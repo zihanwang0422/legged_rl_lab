@@ -16,7 +16,7 @@ if TYPE_CHECKING:
 def add_rsl_rl_args(parser: argparse.ArgumentParser):
     """Add RSL-RL arguments to the parser.
 
-    Args:
+    Args:  
         parser: The parser to add the arguments to.
     """
     # create a new argument group

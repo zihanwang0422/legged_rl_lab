@@ -4,8 +4,6 @@
 [![Isaac Lab](https://img.shields.io/badge/IsaacLab-2.3.0-silver)](https://isaac-sim.github.io/IsaacLab)
 [![Python](https://img.shields.io/badge/python-3.11-blue.svg)](https://docs.python.org/3/whatsnew/3.11.html)
 [![Linux platform](https://img.shields.io/badge/platform-linux--64-orange.svg)](https://releases.ubuntu.com/22.04/)
-[![Windows platform](https://img.shields.io/badge/platform-windows--64-orange.svg)](https://www.microsoft.com/en-us/)
-[![pre-commit](https://img.shields.io/badge/pre--commit-enabled-brightgreen?logo=pre-commit&logoColor=white)](https://pre-commit.com/)
 [![License](https://img.shields.io/badge/license-Apache2.0-yellow.svg)](https://opensource.org/license/apache-2-0)
 
 ## Overview
@@ -13,7 +11,8 @@
 
 ## 🧰️Setup 
 
-* Use pip to install isaaclab
+* Use pip to install isaaclab [pip install isaaclab](https://isaac-sim.github.io/IsaacLab/main/source/setup/installation/isaaclab_pip_installation.html)
+
 
 * Create conda environment
 ```bash
@@ -39,9 +38,10 @@ Verify the installization
 ## 🚀Train
 
 * Run a task
-`python scripts/<specific-rl-library>/train.py --task=<Task-Name>`   
+`python scripts/rsl_rl/train.py --task=LeggedRLLab-Isaac-Velocity-Rough-Unitree-Go2-v0`   
 
-
+* Play a task
+`python scripts/rsl_rl/play.py --task=LeggedRLLab-Isaac-Velocity-Rough-Unitree-Go2-v0`
 
 ## Sim2sim
 
@@ -66,26 +66,6 @@ In this case, add the path to your extension in `.vscode/settings.json` under th
     ]
 }
 ```
-
-### Pylance Crash
-
-If you encounter a crash in `pylance`, it is probable that too many files are indexed and you run out of memory.
-A possible solution is to exclude some of omniverse packages that are not used in your project.
-To do so, modify `.vscode/settings.json` and comment out packages under the key `"python.analysis.extraPaths"`
-Some examples of packages that can likely be excluded are:
-
-```json
-"<path-to-isaac-sim>/extscache/omni.anim.*"         // Animation packages
-"<path-to-isaac-sim>/extscache/omni.kit.*"          // Kit UI tools
-"<path-to-isaac-sim>/extscache/omni.graph.*"        // Graph UI tools
-"<path-to-isaac-sim>/extscache/omni.services.*"     // Services tools
-...
-```
-
-
-
-
-
 
 
 ## Acknowledgements

@@ -94,12 +94,13 @@ class UnitreeUrdfFileCfg(sim_utils.UrdfFileCfg):
 """ Configuration for the Unitree robots."""
 
 UNITREE_GO2_CFG = UnitreeArticulationCfg(
-    spawn=UnitreeUrdfFileCfg(
-        asset_path=f"{UNITREE_MODEL_DIR}/go2/urdf/go2_description.urdf",
-    ),
-    # spawn=UnitreeUsdFileCfg(
-    #     usd_path=f"{UNITREE_MODEL_DIR}/Go2/usd/go2.usd",
+    # spawn=UnitreeUrdfFileCfg(
+    #     asset_path=f"{UNITREE_MODEL_DIR}/go2/urdf/go2_description.urdf",
+    #     fix_base=False,
     # ),
+    spawn=UnitreeUsdFileCfg(
+        usd_path=f"{UNITREE_MODEL_DIR}/go2_usd/go2.usd",
+    ),
     init_state=ArticulationCfg.InitialStateCfg(
         pos=(0.0, 0.0, 0.4),
         joint_pos={
