@@ -5,6 +5,19 @@
 
 """Configuration for Unitree robots.
 
+The following configurations are available:
+
+* :obj:`UNITREE_A1_CFG`: Unitree A1 robot with ideal PD actuator model for the legs
+* :obj:`UNITREE_GO1_CFG`: Unitree Go1 robot with ideal PD actuator model for the legs
+* :obj:`UNITREE_GO1_ACTUATORNET_CFG`: Unitree Go1 robot with neural network actuator model (if available)
+* :obj:`UNITREE_GO2_CFG`: Unitree Go2 robot with custom actuator model for the legs
+* :obj:`UNITREE_GO2W_CFG`: Unitree Go2W robot with wheeled feet
+* :obj:`UNITREE_B2_CFG`: Unitree B2 robot
+* :obj:`UNITREE_H1_CFG`: Unitree H1 humanoid robot
+* :obj:`UNITREE_G1_23DOF_CFG`: Unitree G1 humanoid robot (23 DOF)
+* :obj:`UNITREE_G1_29DOF_CFG`: Unitree G1 humanoid robot (29 DOF)
+* :obj:`UNITREE_G1_29DOF_MIMIC_CFG`: Unitree G1 humanoid robot (29 DOF) configured for locomanipulation tasks
+
 Reference: https://github.com/unitreerobotics/unitree_ros
 """
 
@@ -14,6 +27,7 @@ import isaaclab.sim as sim_utils
 from isaaclab.actuators import IdealPDActuatorCfg, ImplicitActuatorCfg
 from isaaclab.assets.articulation import ArticulationCfg
 from isaaclab.utils import configclass
+from isaaclab.utils.assets import ISAACLAB_NUCLEUS_DIR
 
 from legged_rl_lab import LEGGED_RL_LAB_ROOT_DIR
 from legged_rl_lab.assets import unitree_actuators
@@ -92,6 +106,141 @@ class UnitreeUrdfFileCfg(sim_utils.UrdfFileCfg):
 
 
 """ Configuration for the Unitree robots."""
+
+UNITREE_A1_CFG = UnitreeArticulationCfg(
+    spawn=UnitreeUsdFileCfg(
+        usd_path=f"{UNITREE_MODEL_DIR}/a1_usd/a1.usd",
+    ),
+    init_state=ArticulationCfg.InitialStateCfg(
+        pos=(0.0, 0.0, 0.42),
+        joint_pos={
+            ".*L_hip_joint": 0.1,
+            ".*R_hip_joint": -0.1,
+            "F[L,R]_thigh_joint": 0.8,
+            "R[L,R]_thigh_joint": 1.0,
+            ".*_calf_joint": -1.5,
+        },
+        joint_vel={".*": 0.0},
+    ),
+    actuators={
+        "base_legs": IdealPDActuatorCfg(
+            joint_names_expr=[".*_hip_joint", ".*_thigh_joint", ".*_calf_joint"],
+            effort_limit=33.5,
+            velocity_limit=21.0,
+            stiffness=25.0,
+            damping=0.5,
+            friction=0.0,
+        ),
+    },
+    # fmt: off
+    joint_sdk_names=[
+        "FR_hip_joint", "FR_thigh_joint", "FR_calf_joint",
+        "FL_hip_joint", "FL_thigh_joint", "FL_calf_joint",
+        "RR_hip_joint", "RR_thigh_joint", "RR_calf_joint",
+        "RL_hip_joint", "RL_thigh_joint", "RL_calf_joint"
+    ],
+    # fmt: on
+)
+"""Configuration of Unitree A1 robot.
+Note: Specifications taken from: https://www.trossenrobotics.com/a1-quadruped#specifications
+"""
+
+UNITREE_GO1_CFG = UnitreeArticulationCfg(
+    spawn=UnitreeUsdFileCfg(
+        usd_path=f"{UNITREE_MODEL_DIR}/go1_usd/go1.usd",
+    ),
+    init_state=ArticulationCfg.InitialStateCfg(
+        pos=(0.0, 0.0, 0.4),
+        joint_pos={
+            ".*L_hip_joint": 0.1,
+            ".*R_hip_joint": -0.1,
+            "F[L,R]_thigh_joint": 0.8,
+            "R[L,R]_thigh_joint": 1.0,
+            ".*_calf_joint": -1.5,
+        },
+        joint_vel={".*": 0.0},
+    ),
+    actuators={
+        "base_legs": IdealPDActuatorCfg(
+            joint_names_expr=[".*_hip_joint", ".*_thigh_joint", ".*_calf_joint"],
+            effort_limit=23.7,
+            velocity_limit=30.0,
+            stiffness=25.0,
+            damping=0.5,
+            friction=0.0,
+        ),
+    },
+    # fmt: off
+    joint_sdk_names=[
+        "FR_hip_joint", "FR_thigh_joint", "FR_calf_joint",
+        "FL_hip_joint", "FL_thigh_joint", "FL_calf_joint",
+        "RR_hip_joint", "RR_thigh_joint", "RR_calf_joint",
+        "RL_hip_joint", "RL_thigh_joint", "RL_calf_joint"
+    ],
+    # fmt: on
+)
+"""Configuration of Unitree Go1 robot.
+Actuator specifications: https://shop.unitree.com/products/go1-motor
+"""
+
+# Optional: Go1 with ActuatorNet MLP model (requires neural network model file)
+# Uncomment if you have the trained model file
+try:
+    from isaaclab.actuators import ActuatorNetMLPCfg
+
+    GO1_ACTUATOR_NET_CFG = ActuatorNetMLPCfg(
+        joint_names_expr=[".*_hip_joint", ".*_thigh_joint", ".*_calf_joint"],
+        network_file=f"{ISAACLAB_NUCLEUS_DIR}/ActuatorNets/Unitree/unitree_go1.pt",
+        pos_scale=-1.0,
+        vel_scale=1.0,
+        torque_scale=1.0,
+        input_order="pos_vel",
+        input_idx=[0, 1, 2],
+        effort_limit=23.7,
+        velocity_limit=30.0,
+        saturation_effort=23.7,
+    )
+    """Configuration of Go1 actuators using MLP model.
+    
+    This model is trained from real robot data and provides the most accurate simulation.
+    Model from: https://github.com/Improbable-AI/walk-these-ways
+    """
+
+    UNITREE_GO1_ACTUATORNET_CFG = UnitreeArticulationCfg(
+        spawn=UnitreeUsdFileCfg(
+            usd_path=f"{UNITREE_MODEL_DIR}/go1_usd/go1.usd",
+        ),
+        init_state=ArticulationCfg.InitialStateCfg(
+            pos=(0.0, 0.0, 0.4),
+            joint_pos={
+                ".*L_hip_joint": 0.1,
+                ".*R_hip_joint": -0.1,
+                "F[L,R]_thigh_joint": 0.8,
+                "R[L,R]_thigh_joint": 1.0,
+                ".*_calf_joint": -1.5,
+            },
+            joint_vel={".*": 0.0},
+        ),
+        actuators={
+            "base_legs": GO1_ACTUATOR_NET_CFG,
+        },
+        # fmt: off
+        joint_sdk_names=[
+            "FR_hip_joint", "FR_thigh_joint", "FR_calf_joint",
+            "FL_hip_joint", "FL_thigh_joint", "FL_calf_joint",
+            "RR_hip_joint", "RR_thigh_joint", "RR_calf_joint",
+            "RL_hip_joint", "RL_thigh_joint", "RL_calf_joint"
+        ],
+        # fmt: on
+    )
+    """Configuration of Unitree Go1 with neural network actuator model.
+    
+    This provides the most realistic simulation using a neural network trained on real robot data.
+    Use this if you have the model file and want maximum Sim2Real transfer performance.
+    """
+except ImportError:
+    # ActuatorNetMLPCfg not available or model file not found
+    pass
 
 UNITREE_GO2_CFG = UnitreeArticulationCfg(
     # spawn=UnitreeUrdfFileCfg(
