@@ -12,7 +12,7 @@
 
 | <div align="center"> Isaac Lab </div> | <div align="center">  Mujoco </div> |  <div align="center"> Physical </div> |
 |--- | --- | --- |
-| [<img src="gifs/isaac.gif" width="200px">](gifs/isaac.gif) | [<img src="gifs/mujoco.gif" width="200px">](gifs/mujoco.gif) | [<img src="gifs/real.gif" width="150px">](gifs/real.gif) |
+| [<img src="gifs/isaac.gif" width="200px">](gifs/isaac.gif) | [<img src="gifs/mujoco.gif" width="180px">](gifs/mujoco.gif) | [<img src="gifs/real.gif" width="150px">](gifs/real.gif) |
 
 </div>
 
