@@ -75,9 +75,15 @@ from .observations import *                               # 7. 自定义观察
 
 ## sim2sim guide
 
-### urdf2usd2xml
+### Convert URDF to USD (recommend)
 
-[sim2sim guide](Instruction_CN.md#sim2sim-guide)
+
+⚠️ 注意一定要转换成与`go1.xml`和`unitree.py`go1cfg 对应的电机参数`--joint-stiffness 100.0   --joint-damping 0.5   --joint-target-type position`
+```bash
+cd ~/legged_rl_lab
+
+python scripts/tools/convert_urdf.py   source/legged_rl_lab/legged_rl_lab/data/robots/go1_description/urdf/go1.urdf   source/legged_rl_lab/legged_rl_lab/data/robots/go1_description/usd/go1.usd   --merge-joints   --joint-stiffness 100.0   --joint-damping 0.5   --joint-target-type position
+```
 
 ### MuJoCo vs. IsaacLab Joint对照表
 
