@@ -30,9 +30,13 @@
 ```
 
 * Install isaacsim 5.1 and isaaclab 2.3
-`pip install "isaacsim[all,extscache]==5.1.0" --extra-index-url https://pypi.nvidia.com`
+```bash
+pip install "isaacsim[all,extscache]==5.1.0" --extra-index-url https://pypi.nvidia.com`
+```
 Verify the installization
-`isaacsim`
+```bash
+isaacsim
+```
 
 * Install the project
 ```bash
