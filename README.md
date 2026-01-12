@@ -28,26 +28,52 @@ Verify the installization
 `isaacsim`
 
 * Install the project
-`python -m pip install -e source/legged_rl_lab`
+```bash
+python -m pip install -e source/legged_rl_lab
+```
 
 * List the tasks available in the project
-`python scripts/list_envs.py`
+```bash
+python scripts/list_envs.py
+```
 
 ---
 
 ## 🚀Train
 
-* Run a task
-`python scripts/rsl_rl/train.py --task=LeggedRLLab-Isaac-Velocity-Rough-Unitree-Go2-v0`   
+* Run task
+```bash
+python scripts/rsl_rl/train.py --task=LeggedRLLab-Isaac-Velocity-Rough-Unitree-Go1-v0
+``` 
 
-* Play a task
-`python scripts/rsl_rl/play.py --task=LeggedRLLab-Isaac-Velocity-Rough-Unitree-Go2-v0`
+* Play task
+```bash
+python scripts/rsl_rl/play.py --task=LeggedRLLab-Isaac-Velocity-Rough-Unitree-Go1-v0
+```
 
 ## Sim2sim
 
+Define own task:
+
+1. Modify the yaml file in `legged_rl_lab/deploy/config`
+
+2. Exported the `policy.pt` to `legged_rl_lab/deploy/exported_policy`
+
+3. Detail sim2sim guide in  [sim2sim guide](Instruction_CN.md#sim2sim-guide)
+
+4. Play the sim2sim script
+
+```bash
+python deploy/sim2sim.py --mode sim --model policy.pt
+```
+
+
+
 
 ## Sim2real
-
+```bash
+python sim2sim2real_joystick.py --mode real --model policy_45_continus.pt #play in real-world
+```
 
 
 
@@ -67,7 +93,7 @@ In this case, add the path to your extension in `.vscode/settings.json` under th
 }
 ```
 
-
+<!-- 
 ## Acknowledgements
 
 ### rl_locomotion
@@ -105,4 +131,4 @@ In this case, add the path to your extension in `.vscode/settings.json` under th
 * [unitree_mujoco](https://github.com/unitreerobotics/unitree_mujoco)
 * [mjlab](https://github.com/mujocolab/mjlab)
 * [mujoco_playground](https://github.com/google-deepmind/mujoco_playground)
-* [FastTD3](https://github.com/younggyoseo/FastTD3)
+* [FastTD3](https://github.com/younggyoseo/FastTD3) -->

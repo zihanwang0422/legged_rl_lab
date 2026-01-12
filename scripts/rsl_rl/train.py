@@ -171,6 +171,21 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
     # convert to single-agent instance if required by the RL algorithm
     if isinstance(env.unwrapped, DirectMARLEnv):
         env = multi_agent_to_single_agent(env)
+    
+    # Print joint order information for deployment reference
+    print("\n" + "="*70)
+    print("ROBOT JOINT ORDER (for deployment reference)")
+    print("="*70)
+    robot = env.unwrapped.scene["robot"]
+    print(f"Total joints: {robot.num_joints}")
+    print(f"Joint names (in training order):")
+    for i, name in enumerate(robot.data.joint_names):
+        print(f"  [{i:2d}] {name}")
+    print(f"\nDefault joint positions:")
+    default_pos = robot.data.default_joint_pos[0].cpu().numpy()
+    for i, (name, pos) in enumerate(zip(robot.data.joint_names, default_pos)):
+        print(f"  [{i:2d}] {name:20s} = {pos:+.4f} rad")
+    print("="*70 + "\n")
 
     # save resume path before creating a new log_dir
     if agent_cfg.resume or agent_cfg.algorithm.class_name == "Distillation":
