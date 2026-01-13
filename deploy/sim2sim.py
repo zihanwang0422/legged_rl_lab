@@ -466,7 +466,7 @@ class Sim2SimController:
                         # cmd_vx, cmd_vy, cmd_vyaw = gamepad.get_velocity()
                         # commands = np.array([cmd_vx, cmd_vy, cmd_vyaw], dtype=np.float32)
                         
-                        cmd_vx, cmd_vy, cmd_vyaw = [2.0, 0.0, 0.0]  # FOR TESTING ONLY
+                        cmd_vx, cmd_vy, cmd_vyaw = [4.0, 0.0, 0.0]  # FOR TESTING ONLY
                         commands = np.array([cmd_vx, cmd_vy, cmd_vyaw], dtype=np.float32)
                         
                         # Prepare observation for the policy
@@ -541,7 +541,7 @@ if __name__ == '__main__':
         script_dir = os.path.dirname(os.path.abspath(__file__))
         args.config = os.path.join(script_dir, 'config', args.config)
     
-    # 1. 加载 Config (路径已经在内部处理好了)
+    # 1. 加载 Config
     config = load_config(args.config)
     
     # 2. 初始化 Gamepad (使用 config 中的 range)

@@ -56,21 +56,8 @@ class UnitreeGo1RoughEnvCfg(LocomotionVelocityRoughEnvCfg):
         self.rewards.track_ang_vel_z_exp.weight = 0.75
         self.rewards.dof_acc_l2.weight = -2.5e-7
 
-        # === 解决膝关节角度过小和小腿贴地问题的奖励 ===
-        # 1. 惩罚小腿(calf)和大腿(thigh)接触地面 - 防止小腿贴地
-        self.rewards.undesired_contacts.weight = -1.0
-        self.rewards.undesired_contacts.params["sensor_cfg"].body_names = ".*_(calf|thigh)"
-        # 2. 惩罚关节超出软限制 - 防止膝关节角度过小(腿伸太直)
-        self.rewards.dof_pos_limits.weight = -1.0
-        # 3. 维持机身高度 - 鼓励机器人保持适当的站立高度
-        self.rewards.base_height_l2.weight = -0.5
-        self.rewards.base_height_l2.params["target_height"] = 0.445
-        # 4. 前腿 hip 关节角度偏差奖励(防止前腿外扩)
-        self.rewards.front_hip_deviation_l1.weight = -0.5
-        self.rewards.front_hip_deviation_l1.params["asset_cfg"].joint_names = ["FR_hip_joint", "FL_hip_joint", "RR_hip_joint", "RL_hip_joint"]
-
         # terminations
-        self.terminations.base_contact.params["sensor_cfg"].body_names = "base"
+        self.terminations.base_contact.params["sensor_cfg"].body_names = "trunk"
         
         # commands
         self.commands.base_velocity.ranges.lin_vel_x = (-1.0, 1.0)

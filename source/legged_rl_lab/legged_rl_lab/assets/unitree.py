@@ -135,29 +135,32 @@ UNITREE_GO1_CFG = ArticulationCfg(
         # 对应 MJCF 中的 abduction class (侧展关节)
         "hip_joints": IdealPDActuatorCfg(
             joint_names_expr=[".*_hip_joint"],
-            effort_limit=45.43,      # 对应 MJCF motor ctrlrange
+            effort_limit=45.43,      
             velocity_limit=30.0,
-            stiffness=100.0,         # 对应 MJCF kp
-            damping=0.5,            # 对应 MJCF abduction class damping
-            friction=0.2,           # 对应 MJCF frictionloss
+            stiffness=25.0,         
+            damping=1.0,            
+            friction=0.2,   
+            armature=0.01,          
         ),
         # 对应 MJCF 中的 hip class (大腿关节)
         "thigh_joints": IdealPDActuatorCfg(
             joint_names_expr=[".*_thigh_joint"],
             effort_limit=45.43,
             velocity_limit=30.0,
-            stiffness=100.0,
-            damping=0.5,            # 对应 MJCF 基础 damping
+            stiffness=25.0,
+            damping=1.0,           
             friction=0.2,
+            armature=0.01,          
         ),
         # 对应 MJCF 中的 knee class (小腿关节)
         "calf_joints": IdealPDActuatorCfg(
             joint_names_expr=[".*_calf_joint"],
-            effort_limit=45.43,
+            effort_limit=35.55,
             velocity_limit=30.0,
-            stiffness=100.0,
-            damping=0.5,
+            stiffness=25.0,
+            damping=1.0,
             friction=0.2,
+            armature=0.01,        
         ),
     },
 )

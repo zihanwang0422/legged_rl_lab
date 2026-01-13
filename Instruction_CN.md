@@ -82,7 +82,7 @@ from .observations import *                               # 7. 自定义观察
 ```bash
 cd ~/legged_rl_lab
 
-python scripts/tools/convert_urdf.py   source/legged_rl_lab/legged_rl_lab/data/robots/go1_description/urdf/go1.urdf   source/legged_rl_lab/legged_rl_lab/data/robots/go1_description/usd/go1.usd   --merge-joints   --joint-stiffness 100.0   --joint-damping 0.5   --joint-target-type position
+python scripts/tools/convert_urdf.py   source/legged_rl_lab/legged_rl_lab/data/robots/go1_description/urdf/go1.urdf   source/legged_rl_lab/legged_rl_lab/data/robots/go1_description/usd/go1.usd   --merge-joints   --joint-stiffness 25.0   --joint-damping 1.0   --joint-target-type position
 ```
 
 ### MuJoCo vs. IsaacLab Joint对照表

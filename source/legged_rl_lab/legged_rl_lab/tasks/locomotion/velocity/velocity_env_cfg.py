@@ -117,7 +117,9 @@ class CommandsCfg:
 class ActionsCfg:
     """Action specifications for the MDP."""
 
-    joint_pos = mdp.JointPositionActionCfg(asset_name="robot", joint_names=[".*"], scale=0.25, use_default_offset=True, clip={".*": (-100.0, 100.0)})
+    joint_pos = mdp.JointPositionActionCfg(asset_name="robot", joint_names=[".*"], scale=0.25, use_default_offset=True, clip={".*hip_joint": (-0.863, 0.863), 
+              ".*thigh_joint": (-0.686, 4.501),
+              ".*calf_joint": (-2.818, -0.888)},)
     joint_vel = mdp.JointVelocityActionCfg(asset_name="robot", joint_names=[".*"], scale=0.5, use_default_offset=False, clip={".*": (-100.0, 100.0)})
 
 @configclass
@@ -278,11 +280,29 @@ class RewardsCfg:
         weight=0.0,
         params={"target_height": 0.34, "asset_cfg": SceneEntityCfg("robot")},
     )
-    # 前腿 hip 关节角度偏差奖励（防止前腿外扩）- 使用 L1 偏差
+    # 前腿 hip 关节角度偏差奖励(防止前腿外扩)- 使用 L1 偏差
     front_hip_deviation_l1 = RewTerm(
         func=mdp.joint_deviation_l1,
         weight=0.0,
         params={"asset_cfg": SceneEntityCfg("robot", joint_names=[".*_hip_joint"])},
+    )
+    # 左右腿关节对称奖励 - 鼓励对称步态
+    joint_symmetry_l2 = RewTerm(
+        func=mdp.joint_mirror,
+        weight=0.0,
+        params={
+            "asset_cfg": SceneEntityCfg("robot"),
+            "mirror_joints": [[".*L_hip_joint"], [".*R_hip_joint"]],
+        },
+    )
+    # 左右腿动作对称奖励 - 鼓励对称控制
+    action_symmetry_l2 = RewTerm(
+        func=mdp.action_mirror,
+        weight=0.0,
+        params={
+            "asset_cfg": SceneEntityCfg("robot"),
+            "mirror_joints": [[".*L_hip_joint"], [".*R_hip_joint"]],
+        },
     )
 
 

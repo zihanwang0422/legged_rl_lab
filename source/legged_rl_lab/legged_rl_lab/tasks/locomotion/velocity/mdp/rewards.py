@@ -14,6 +14,7 @@ from __future__ import annotations
 import torch
 from typing import TYPE_CHECKING
 
+from isaaclab.assets import Articulation
 from isaaclab.envs import mdp
 from isaaclab.managers import SceneEntityCfg
 from isaaclab.sensors import ContactSensor
@@ -114,3 +115,79 @@ def stand_still_joint_deviation_l1(
     command = env.command_manager.get_command(command_name)
     # Penalize motion when command is nearly zero.
     return mdp.joint_deviation_l1(env, asset_cfg) * (torch.norm(command[:, :2], dim=1) < command_threshold)
+
+
+def joint_mirror(env: ManagerBasedRLEnv, asset_cfg: SceneEntityCfg, mirror_joints: list[list[str]]) -> torch.Tensor:
+    """Penalize joint position differences between mirrored joints (e.g., left-right leg symmetry).
+    
+    This reward helps ensure symmetric gait patterns by penalizing differences between corresponding
+    joints on opposite sides of the robot (e.g., left_hip vs right_hip).
+    
+    Args:
+        env: The learning environment.
+        asset_cfg: The asset configuration for the robot.
+        mirror_joints: List of joint pairs to mirror, e.g., [[".*_hip_joint"], [".*R_hip_joint"]]
+                       where each pair should have symmetric behavior.
+    
+    Returns:
+        Penalty proportional to joint position differences between mirrored pairs.
+    """
+    # extract the used quantities (to enable type-hinting)
+    asset: Articulation = env.scene[asset_cfg.name]
+    if not hasattr(env, "joint_mirror_joints_cache") or env.joint_mirror_joints_cache is None:
+        # Cache joint positions for all pairs
+        env.joint_mirror_joints_cache = [
+            [asset.find_joints(joint_name) for joint_name in joint_pair] for joint_pair in mirror_joints
+        ]
+    reward = torch.zeros(env.num_envs, device=env.device)
+    # Iterate over all joint pairs
+    for joint_pair in env.joint_mirror_joints_cache:
+        # Calculate the difference for each pair and add to the total reward
+        diff = torch.sum(
+            torch.square(asset.data.joint_pos[:, joint_pair[0][0]] - asset.data.joint_pos[:, joint_pair[1][0]]),
+            dim=-1,
+        )
+        reward += diff
+    reward *= 1 / len(mirror_joints) if len(mirror_joints) > 0 else 0
+    reward *= torch.clamp(-env.scene["robot"].data.projected_gravity_b[:, 2], 0, 0.7) / 0.7
+    return reward
+
+
+def action_mirror(env: ManagerBasedRLEnv, asset_cfg: SceneEntityCfg, mirror_joints: list[list[str]]) -> torch.Tensor:
+    """Penalize action differences between mirrored joints (e.g., left-right leg symmetry).
+    
+    This reward helps ensure symmetric control commands by penalizing differences in action magnitudes
+    between corresponding joints on opposite sides of the robot.
+    
+    Args:
+        env: The learning environment.
+        asset_cfg: The asset configuration for the robot.
+        mirror_joints: List of joint pairs to mirror, e.g., [[".*L_hip_joint"], [".*R_hip_joint"]]
+                       where each pair should receive symmetric actions.
+    
+    Returns:
+        Penalty proportional to action differences between mirrored pairs.
+    """
+    # extract the used quantities (to enable type-hinting)
+    asset: Articulation = env.scene[asset_cfg.name]
+    if not hasattr(env, "action_mirror_joints_cache") or env.action_mirror_joints_cache is None:
+        # Cache joint positions for all pairs
+        env.action_mirror_joints_cache = [
+            [asset.find_joints(joint_name) for joint_name in joint_pair] for joint_pair in mirror_joints
+        ]
+    reward = torch.zeros(env.num_envs, device=env.device)
+    # Iterate over all joint pairs
+    for joint_pair in env.action_mirror_joints_cache:
+        # Calculate the difference for each pair and add to the total reward
+        diff = torch.sum(
+            torch.square(
+                torch.abs(env.action_manager.action[:, joint_pair[0][0]])
+                - torch.abs(env.action_manager.action[:, joint_pair[1][0]])
+            ),
+            dim=-1,
+        )
+        reward += diff
+    reward *= 1 / len(mirror_joints) if len(mirror_joints) > 0 else 0
+    reward *= torch.clamp(-env.scene["robot"].data.projected_gravity_b[:, 2], 0, 0.7) / 0.7
+    return reward
+
