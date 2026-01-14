@@ -25,47 +25,47 @@ class UnitreeGo1FlatEnvCfg(UnitreeGo1RoughEnvCfg):
         # 2. 惩罚关节超出软限制 - 防止膝关节角度过小(腿伸太直)
         self.rewards.dof_pos_limits.weight = -1.0
         # 3. 维持机身高度 - 鼓励机器人保持适当的站立高度
-        self.rewards.base_height_l2.weight = -2.0
+        self.rewards.base_height_l2.weight = -2.0 #
         self.rewards.base_height_l2.params["target_height"] = 0.30
         
-        # === 解决左右腿不对称和向右偏倒的问题 ===
-        # 4. 左右腿关节对称奖励 - 鼓励左右腿关节位置对称,防止一侧迈步幅度过大
-        self.rewards.joint_symmetry_l2.weight = -0.3
-        self.rewards.joint_symmetry_l2.params["mirror_joints"] = [
-            ["FL_hip_joint", "RL_hip_joint"],  # 左前左后
-            ["FR_hip_joint", "RR_hip_joint"],  # 右前右后
-        ]
-        # 5. 左右腿动作对称奖励 - 鼓励左右腿控制指令对称,防止控制不平衡
-        self.rewards.action_symmetry_l2.weight = -0.2
-        self.rewards.action_symmetry_l2.params["mirror_joints"] = [
-            ["FL_hip_joint", "RL_hip_joint"],  # 左侧腿
-            ["FR_hip_joint", "RR_hip_joint"],  # 右侧腿
-        ]
+        # ====Make trunk flat====
         # 6. 增强侧向速度跟踪奖励权重,帮助机器人更好地保持直线行走
-        self.rewards.track_lin_vel_xy_exp.weight = 2.0
+        self.rewards.track_lin_vel_xy_exp.weight = 2.5
         # 7. 增加侧向角速度惩罚,防止左右倾斜
         self.rewards.ang_vel_xy_l2.weight = -0.1
         
-        # === 解决trunk向左倾斜的问题 ===
-        # 8. Roll角惩罚 - 强力惩罚机身左右倾斜(向左或向右)
-        self.rewards.body_roll_l2.weight = -5.0
-        # 9. 减弱flat_orientation权重,因为已经有专门的roll/pitch惩罚
-        self.rewards.flat_orientation_l2.weight = -1.0
+        self.rewards.body_roll_l2.weight = -5.0 #
+        self.rewards.flat_orientation_l2.weight = -1.0 #
         
-        # 10. 前腿 hip 关节角度偏差奖励(防止前腿外扩)
-        self.rewards.front_hip_deviation_l1.weight = -0.5
-        self.rewards.front_hip_deviation_l1.params["asset_cfg"].joint_names = ["FR_hip_joint", "FL_hip_joint", "RR_hip_joint", "RL_hip_joint"]
-
+        # ====Terrain Cfg====
         # change terrain to flat
         self.scene.terrain.terrain_type = "plane"
         self.scene.terrain.terrain_generator = None
         # no height scan
         self.scene.height_scanner = None
         self.observations.policy.height_scan = None
-        #no base_lin_vel
-        # self.observations.policy.base_lin_vel = None
+
         # no terrain curriculum
         self.curriculum.terrain_levels = None
+        
+        # ===Symmetric rewards for stable gait===
+        self.rewards.joint_symmetry_l2.weight = -0.3
+        self.rewards.joint_symmetry_l2.params["mirror_joints"] = [
+            ["FL_hip_joint", "RL_hip_joint"],   
+            ["FR_hip_joint", "RR_hip_joint"],  
+        ]
+
+        self.rewards.action_symmetry_l2.weight = -0.2
+        self.rewards.action_symmetry_l2.params["mirror_joints"] = [
+            ["FL_hip_joint", "RL_hip_joint"],  
+            ["FR_hip_joint", "RR_hip_joint"],  
+        ]
+        
+        # commands - 扩大速度范围以支持高速运动
+        self.commands.base_velocity.ranges.lin_vel_x = (-1.0, 1.0)  # 扩展到1.0m/s
+        self.commands.base_velocity.ranges.lin_vel_y = (-0.8, 0.8)  # 相应扩展侧向速度
+        self.commands.base_velocity.ranges.ang_vel_z = (-1.0, 1.0)  # 扩展角速度
+
         
     
 

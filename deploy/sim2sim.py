@@ -148,7 +148,7 @@ def build_obs(base_lin_vel, base_ang_vel, projected_gravity, commands, dof_pos_r
 
 class GamepadController:
     """Thread-safe gamepad controller (Logitech F710 - Linux native interface)."""
-    def __init__(self, vx_range=(0.0, 1.2), vy_range=(-0.3, 0.3), vyaw_range=(-1.57, 1.57)):
+    def __init__(self, vx_range=(-2.0, 4.0), vy_range=(-1.0, 1.0), vyaw_range=(-1.57, 1.57)):
         self.vx = 0.0
         self.vy = 0.0
         self.vyaw = 0.0
@@ -424,6 +424,7 @@ class Sim2SimController:
             viewer.cam.azimuth = 90
             viewer.cam.elevation = -20
             
+
             # --- Establish Absolute Time Reference ---
             # Record start time immediately before entering the loop
             start_time = time.time() 
@@ -454,10 +455,7 @@ class Sim2SimController:
                     quat_wxyz = self.data.qpos[3:7].copy()
                     quat_xyzw = np.array([quat_wxyz[1], quat_wxyz[2], quat_wxyz[3], quat_wxyz[0]])
                     rpy = R.from_quat(quat_xyzw).as_euler('xyz')
-                    # if abs(rpy[0]) > 0.8 or abs(rpy[1]) > 0.8:
-                    #     print(f"\nWarning at {sim_time:.2f}s: Robot tilted! roll={rpy[0]:.2f}, pitch={rpy[1]:.2f}")
-                    
-                    # Policy inference (decimated frequency)
+
                     self.policy_counter += 1
                     if self.policy_counter == self.policy_decimation:
                         self.policy_counter = 0
@@ -466,7 +464,7 @@ class Sim2SimController:
                         # cmd_vx, cmd_vy, cmd_vyaw = gamepad.get_velocity()
                         # commands = np.array([cmd_vx, cmd_vy, cmd_vyaw], dtype=np.float32)
                         
-                        cmd_vx, cmd_vy, cmd_vyaw = [1.0, 0.0, 0.0]  # FOR TESTING ONLY
+                        cmd_vx, cmd_vy, cmd_vyaw = [0.0, 0.0, -2.0]  # FOR TESTING ONLY
                         commands = np.array([cmd_vx, cmd_vy, cmd_vyaw], dtype=np.float32)
                         
                         # Prepare observation for the policy

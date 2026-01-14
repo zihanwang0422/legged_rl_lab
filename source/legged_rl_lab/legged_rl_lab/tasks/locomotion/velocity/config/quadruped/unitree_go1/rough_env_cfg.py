@@ -59,10 +59,10 @@ class UnitreeGo1RoughEnvCfg(LocomotionVelocityRoughEnvCfg):
         # terminations
         self.terminations.base_contact.params["sensor_cfg"].body_names = "trunk"
         
-        # commands
-        self.commands.base_velocity.ranges.lin_vel_x = (-1.0, 1.0)
-        self.commands.base_velocity.ranges.lin_vel_y = (-0.5, 0.5)
-        self.commands.base_velocity.ranges.ang_vel_z = (-1.0, 1.0)
+        # commands - 扩大速度范围以支持高速运动
+        self.commands.base_velocity.ranges.lin_vel_x = (-1.0, 1.0)  
+        self.commands.base_velocity.ranges.lin_vel_y = (-0.8, 0.8) 
+        self.commands.base_velocity.ranges.ang_vel_z = (-1.0, 1.0) 
 
 
 @configclass
