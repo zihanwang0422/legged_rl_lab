@@ -23,15 +23,15 @@
 
 * Create conda environment
 ```bash
-    conda create -n env_isaaclab1 python=3.11
-    conda activate env_isaaclab1
-    pip install -U torch==2.7.0 torchvision==0.22.0 --index-url https://download.pytorch.org/whl/cu128
-    pip install --upgrade pip
+conda create -n env_isaaclab python=3.11
+conda activate env_isaaclab
+pip install -U torch==2.7.0 torchvision==0.22.0 --index-url https://download.pytorch.org/whl/cu128
+pip install --upgrade pip
 ```
 
 * Install isaacsim 5.1 and isaaclab 2.3
 ```bash
-pip install "isaacsim[all,extscache]==5.1.0" --extra-index-url https://pypi.nvidia.com`
+pip install isaaclab[isaacsim,all]==2.3.0 --extra-index-url https://pypi.nvidia.com
 ```
 Verify the installization
 ```bash
