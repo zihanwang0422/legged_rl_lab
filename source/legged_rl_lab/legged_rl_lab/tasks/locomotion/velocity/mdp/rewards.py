@@ -191,3 +191,43 @@ def action_mirror(env: ManagerBasedRLEnv, asset_cfg: SceneEntityCfg, mirror_join
     reward *= torch.clamp(-env.scene["robot"].data.projected_gravity_b[:, 2], 0, 0.7) / 0.7
     return reward
 
+
+
+def body_roll_l2(env: ManagerBasedRLEnv, asset_cfg: SceneEntityCfg = SceneEntityCfg("robot")) -> torch.Tensor:
+    """Penalize roll angle (sideways tilt) of the robot base.
+    
+    This reward specifically targets the roll (x-axis rotation) of the robot body,
+    which is useful for preventing sideways leaning/tilting during locomotion.
+    
+    Args:
+        env: The learning environment.
+        asset_cfg: The asset configuration for the robot.
+    
+    Returns:
+        Penalty proportional to the square of the roll angle.
+    """
+    # extract the used quantities (to enable type-hinting)
+    asset: Articulation = env.scene[asset_cfg.name]
+    # Roll is the first component of projected gravity in body frame (x-axis)
+    # When upright, projected_gravity_b = [0, 0, -1]. Roll tilt causes x component to be non-zero
+    return torch.square(asset.data.projected_gravity_b[:, 0])
+
+
+def body_pitch_l2(env: ManagerBasedRLEnv, asset_cfg: SceneEntityCfg = SceneEntityCfg("robot")) -> torch.Tensor:
+    """Penalize pitch angle (forward/backward tilt) of the robot base.
+    
+    This reward specifically targets the pitch (y-axis rotation) of the robot body,
+    which is useful for preventing forward/backward leaning during locomotion.
+    
+    Args:
+        env: The learning environment.
+        asset_cfg: The asset configuration for the robot.
+    
+    Returns:
+        Penalty proportional to the square of the pitch angle.
+    """
+    # extract the used quantities (to enable type-hinting)
+    asset: Articulation = env.scene[asset_cfg.name]
+    # Pitch is the second component of projected gravity in body frame (y-axis)
+    # When upright, projected_gravity_b = [0, 0, -1]. Pitch tilt causes y component to be non-zero
+    return torch.square(asset.data.projected_gravity_b[:, 1])

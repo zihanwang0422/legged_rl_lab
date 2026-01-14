@@ -25,8 +25,8 @@ class UnitreeGo1FlatEnvCfg(UnitreeGo1RoughEnvCfg):
         # 2. 惩罚关节超出软限制 - 防止膝关节角度过小(腿伸太直)
         self.rewards.dof_pos_limits.weight = -1.0
         # 3. 维持机身高度 - 鼓励机器人保持适当的站立高度
-        self.rewards.base_height_l2.weight = -0.5
-        self.rewards.base_height_l2.params["target_height"] = 0.445
+        self.rewards.base_height_l2.weight = -2.0
+        self.rewards.base_height_l2.params["target_height"] = 0.30
         
         # === 解决左右腿不对称和向右偏倒的问题 ===
         # 4. 左右腿关节对称奖励 - 鼓励左右腿关节位置对称,防止一侧迈步幅度过大
@@ -43,13 +43,18 @@ class UnitreeGo1FlatEnvCfg(UnitreeGo1RoughEnvCfg):
         ]
         # 6. 增强侧向速度跟踪奖励权重,帮助机器人更好地保持直线行走
         self.rewards.track_lin_vel_xy_exp.weight = 2.0
-        # 7. 增加侧向角速度惩罚,防止向右偏转
+        # 7. 增加侧向角速度惩罚,防止左右倾斜
         self.rewards.ang_vel_xy_l2.weight = -0.1
         
-        # 8. 前腿 hip 关节角度偏差奖励(防止前腿外扩)
+        # === 解决trunk向左倾斜的问题 ===
+        # 8. Roll角惩罚 - 强力惩罚机身左右倾斜(向左或向右)
+        self.rewards.body_roll_l2.weight = -5.0
+        # 9. 减弱flat_orientation权重,因为已经有专门的roll/pitch惩罚
+        self.rewards.flat_orientation_l2.weight = -1.0
+        
+        # 10. 前腿 hip 关节角度偏差奖励(防止前腿外扩)
         self.rewards.front_hip_deviation_l1.weight = -0.5
         self.rewards.front_hip_deviation_l1.params["asset_cfg"].joint_names = ["FR_hip_joint", "FL_hip_joint", "RR_hip_joint", "RL_hip_joint"]
-        self.rewards.flat_orientation_l2.weight = -0.5
 
         # change terrain to flat
         self.scene.terrain.terrain_type = "plane"

@@ -466,7 +466,7 @@ class Sim2SimController:
                         # cmd_vx, cmd_vy, cmd_vyaw = gamepad.get_velocity()
                         # commands = np.array([cmd_vx, cmd_vy, cmd_vyaw], dtype=np.float32)
                         
-                        cmd_vx, cmd_vy, cmd_vyaw = [4.0, 0.0, 0.0]  # FOR TESTING ONLY
+                        cmd_vx, cmd_vy, cmd_vyaw = [1.0, 0.0, 0.0]  # FOR TESTING ONLY
                         commands = np.array([cmd_vx, cmd_vy, cmd_vyaw], dtype=np.float32)
                         
                         # Prepare observation for the policy

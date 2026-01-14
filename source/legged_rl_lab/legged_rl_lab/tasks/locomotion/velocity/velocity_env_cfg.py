@@ -304,6 +304,18 @@ class RewardsCfg:
             "mirror_joints": [[".*L_hip_joint"], [".*R_hip_joint"]],
         },
     )
+    # Roll角惩罚 - 防止机身左右倾斜
+    body_roll_l2 = RewTerm(
+        func=mdp.body_roll_l2,
+        weight=0.0,
+        params={"asset_cfg": SceneEntityCfg("robot")},
+    )
+    # Pitch角惩罚 - 防止机身前后倾斜
+    body_pitch_l2 = RewTerm(
+        func=mdp.body_pitch_l2,
+        weight=0.0,
+        params={"asset_cfg": SceneEntityCfg("robot")},
+    )
 
 
 @configclass
