@@ -274,15 +274,15 @@ class RewardsCfg:
     )
     flat_orientation_l2 = RewTerm(
         func=mdp.flat_orientation_l2,
-        weight=0.0,  
+        weight=-5.0,  # 强烈惩罚倾斜，防止头着地
         params={
-            "asset_cfg": SceneEntityCfg("robot", body_names="trunk"), 
+            "asset_cfg": SceneEntityCfg("robot", body_names="trunk"),
         },
     )
-    dof_pos_limits = RewTerm(func=mdp.joint_pos_limits, weight=0.0)
+    dof_pos_limits = RewTerm(func=mdp.joint_pos_limits, weight=-10.0)  # 惩罚关节超限
     base_height_l2 = RewTerm(
         func=mdp.base_height_l2,
-        weight=0.0,
+        weight=-1.0,  # 维持合适高度，防止瘫倒
         params={"target_height": 0.34, "asset_cfg": SceneEntityCfg("robot")},
     )
     # 前腿 hip 关节角度偏差奖励(防止前腿外扩)- 使用 L1 偏差

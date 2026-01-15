@@ -5,37 +5,22 @@
 
 from isaaclab.utils import configclass
 
-from .rough_env_cfg import UnitreeGo1RoughEnvCfg
+from legged_rl_lab.tasks.locomotion.velocity.velocity_env_cfg import LocomotionVelocityRoughEnvCfg
+
+##
+# Pre-defined configs
+##
+from legged_rl_lab.assets.unitree import UNITREE_GO1_CFG  # isort: skip
 
 
 @configclass
-class UnitreeGo1FlatEnvCfg(UnitreeGo1RoughEnvCfg):
+class UnitreeGo1FlatEnvCfg(LocomotionVelocityRoughEnvCfg):
     def __post_init__(self):
         # post init of parent
         super().__post_init__()
 
-        # override rewards
-        self.rewards.flat_orientation_l2.weight = -2.5
-        self.rewards.feet_air_time.weight = 0.25
-        
-        # === 解决膝关节角度过小和小腿贴地问题的奖励 ===
-        # 1. 惩罚小腿(calf)和大腿(thigh)接触地面 - 防止小腿贴地
-        self.rewards.undesired_contacts.weight = -1.0
-        self.rewards.undesired_contacts.params["sensor_cfg"].body_names = ".*_(calf|thigh)"
-        # 2. 惩罚关节超出软限制 - 防止膝关节角度过小(腿伸太直)
-        self.rewards.dof_pos_limits.weight = -1.0
-        # 3. 维持机身高度 - 鼓励机器人保持适当的站立高度
-        self.rewards.base_height_l2.weight = -2.0 #
-        self.rewards.base_height_l2.params["target_height"] = 0.30
-        
-        # ====Make trunk flat====
-        # 6. 增强侧向速度跟踪奖励权重,帮助机器人更好地保持直线行走
-        self.rewards.track_lin_vel_xy_exp.weight = 2.5
-        # 7. 增加侧向角速度惩罚,防止左右倾斜
-        self.rewards.ang_vel_xy_l2.weight = -0.1
-        
-        self.rewards.body_roll_l2.weight = -5.0 #
-        self.rewards.flat_orientation_l2.weight = -1.0 #
+        self.scene.robot = UNITREE_GO1_CFG.replace(prim_path="{ENV_REGEX_NS}/Robot")
+        self.scene.height_scanner.prim_path = "{ENV_REGEX_NS}/Robot/base"
         
         # ====Terrain Cfg====
         # change terrain to flat
@@ -47,6 +32,49 @@ class UnitreeGo1FlatEnvCfg(UnitreeGo1RoughEnvCfg):
 
         # no terrain curriculum
         self.curriculum.terrain_levels = None
+
+        # action
+        self.actions.joint_pos.scale = 0.25
+
+        # event
+        self.events.push_robot = None
+        self.events.add_base_mass.params["mass_distribution_params"] = (-1.0, 3.0)
+        self.events.add_base_mass.params["asset_cfg"].body_names = "base"
+        self.events.base_external_force_torque.params["asset_cfg"].body_names = "base"
+        self.events.reset_robot_joints.params["position_range"] = (1.0, 1.0)
+        self.events.reset_base.params = {
+            "pose_range": {"x": (-0.5, 0.5), "y": (-0.5, 0.5), "yaw": (-3.14, 3.14)},
+            "velocity_range": {
+                "x": (0.0, 0.0),
+                "y": (0.0, 0.0),
+                "z": (0.0, 0.0),
+                "roll": (0.0, 0.0),
+                "pitch": (0.0, 0.0),
+                "yaw": (0.0, 0.0),
+            },
+        }
+        self.events.base_com = None
+
+        # rewards
+        self.rewards.feet_air_time.params["sensor_cfg"].body_names = ".*_foot"
+        self.rewards.feet_air_time.weight = 0.01
+        self.rewards.dof_torques_l2.weight = -0.0002
+        self.rewards.track_lin_vel_xy_exp.weight = 2.5
+        self.rewards.track_ang_vel_z_exp.weight = 0.75
+        self.rewards.ang_vel_xy_l2.weight = -0.1
+        self.rewards.dof_acc_l2.weight = -2.5e-7
+        self.rewards.body_roll_l2.weight = -5.0 #
+        self.rewards.flat_orientation_l2.weight = -3.0 #
+        
+        # === 解决膝关节角度过小和小腿贴地问题的奖励 ===
+        # 1. 惩罚小腿(calf)和大腿(thigh)接触地面 - 防止小腿贴地
+        self.rewards.undesired_contacts.weight = -1.0
+        self.rewards.undesired_contacts.params["sensor_cfg"].body_names = ".*_(calf|thigh)"
+        # 2. 惩罚关节超出软限制 - 防止膝关节角度过小(腿伸太直)
+        self.rewards.dof_pos_limits.weight = -1.0
+        # 3. 维持机身高度 - 鼓励机器人保持适当的站立高度
+        self.rewards.base_height_l2.weight = -2.0 #
+        self.rewards.base_height_l2.params["target_height"] = 0.30
         
         # ===Symmetric rewards for stable gait===
         self.rewards.joint_symmetry_l2.weight = -0.3
@@ -61,22 +89,27 @@ class UnitreeGo1FlatEnvCfg(UnitreeGo1RoughEnvCfg):
             ["FR_hip_joint", "RR_hip_joint"],  
         ]
         
-        # commands - 扩大速度范围以支持高速运动
-        self.commands.base_velocity.ranges.lin_vel_x = (-1.0, 1.0)  # 扩展到1.0m/s
-        self.commands.base_velocity.ranges.lin_vel_y = (-0.8, 0.8)  # 相应扩展侧向速度
-        self.commands.base_velocity.ranges.ang_vel_z = (-1.0, 1.0)  # 扩展角速度
-
+        # terminations
+        self.terminations.base_contact.params["sensor_cfg"].body_names = "trunk"
         
-    
+        # commands - 扩大速度范围以支持高速运动
+        self.commands.base_velocity.ranges.lin_vel_x = (-1.0, 1.0)  
+        self.commands.base_velocity.ranges.lin_vel_y = (-1.0, 1.0) 
+        self.commands.base_velocity.ranges.ang_vel_z = (-1.0, 1.0) 
 
+
+@configclass
 class UnitreeGo1FlatEnvCfg_PLAY(UnitreeGo1FlatEnvCfg):
-    def __post_init__(self) -> None:
+    def __post_init__(self):
         # post init of parent
         super().__post_init__()
 
         # make a smaller scene for play
         self.scene.num_envs = 50
         self.scene.env_spacing = 2.5
+        # spawn the robot randomly in the grid (instead of their terrain levels)
+        self.scene.terrain.max_init_terrain_level = None
+  
         # disable randomization for play
         self.observations.policy.enable_corruption = False
         # remove random pushing event

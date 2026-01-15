@@ -84,6 +84,11 @@ python deploy/sim2sim.py --mode sim --model policy.pt
 ```bash
 python sim2sim2real_joystick.py --mode real --model policy_45_continus.pt #play in real-world
 ```
+## TODO
+[]  
+
+
+
 
 ## Troubleshooting
 

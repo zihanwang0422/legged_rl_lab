@@ -4,6 +4,7 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 from isaaclab.utils import configclass
+from isaaclab.managers import SceneEntityCfg
 
 from legged_rl_lab.tasks.locomotion.velocity.velocity_env_cfg import LocomotionVelocityRoughEnvCfg
 
@@ -11,7 +12,7 @@ from legged_rl_lab.tasks.locomotion.velocity.velocity_env_cfg import LocomotionV
 # Pre-defined configs
 ##
 from legged_rl_lab.assets.unitree import UNITREE_GO1_CFG  # isort: skip
-
+import isaaclab.terrains as terrain_gen
 
 @configclass
 class UnitreeGo1RoughEnvCfg(LocomotionVelocityRoughEnvCfg):
@@ -21,12 +22,42 @@ class UnitreeGo1RoughEnvCfg(LocomotionVelocityRoughEnvCfg):
 
         self.scene.robot = UNITREE_GO1_CFG.replace(prim_path="{ENV_REGEX_NS}/Robot")
         self.scene.height_scanner.prim_path = "{ENV_REGEX_NS}/Robot/base"
-        # scale down the terrains because the robot is small
-        self.scene.terrain.terrain_generator.sub_terrains["boxes"].grid_height_range = (0.025, 0.1)
-        self.scene.terrain.terrain_generator.sub_terrains["random_rough"].noise_range = (0.01, 0.06)
-        self.scene.terrain.terrain_generator.sub_terrains["random_rough"].noise_step = 0.01
+        
+        
+        # terrain curriculum - 使用金字塔楼梯和斜坡地形
+        self.scene.terrain.terrain_generator.sub_terrains = {
+            "pyramid_stairs": terrain_gen.MeshPyramidStairsTerrainCfg(
+                proportion=0.25,
+                step_height_range=(0.05, 0.23),
+                step_width=0.3,
+                platform_width=3.0,
+                border_width=1.0,
+                holes=False,
+            ),
+            "inverted_stairs": terrain_gen.MeshInvertedPyramidStairsTerrainCfg(
+                proportion=0.25,
+                step_height_range=(0.05, 0.23),
+                step_width=0.3,
+                platform_width=3.0,
+                border_width=1.0,
+                holes=False,
+            ),
+            "pyramid_slopes": terrain_gen.HfPyramidSlopedTerrainCfg(
+                proportion=0.25,
+                slope_range=(0.0, 0.4),
+                platform_width=3.0,
+                border_width=0.25,
+                inverted=False,
+            ),
+            "inverted_slopes": terrain_gen.HfInvertedPyramidSlopedTerrainCfg(
+                proportion=0.25,
+                slope_range=(0.0, 0.4),
+                platform_width=3.0,
+                border_width=0.25,
+            ),
+        }
 
-        # reduce action scale
+        # action
         self.actions.joint_pos.scale = 0.25
 
         # event
@@ -50,12 +81,49 @@ class UnitreeGo1RoughEnvCfg(LocomotionVelocityRoughEnvCfg):
 
         # rewards
         self.rewards.feet_air_time.params["sensor_cfg"].body_names = ".*_foot"
-        self.rewards.feet_air_time.weight = 0.01
+        self.rewards.feet_air_time.weight = 0.5
         self.rewards.dof_torques_l2.weight = -0.0002
         self.rewards.track_lin_vel_xy_exp.weight = 1.5
         self.rewards.track_ang_vel_z_exp.weight = 0.75
         self.rewards.dof_acc_l2.weight = -2.5e-7
 
+        # 爬台阶奖励设置 - 平衡稳定性与运动能力
+        # 1. 惩罚小腿(calf)和大腿(thigh)接触地面 - 防止小腿贴地
+        self.rewards.undesired_contacts.weight = -1.0
+        self.rewards.undesired_contacts.params["sensor_cfg"].body_names = ".*_(calf|thigh)"
+        
+        # Base orientation - 增强姿态约束防止狗头触地
+        self.rewards.flat_orientation_l2.weight = -5.0  # 强力约束俯仰角和横滚角
+        
+        # Pitch角单独惩罚 - 防止前倾
+        self.rewards.body_pitch_l2.weight = -3.0
+
+        self.rewards.dof_pos_limits.weight = -1.0  # 轻度惩罚关节极限(保留大幅度动作能力)
+        
+        # Base height - 约束整个机身高度
+        self.rewards.base_height_l2.weight = -3.0  # 增强高度约束
+        self.rewards.base_height_l2.params["target_height"] = 0.32  # 稍微提高目标高度
+        self.rewards.base_height_l2.params["asset_cfg"].body_names = "base"  # 改为base而非trunk
+        self.rewards.base_height_l2.params["sensor_cfg"] = SceneEntityCfg("height_scanner")
+        
+        # ===Symmetric rewards for stable gait===
+        # 左右腿对称 (不是前后腿对称!)
+        self.rewards.joint_symmetry_l2.weight = -0.5
+        self.rewards.joint_symmetry_l2.params["mirror_joints"] = [
+            ["FL_hip_joint", "FR_hip_joint"],   # 左前 vs 右前
+            ["RL_hip_joint", "RR_hip_joint"],   # 左后 vs 右后
+            ["FL_thigh_joint", "FR_thigh_joint"],
+            ["RL_thigh_joint", "RR_thigh_joint"],
+        ]
+
+        self.rewards.action_symmetry_l2.weight = -0.3
+        self.rewards.action_symmetry_l2.params["mirror_joints"] = [
+            ["FL_hip_joint", "FR_hip_joint"],
+            ["RL_hip_joint", "RR_hip_joint"],
+            ["FL_thigh_joint", "FR_thigh_joint"],
+            ["RL_thigh_joint", "RR_thigh_joint"],
+        ]
+        
         # terminations
         self.terminations.base_contact.params["sensor_cfg"].body_names = "trunk"
         
