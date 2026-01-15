@@ -54,7 +54,11 @@ python scripts/list_envs.py
 
 * Run task
 ```bash
-python scripts/rsl_rl/train.py --task=LeggedRLLab-Isaac-Velocity-Flat-Unitree-Go1-v0
+# Use wandb
+python scripts/rsl_rl/train.py \
+    --task=LeggedRLLab-Isaac-Velocity-Rough-Unitree-Go1-v0 \
+    --num_envs 4096 \
+    --headless
 ``` 
 
 * Play task

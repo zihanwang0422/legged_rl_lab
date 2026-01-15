@@ -11,24 +11,56 @@ from legged_rl_lab.tasks.locomotion.velocity.velocity_env_cfg import LocomotionV
 # Pre-defined configs
 ##
 from legged_rl_lab.assets.unitree import UNITREE_GO1_CFG  # isort: skip
-
+import isaaclab.terrains as terrain_gen
 
 @configclass
-class UnitreeGo1FlatEnvCfg(LocomotionVelocityRoughEnvCfg):
+class UnitreeGo1RoughEnvCfg(LocomotionVelocityRoughEnvCfg):
     def __post_init__(self):
         # post init of parent
         super().__post_init__()
 
         self.scene.robot = UNITREE_GO1_CFG.replace(prim_path="{ENV_REGEX_NS}/Robot")
-        self.scene.height_scanner.prim_path = "{ENV_REGEX_NS}/Robot/base"
+        self.scene.height_scanner.prim_path = "{ENV_REGEX_NS}/Robot/trunk"
         
-        # ====Terrain Cfg====
-        # change terrain to flat
-        self.scene.terrain.terrain_type = "plane"
-        self.scene.terrain.terrain_generator = None
-        # no height scan
-        self.scene.height_scanner = None
-        self.observations.policy.height_scan = None
+
+         #------------------------------- Terrain -------------------------------
+        # 减少地形网格数量以节省内存
+        self.scene.terrain.terrain_generator.num_rows = 3  # 默认 10
+        self.scene.terrain.terrain_generator.num_cols = 3  # 默认 10
+        self.scene.terrain.terrain_generator.horizontal_scale = 0.2  # 增大以减少顶点数
+        self.scene.terrain.terrain_generator.vertical_scale = 0.005
+        self.scene.terrain.terrain_generator.sub_terrains = {
+            "pyramid_stairs": terrain_gen.MeshPyramidStairsTerrainCfg(
+                proportion=0.25,
+                step_height_range=(0.05, 0.23),
+                step_width=0.3,
+                platform_width=3.0,
+                border_width=1.0,
+                holes=False,
+            ),
+            "inverted_stairs": terrain_gen.MeshInvertedPyramidStairsTerrainCfg(
+                proportion=0.25,
+                step_height_range=(0.05, 0.23),
+                step_width=0.3,
+                platform_width=3.0,
+                border_width=1.0,
+                holes=False,
+            ),
+            "pyramid_slopes": terrain_gen.HfPyramidSlopedTerrainCfg(
+                proportion=0.25,
+                slope_range=(0.0, 0.4),
+                platform_width=3.0,
+                border_width=0.25,
+                inverted=False,
+            ),
+            "inverted_slopes": terrain_gen.HfInvertedPyramidSlopedTerrainCfg(
+                proportion=0.25,
+                slope_range=(0.0, 0.4),
+                platform_width=3.0,
+                border_width=0.25,
+            ),
+        }
+
 
         # no terrain curriculum
         self.curriculum.terrain_levels = None
@@ -39,8 +71,8 @@ class UnitreeGo1FlatEnvCfg(LocomotionVelocityRoughEnvCfg):
         # event
         self.events.push_robot = None
         self.events.add_base_mass.params["mass_distribution_params"] = (-1.0, 3.0)
-        self.events.add_base_mass.params["asset_cfg"].body_names = "base"
-        self.events.base_external_force_torque.params["asset_cfg"].body_names = "base"
+        self.events.add_base_mass.params["asset_cfg"].body_names = "trunk"
+        self.events.base_external_force_torque.params["asset_cfg"].body_names = "trunk"
         self.events.reset_robot_joints.params["position_range"] = (1.0, 1.0)
         self.events.reset_base.params = {
             "pose_range": {"x": (-0.5, 0.5), "y": (-0.5, 0.5), "yaw": (-3.14, 3.14)},
@@ -81,14 +113,14 @@ class UnitreeGo1FlatEnvCfg(LocomotionVelocityRoughEnvCfg):
         # ===Symmetric rewards for stable gait===
         self.rewards.joint_symmetry_l2.weight = -0.3
         self.rewards.joint_symmetry_l2.params["mirror_joints"] = [
-            ["FL_hip_joint", "RL_hip_joint"],   
-            ["FR_hip_joint", "RR_hip_joint"],  
+            ["FR_(hip|thigh|calf).*", "RL_(hip|thigh|calf).*"],
+            ["FL_(hip|thigh|calf).*", "RR_(hip|thigh|calf).*"],
         ]
 
         self.rewards.action_symmetry_l2.weight = -0.2
         self.rewards.action_symmetry_l2.params["mirror_joints"] = [
-            ["FL_hip_joint", "RL_hip_joint"],  
-            ["FR_hip_joint", "RR_hip_joint"],  
+            ["FR_(hip|thigh|calf).*", "RL_(hip|thigh|calf).*"],
+            ["FL_(hip|thigh|calf).*", "RR_(hip|thigh|calf).*"],
         ]
         
         # terminations
@@ -96,12 +128,12 @@ class UnitreeGo1FlatEnvCfg(LocomotionVelocityRoughEnvCfg):
         
         # commands - 扩大速度范围以支持高速运动
         self.commands.base_velocity.ranges.lin_vel_x = (-1.0, 1.0)  
-        self.commands.base_velocity.ranges.lin_vel_y = (-1.0, 1.0) 
-        self.commands.base_velocity.ranges.ang_vel_z = (-1.0, 1.0) 
+        # self.commands.base_velocity.ranges.lin_vel_y = (-1.0, 1.0) 
+        # self.commands.base_velocity.ranges.ang_vel_z = (-1.0, 1.0) 
 
 
 @configclass
-class UnitreeGo1FlatEnvCfg_PLAY(UnitreeGo1FlatEnvCfg):
+class UnitreeGo1RoughEnvCfg_PLAY(UnitreeGo1RoughEnvCfg):
     def __post_init__(self):
         # post init of parent
         super().__post_init__()

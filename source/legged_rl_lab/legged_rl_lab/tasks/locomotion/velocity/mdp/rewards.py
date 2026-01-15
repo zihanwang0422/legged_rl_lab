@@ -84,6 +84,55 @@ def feet_slide(env, sensor_cfg: SceneEntityCfg, asset_cfg: SceneEntityCfg = Scen
     reward = torch.sum(body_vel.norm(dim=-1) * contacts, dim=1)
     return reward
 
+def feet_height(
+    env: ManagerBasedRLEnv,
+    command_name: str,
+    asset_cfg: SceneEntityCfg,
+    target_height: float,
+    tanh_mult: float,
+) -> torch.Tensor:
+    """Reward the swinging feet for clearing a specified height off the ground"""
+    asset: RigidObject = env.scene[asset_cfg.name]
+    foot_z_target_error = torch.square(asset.data.body_pos_w[:, asset_cfg.body_ids, 2] - target_height)
+    foot_velocity_tanh = torch.tanh(
+        tanh_mult * torch.linalg.norm(asset.data.body_lin_vel_w[:, asset_cfg.body_ids, :2], dim=2)
+    )
+    reward = torch.sum(foot_z_target_error * foot_velocity_tanh, dim=1)
+    # no reward for zero command
+    reward *= torch.linalg.norm(env.command_manager.get_command(command_name), dim=1) > 0.1
+    reward *= torch.clamp(-env.scene["robot"].data.projected_gravity_b[:, 2], 0, 0.7) / 0.7
+    return reward
+
+
+# def feet_height_body(
+#     env: ManagerBasedRLEnv,
+#     command_name: str,
+#     asset_cfg: SceneEntityCfg,
+#     target_height: float,
+#     tanh_mult: float,
+# ) -> torch.Tensor:
+#     """Reward the swinging feet for clearing a specified height off the ground"""
+#     asset: RigidObject = env.scene[asset_cfg.name]
+#     cur_footpos_translated = asset.data.body_pos_w[:, asset_cfg.body_ids, :] - asset.data.root_pos_w[:, :].unsqueeze(1)
+#     footpos_in_body_frame = torch.zeros(env.num_envs, len(asset_cfg.body_ids), 3, device=env.device)
+#     cur_footvel_translated = asset.data.body_lin_vel_w[:, asset_cfg.body_ids, :] - asset.data.root_lin_vel_w[
+#         :, :
+#     ].unsqueeze(1)
+#     footvel_in_body_frame = torch.zeros(env.num_envs, len(asset_cfg.body_ids), 3, device=env.device)
+#     for i in range(len(asset_cfg.body_ids)):
+#         footpos_in_body_frame[:, i, :] = math_utils.quat_apply_inverse(
+#             asset.data.root_quat_w, cur_footpos_translated[:, i, :]
+#         )
+#         footvel_in_body_frame[:, i, :] = math_utils.quat_apply_inverse(
+#             asset.data.root_quat_w, cur_footvel_translated[:, i, :]
+#         )
+#     foot_z_target_error = torch.square(footpos_in_body_frame[:, :, 2] - target_height).view(env.num_envs, -1)
+#     foot_velocity_tanh = torch.tanh(tanh_mult * torch.norm(footvel_in_body_frame[:, :, :2], dim=2))
+#     reward = torch.sum(foot_z_target_error * foot_velocity_tanh, dim=1)
+#     reward *= torch.linalg.norm(env.command_manager.get_command(command_name), dim=1) > 0.1
+#     reward *= torch.clamp(-env.scene["robot"].data.projected_gravity_b[:, 2], 0, 0.7) / 0.7
+#     return reward
+
 
 def track_lin_vel_xy_yaw_frame_exp(
     env, std: float, command_name: str, asset_cfg: SceneEntityCfg = SceneEntityCfg("robot")

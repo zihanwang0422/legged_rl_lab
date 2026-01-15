@@ -24,7 +24,12 @@ class UnitreeGo1RoughEnvCfg(LocomotionVelocityRoughEnvCfg):
         self.scene.height_scanner.prim_path = "{ENV_REGEX_NS}/Robot/base"
         
         
-        # terrain curriculum - 使用金字塔楼梯和斜坡地形
+        #------------------------------- Terrain -------------------------------
+        # 减少地形网格数量以节省内存
+        self.scene.terrain.terrain_generator.num_rows = 3  # 默认 10
+        self.scene.terrain.terrain_generator.num_cols = 3  # 默认 10
+        self.scene.terrain.terrain_generator.horizontal_scale = 0.2  # 增大以减少顶点数
+        self.scene.terrain.terrain_generator.vertical_scale = 0.005
         self.scene.terrain.terrain_generator.sub_terrains = {
             "pyramid_stairs": terrain_gen.MeshPyramidStairsTerrainCfg(
                 proportion=0.25,
@@ -60,7 +65,7 @@ class UnitreeGo1RoughEnvCfg(LocomotionVelocityRoughEnvCfg):
         # action
         self.actions.joint_pos.scale = 0.25
 
-        # event
+        #------------------------------- Event -------------------------------
         self.events.push_robot = None
         self.events.add_base_mass.params["mass_distribution_params"] = (-1.0, 3.0)
         self.events.add_base_mass.params["asset_cfg"].body_names = "base"
@@ -79,58 +84,68 @@ class UnitreeGo1RoughEnvCfg(LocomotionVelocityRoughEnvCfg):
         }
         self.events.base_com = None
 
-        # rewards
+        #------------------------------- Rewards -------------------------------
+        
+        #general rewards
+        self.rewards.is_terminated.weight = 0.0  
+        
+        #Contact rewards
         self.rewards.feet_air_time.params["sensor_cfg"].body_names = ".*_foot"
         self.rewards.feet_air_time.weight = 0.5
-        self.rewards.dof_torques_l2.weight = -0.0002
-        self.rewards.track_lin_vel_xy_exp.weight = 1.5
-        self.rewards.track_ang_vel_z_exp.weight = 0.75
-        self.rewards.dof_acc_l2.weight = -2.5e-7
-
-        # 爬台阶奖励设置 - 平衡稳定性与运动能力
-        # 1. 惩罚小腿(calf)和大腿(thigh)接触地面 - 防止小腿贴地
-        self.rewards.undesired_contacts.weight = -1.0
-        self.rewards.undesired_contacts.params["sensor_cfg"].body_names = ".*_(calf|thigh)"
         
-        # Base orientation - 增强姿态约束防止狗头触地
-        self.rewards.flat_orientation_l2.weight = -5.0  # 强力约束俯仰角和横滚角
+        self.rewards.feet_slide.weight = -0.1
+        self.rewards.feet_slide.params["sensor_cfg"].body_names = ".*_foot"
+        self.rewards.feet_height.weight = 0
+        self.rewards.feet_height.params["target_height"] = 0.05
+        self.rewards.feet_height.params["asset_cfg"].body_names = ".*_foot"
+        # self.rewards.feet_height_body.weight = -5.0
+        # self.rewards.feet_height_body.params["target_height"] = -0.2
+        # self.rewards.feet_height_body.params["asset_cfg"].body_names = ".*_foot"
+     
+        self.rewards.undesired_contacts = None
+        # self.rewards.undesired_contacts.weight = -1.0
+        # self.rewards.undesired_contacts.params["sensor_cfg"].body_names = ".*_(calf|thigh)"
         
-        # Pitch角单独惩罚 - 防止前倾
-        self.rewards.body_pitch_l2.weight = -3.0
-
-        self.rewards.dof_pos_limits.weight = -1.0  # 轻度惩罚关节极限(保留大幅度动作能力)
+        # Base rewards
+        self.rewards.stand_till.weight = -2.0
+        self.rewards.stand_till.params["command_name"] = "base_velocity"
+        self.rewards.track_lin_vel_xy_exp.weight = 3.0
+        self.rewards.track_ang_vel_z_exp.weight = 1.5
         
-        # Base height - 约束整个机身高度
-        self.rewards.base_height_l2.weight = -3.0  # 增强高度约束
-        self.rewards.base_height_l2.params["target_height"] = 0.32  # 稍微提高目标高度
-        self.rewards.base_height_l2.params["asset_cfg"].body_names = "base"  # 改为base而非trunk
-        self.rewards.base_height_l2.params["sensor_cfg"] = SceneEntityCfg("height_scanner")
+        self.rewards.flat_orientation_l2.weight = 0.0
         
-        # ===Symmetric rewards for stable gait===
-        # 左右腿对称 (不是前后腿对称!)
-        self.rewards.joint_symmetry_l2.weight = -0.5
+        # self.rewards.base_height_l2.weight = 0.0  
+        # self.rewards.base_height_l2.params["target_height"] = 0.20 
+        # self.rewards.base_height_l2.params["asset_cfg"].body_names = "base"
+        # self.rewards.base_height_l2.params["sensor_cfg"] = SceneEntityCfg("height_scanner")
+        
+        
+        # Joint rewards
+        self.rewards.joint_torques_l2.weight = -0.0002
+        self.rewards.joint_acc_l2.weight = -2.5e-7
+        self.rewards.joint_pos_limits.weight = -5.0
+        
+        # ===对角线步态对称性 (Trot Gait)===
+        # FL+RR 为一组对角线, FR+RL 为另一组对角线
+        self.rewards.joint_symmetry_l2.weight = -0.1  # 降低权重避免过度约束
         self.rewards.joint_symmetry_l2.params["mirror_joints"] = [
-            ["FL_hip_joint", "FR_hip_joint"],   # 左前 vs 右前
-            ["RL_hip_joint", "RR_hip_joint"],   # 左后 vs 右后
-            ["FL_thigh_joint", "FR_thigh_joint"],
-            ["RL_thigh_joint", "RR_thigh_joint"],
+            ["FL_.*_joint", "RR_.*_joint"],  # 前左 + 后右 (对角线1)
+            ["FR_.*_joint", "RL_.*_joint"],  # 前右 + 后左 (对角线2)
         ]
 
-        self.rewards.action_symmetry_l2.weight = -0.3
+        self.rewards.action_symmetry_l2.weight = -0.05  # 降低权重
         self.rewards.action_symmetry_l2.params["mirror_joints"] = [
-            ["FL_hip_joint", "FR_hip_joint"],
-            ["RL_hip_joint", "RR_hip_joint"],
-            ["FL_thigh_joint", "FR_thigh_joint"],
-            ["RL_thigh_joint", "RR_thigh_joint"],
+            ["FL_.*_joint", "RR_.*_joint"],  # 前左 + 后右 (对角线1)
+            ["FR_.*_joint", "RL_.*_joint"],  # 前右 + 后左 (对角线2)
         ]
         
-        # terminations
+        #------------------------------- Terminations -------------------------------
         self.terminations.base_contact.params["sensor_cfg"].body_names = "trunk"
         
-        # commands - 扩大速度范围以支持高速运动
+        #------------------------------- Commands -------------------------------
         self.commands.base_velocity.ranges.lin_vel_x = (-1.0, 1.0)  
-        self.commands.base_velocity.ranges.lin_vel_y = (-0.8, 0.8) 
-        self.commands.base_velocity.ranges.ang_vel_z = (-1.0, 1.0) 
+        # self.commands.base_velocity.ranges.lin_vel_y = (-0.8, 0.8) 
+        # self.commands.base_velocity.ranges.ang_vel_z = (-1.0, 1.0) 
 
 
 @configclass
