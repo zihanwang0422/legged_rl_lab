@@ -54,12 +54,12 @@ python scripts/list_envs.py
 
 * Run task
 ```bash
-python scripts/rsl_rl/train.py --task=LeggedRLLab-Isaac-Velocity-Rough-Unitree-Go1-v0
+python scripts/rsl_rl/train.py --task=LeggedRLLab-Isaac-Velocity-Flat-Unitree-Go1-v0
 ``` 
 
 * Play task
 ```bash
-python scripts/rsl_rl/play.py --task=LeggedRLLab-Isaac-Velocity-Rough-Unitree-Go1-v0
+python scripts/rsl_rl/play.py --task=LeggedRLLab-Isaac-Velocity-Flat-Unitree-Go1-v0
 ```
 
 ## Sim2sim
@@ -75,19 +75,15 @@ Define own task:
 4. Play the sim2sim script
 
 ```bash
+pip install mujoco
+
 python deploy/sim2sim.py --mode sim --model policy.pt
 ```
-
-
-
 
 ## Sim2real
 ```bash
 python sim2sim2real_joystick.py --mode real --model policy_45_continus.pt #play in real-world
 ```
-
-
-
 
 ## Troubleshooting
 
