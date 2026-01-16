@@ -78,17 +78,18 @@ class UnitreeGo1FlatEnvCfg(LocomotionVelocityRoughEnvCfg):
         self.rewards.base_height_l2.weight = -2.0 #
         self.rewards.base_height_l2.params["target_height"] = 0.30
         
-        # ===Symmetric rewards for stable gait===
-        self.rewards.joint_symmetry_l2.weight = -0.3
+        # ===对角线步态对称性 (Trot Gait)===
+        # FL+RR 为一组对角线, FR+RL 为另一组对角线
+        self.rewards.joint_symmetry_l2.weight = -0.1  # 降低权重避免过度约束
         self.rewards.joint_symmetry_l2.params["mirror_joints"] = [
-            ["FL_hip_joint", "RL_hip_joint"],   
-            ["FR_hip_joint", "RR_hip_joint"],  
+            ["FL_.*_joint", "RR_.*_joint"],  # 前左 + 后右 (对角线1)
+            ["FR_.*_joint", "RL_.*_joint"],  # 前右 + 后左 (对角线2)
         ]
 
-        self.rewards.action_symmetry_l2.weight = -0.2
+        self.rewards.action_symmetry_l2.weight = -0.05  # 降低权重
         self.rewards.action_symmetry_l2.params["mirror_joints"] = [
-            ["FL_hip_joint", "RL_hip_joint"],  
-            ["FR_hip_joint", "RR_hip_joint"],  
+            ["FL_.*_joint", "RR_.*_joint"],  # 前左 + 后右 (对角线1)
+            ["FR_.*_joint", "RL_.*_joint"],  # 前右 + 后左 (对角线2)
         ]
         
         # terminations

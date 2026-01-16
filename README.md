@@ -63,7 +63,13 @@ python scripts/rsl_rl/train.py \
 
 * Play task
 ```bash
-python scripts/rsl_rl/play.py --task=LeggedRLLab-Isaac-Velocity-Flat-Unitree-Go1-v0
+# 先确保 GPU 显存充足,停止其他训练进程
+# 检查显存: nvidia-smi
+# 清理进程: pkill -f "python.*train.py"
+
+python scripts/rsl_rl/play.py \
+    --task=LeggedRLLab-Isaac-Velocity-Rough-Unitree-Go1-v0 \
+    --num_envs 16 \
 ```
 
 ## Sim2sim
