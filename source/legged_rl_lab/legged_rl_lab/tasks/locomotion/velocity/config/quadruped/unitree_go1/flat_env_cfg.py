@@ -55,38 +55,48 @@ class UnitreeGo1FlatEnvCfg(LocomotionVelocityRoughEnvCfg):
         }
         self.events.base_com = None
 
-        # rewards
-        self.rewards.feet_air_time.params["sensor_cfg"].body_names = ".*_foot"
-        self.rewards.feet_air_time.weight = 0.01
-        self.rewards.joint_torques_l2.weight = -0.0002
+        # ==================== Rewards Configuration ====================
+        
+        # ===== Base Rewards =====
+        # Tracking rewards
         self.rewards.track_lin_vel_xy_exp.weight = 2.5
         self.rewards.track_ang_vel_z_exp.weight = 0.75
+        
+        # Base penalties
         self.rewards.ang_vel_xy_l2.weight = -0.1
+        self.rewards.flat_orientation_l2.weight = -3.0
+        self.rewards.base_height_l2.weight = -2.0
+        self.rewards.base_height_l2.params["target_height"] = 0.30
+        
+        # ===== Joint Rewards =====
+        self.rewards.joint_torques_l2.weight = -0.0002
         self.rewards.joint_acc_l2.weight = -2.5e-7
-        self.rewards.body_roll_l2.weight = -5.0 #
-        self.rewards.flat_orientation_l2.weight = -3.0 #
+        self.rewards.joint_pos_limits.weight = -1.0
+        
+        # ===== Contact Rewards =====
+        # Undesired contacts (防止小腿和大腿贴地)
+        self.rewards.undesired_contacts.weight = -1.0
+        self.rewards.undesired_contacts.params["sensor_cfg"].body_names = ".*_(calf|thigh)"
+        
+        # Feet rewards
+        self.rewards.feet_air_time.weight = 0.01
+        self.rewards.feet_air_time.params["sensor_cfg"].body_names = ".*_foot"
+        
+        # ===== Other/Custom Rewards =====
+        # Standing still
         self.rewards.stand_till.weight = -2.0
         self.rewards.stand_till.params["command_name"] = "base_velocity"
         
-        # === 解决膝关节角度过小和小腿贴地问题的奖励 ===
-        # 1. 惩罚小腿(calf)和大腿(thigh)接触地面 - 防止小腿贴地
-        self.rewards.undesired_contacts.weight = -1.0
-        self.rewards.undesired_contacts.params["sensor_cfg"].body_names = ".*_(calf|thigh)"
-        # 2. 惩罚关节超出软限制 - 防止膝关节角度过小(腿伸太直)
-        self.rewards.joint_pos_limits.weight = -1.0
-        # 3. 维持机身高度 - 鼓励机器人保持适当的站立高度
-        self.rewards.base_height_l2.weight = -2.0 #
-        self.rewards.base_height_l2.params["target_height"] = 0.30
+        # Body orientation
+        self.rewards.body_roll_l2.weight = -5.0
         
-        # ===对角线步态对称性 (Trot Gait)===
-        # FL+RR 为一组对角线, FR+RL 为另一组对角线
-        self.rewards.joint_symmetry_l2.weight = -0.1  # 降低权重避免过度约束
+        # Diagonal gait symmetry (Trot Gait: FL+RR, FR+RL)
+        self.rewards.joint_symmetry_l2.weight = -0.1
         self.rewards.joint_symmetry_l2.params["mirror_joints"] = [
             ["FL_.*_joint", "RR_.*_joint"],  # 前左 + 后右 (对角线1)
             ["FR_.*_joint", "RL_.*_joint"],  # 前右 + 后左 (对角线2)
         ]
-
-        self.rewards.action_symmetry_l2.weight = -0.05  # 降低权重
+        self.rewards.action_symmetry_l2.weight = -0.05
         self.rewards.action_symmetry_l2.params["mirror_joints"] = [
             ["FL_.*_joint", "RR_.*_joint"],  # 前左 + 后右 (对角线1)
             ["FR_.*_joint", "RL_.*_joint"],  # 前右 + 后左 (对角线2)

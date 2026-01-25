@@ -340,9 +340,9 @@ def handstand_orientation_l2(
     return torch.sum(torch.square(asset.data.projected_gravity_b - target_gravity_tensor), dim=1)
 
 
-def reward_base_ang_vel_x_l2(env: ManagerBasedRLEnv, asset_cfg: SceneEntityCfg) -> torch.Tensor:
-    """专门惩罚绕机身 X 轴的角速度（针对倒立画圆）"""
-    asset: Articulation = env.scene[asset_cfg.name]
-    # 只提取索引 0 (X轴)
-    ang_vel_x = asset.data.root_com_ang_vel_b[:, 0]
-    return torch.square(ang_vel_x)
+# def reward_base_ang_vel_x_l2(env: ManagerBasedRLEnv, asset_cfg: SceneEntityCfg) -> torch.Tensor:
+#     """专门惩罚绕机身 X 轴的角速度（针对倒立画圆）"""
+#     asset: Articulation = env.scene[asset_cfg.name]
+#     # 只提取索引 0 (X轴)
+#     ang_vel_x = asset.data.root_com_ang_vel_b[:, 0]
+#     return torch.square(ang_vel_x)

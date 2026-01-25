@@ -84,15 +84,36 @@ class UnitreeGo1RoughEnvCfg(LocomotionVelocityRoughEnvCfg):
         }
         self.events.base_com = None
 
-        #------------------------------- Rewards -------------------------------
+        # ==================== Rewards Configuration ====================
         
-        #general rewards
-        self.rewards.is_terminated.weight = 0.0  
+        # ===== General Rewards =====
+        self.rewards.is_terminated.weight = 0.0
         
-        #Contact rewards
-        self.rewards.feet_air_time.params["sensor_cfg"].body_names = ".*_foot"
+        # ===== Base Rewards =====
+        # Tracking rewards
+        self.rewards.track_lin_vel_xy_exp.weight = 3.0
+        self.rewards.track_ang_vel_z_exp.weight = 1.5
+        
+        # Base penalties
+        self.rewards.flat_orientation_l2.weight = 0.0
+        # self.rewards.base_height_l2.weight = 0.0
+        # self.rewards.base_height_l2.params["target_height"] = 0.20
+        # self.rewards.base_height_l2.params["asset_cfg"].body_names = "base"
+        # self.rewards.base_height_l2.params["sensor_cfg"] = SceneEntityCfg("height_scanner")
+        
+        # ===== Joint Rewards =====
+        self.rewards.joint_torques_l2.weight = -0.0002
+        self.rewards.joint_acc_l2.weight = -2.5e-7
+        self.rewards.joint_pos_limits.weight = -5.0
+        
+        # ===== Contact Rewards =====
+        self.rewards.undesired_contacts = None
+        # self.rewards.undesired_contacts.weight = -1.0
+        # self.rewards.undesired_contacts.params["sensor_cfg"].body_names = ".*_(calf|thigh)"
+        
+        # Feet rewards
         self.rewards.feet_air_time.weight = 0.5
-        
+        self.rewards.feet_air_time.params["sensor_cfg"].body_names = ".*_foot"
         self.rewards.feet_slide.weight = -0.1
         self.rewards.feet_slide.params["sensor_cfg"].body_names = ".*_foot"
         self.rewards.feet_height.weight = 0
@@ -101,39 +122,19 @@ class UnitreeGo1RoughEnvCfg(LocomotionVelocityRoughEnvCfg):
         # self.rewards.feet_height_body.weight = -5.0
         # self.rewards.feet_height_body.params["target_height"] = -0.2
         # self.rewards.feet_height_body.params["asset_cfg"].body_names = ".*_foot"
-     
-        self.rewards.undesired_contacts = None
-        # self.rewards.undesired_contacts.weight = -1.0
-        # self.rewards.undesired_contacts.params["sensor_cfg"].body_names = ".*_(calf|thigh)"
         
-        # Base rewards
+        # ===== Other/Custom Rewards =====
+        # Standing still
         self.rewards.stand_till.weight = -2.0
         self.rewards.stand_till.params["command_name"] = "base_velocity"
-        self.rewards.track_lin_vel_xy_exp.weight = 3.0
-        self.rewards.track_ang_vel_z_exp.weight = 1.5
         
-        self.rewards.flat_orientation_l2.weight = 0.0
-        
-        # self.rewards.base_height_l2.weight = 0.0  
-        # self.rewards.base_height_l2.params["target_height"] = 0.20 
-        # self.rewards.base_height_l2.params["asset_cfg"].body_names = "base"
-        # self.rewards.base_height_l2.params["sensor_cfg"] = SceneEntityCfg("height_scanner")
-        
-        
-        # Joint rewards
-        self.rewards.joint_torques_l2.weight = -0.0002
-        self.rewards.joint_acc_l2.weight = -2.5e-7
-        self.rewards.joint_pos_limits.weight = -5.0
-        
-        # ===对角线步态对称性 (Trot Gait)===
-        # FL+RR 为一组对角线, FR+RL 为另一组对角线
-        self.rewards.joint_symmetry_l2.weight = -0.1  # 降低权重避免过度约束
+        # Diagonal gait symmetry (Trot Gait: FL+RR, FR+RL)
+        self.rewards.joint_symmetry_l2.weight = -0.1
         self.rewards.joint_symmetry_l2.params["mirror_joints"] = [
             ["FL_.*_joint", "RR_.*_joint"],  # 前左 + 后右 (对角线1)
             ["FR_.*_joint", "RL_.*_joint"],  # 前右 + 后左 (对角线2)
         ]
-
-        self.rewards.action_symmetry_l2.weight = -0.05  # 降低权重
+        self.rewards.action_symmetry_l2.weight = -0.05
         self.rewards.action_symmetry_l2.params["mirror_joints"] = [
             ["FL_.*_joint", "RR_.*_joint"],  # 前左 + 后右 (对角线1)
             ["FR_.*_joint", "RL_.*_joint"],  # 前右 + 后左 (对角线2)

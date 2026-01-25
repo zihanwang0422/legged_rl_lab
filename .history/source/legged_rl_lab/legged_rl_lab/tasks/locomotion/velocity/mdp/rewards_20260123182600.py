@@ -320,12 +320,22 @@ def handstand_feet_on_air(env: ManagerBasedRLEnv, sensor_cfg: SceneEntityCfg) ->
 
 
 def handstand_feet_air_time(env: ManagerBasedRLEnv, sensor_cfg: SceneEntityCfg, threshold: float) -> torch.Tensor:
+    """Reward continuous air time for specified feet, only when ALL feet are in the air.
+    
+    This ensures that the robot is only rewarded when all specified feet (e.g., front legs)
+    are simultaneously airborne for the required duration.
+    """
     # extract the used quantities (to enable type-hinting)
     contact_sensor: ContactSensor = env.scene.sensors[sensor_cfg.name]
     # compute the reward
     first_contact = contact_sensor.compute_first_contact(env.step_dt)[:, sensor_cfg.body_ids]
     last_air_time = contact_sensor.data.last_air_time[:, sensor_cfg.body_ids]
-    reward = torch.sum((last_air_time - threshold) * first_contact, dim=1)
+    
+    # Use minimum air time across all feet to ensure all are airborne
+    min_air_time = torch.min(last_air_time, dim=1)[0]
+    # Only reward when air time exceeds threshold and any foot just made contact
+    reward = torch.clamp(min_air_time - threshold, min=0.0) * torch.any(first_contact, dim=1).float()
+    
     return reward
 
 

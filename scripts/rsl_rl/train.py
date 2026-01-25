@@ -79,6 +79,8 @@ import gymnasium as gym
 import logging
 import os
 import torch
+
+torch.backends.cuda.preferred_linalg_library("cusolver")
 from datetime import datetime
 
 from rsl_rl.runners import DistillationRunner, OnPolicyRunner

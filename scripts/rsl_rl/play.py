@@ -174,6 +174,8 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
     export_policy_as_onnx(policy_nn, normalizer=normalizer, path=export_model_dir, filename="policy.onnx")
 
     dt = env.unwrapped.step_dt
+    robot_asset = env.unwrapped.scene["robot"]
+    
 
     # reset environment
     obs = env.get_observations()
@@ -187,8 +189,23 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
             actions = policy(obs)
             # env stepping
             obs, _, dones, _ = env.step(actions)
+            
+            # ===== 新增打印代码 =====
+            # 获取 Base Frame 下的重心角速度
+            # data.root_com_ang_vel_b 的 shape 是 [num_envs, 3]
+            # 我们只打印第一个环境 (env_id = 0) 的数据
+            ang_vel_b = robot_asset.data.root_com_ang_vel_b[0]
+            
+            # 打印三个轴的角速度，方便观察
+            # 在倒立 X 轴朝天的情况下，主要观察 ang_vel_x
+            print(f"Time: {timestep:4d} | AngVel_B -> "
+                  f"X(绕机身): {ang_vel_b[0]:.3f} | "
+                  f"Y(俯仰): {ang_vel_b[1]:.3f} | "
+                  f"Z(翻滚): {ang_vel_b[2]:.3f}", end='\r')
+            # =======================
             # reset recurrent states for episodes that have terminated
             policy_nn.reset(dones)
+            
         if args_cli.video:
             timestep += 1
             # Exit the play loop after recording one video

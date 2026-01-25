@@ -163,51 +163,97 @@ class ObservationsCfg:
 @configclass
 class EventCfg:
     """Configuration for events."""
-
+    
+    
     # startup
-    physics_material = EventTerm(
+    randomize_rigid_body_material = EventTerm(
         func=mdp.randomize_rigid_body_material,
         mode="startup",
         params={
             "asset_cfg": SceneEntityCfg("robot", body_names=".*"),
-            "static_friction_range": (0.8, 0.8),
-            "dynamic_friction_range": (0.6, 0.6),
-            "restitution_range": (0.0, 0.0),
+            "static_friction_range": (0.3, 1.0),
+            "dynamic_friction_range": (0.3, 0.8),
+            "restitution_range": (0.0, 0.5),
             "num_buckets": 64,
         },
     )
 
-    add_base_mass = EventTerm(
+    randomize_rigid_body_mass_base = EventTerm(
         func=mdp.randomize_rigid_body_mass,
         mode="startup",
         params={
-            "asset_cfg": SceneEntityCfg("robot", body_names="base"),
-            "mass_distribution_params": (-5.0, 5.0),
+            "asset_cfg": SceneEntityCfg("robot", body_names=""),
+            "mass_distribution_params": (-1.0, 3.0),
             "operation": "add",
+            "recompute_inertia": True,
         },
     )
 
-    base_com = EventTerm(
+    randomize_rigid_body_mass_others = EventTerm(
+        func=mdp.randomize_rigid_body_mass,
+        mode="startup",
+        params={
+            "asset_cfg": SceneEntityCfg("robot", body_names=".*"),
+            "mass_distribution_params": (0.7, 1.3),
+            "operation": "scale",
+            "recompute_inertia": True,
+        },
+    )
+
+    # Skip: inertia updated via mass randomization by setting recompute_inertia=True
+    # randomize_rigid_body_inertia = EventTerm(
+    #     func=mdp.randomize_rigid_body_inertia,
+    #     mode="startup",
+    #     params={
+    #         "asset_cfg": SceneEntityCfg("robot", body_names=".*"),
+    #         "inertia_distribution_params": (0.5, 1.5),
+    #         "operation": "scale",
+    #     },
+    # )
+
+    randomize_com_positions = EventTerm(
         func=mdp.randomize_rigid_body_com,
         mode="startup",
         params={
-            "asset_cfg": SceneEntityCfg("robot", body_names="base"),
-            "com_range": {"x": (-0.05, 0.05), "y": (-0.05, 0.05), "z": (-0.01, 0.01)},
+            "asset_cfg": SceneEntityCfg("robot", body_names=".*"),
+            "com_range": {"x": (-0.05, 0.05), "y": (-0.05, 0.05), "z": (-0.05, 0.05)},
         },
     )
 
     # reset
-    base_external_force_torque = EventTerm(
+    randomize_apply_external_force_torque = EventTerm(
         func=mdp.apply_external_force_torque,
         mode="reset",
         params={
-            "asset_cfg": SceneEntityCfg("robot", body_names="base"),
-            "force_range": (0.0, 0.0),
-            "torque_range": (-0.0, 0.0),
+            "asset_cfg": SceneEntityCfg("robot", body_names=""),
+            "force_range": (-10.0, 10.0),
+            "torque_range": (-10.0, 10.0),
         },
     )
 
-    reset_base = EventTerm(
+    randomize_reset_joints = EventTerm(
+        func=mdp.reset_joints_by_scale,
+        # func=mdp.reset_joints_by_offset,
+        mode="reset",
+        params={
+            "position_range": (1.0, 1.0),
+            "velocity_range": (0.0, 0.0),
+        },
+    )
+
+    randomize_actuator_gains = EventTerm(
+        func=mdp.randomize_actuator_gains,
+        mode="reset",
+        params={
+            "asset_cfg": SceneEntityCfg("robot", joint_names=".*"),
+            "stiffness_distribution_params": (0.5, 2.0),
+            "damping_distribution_params": (0.5, 2.0),
+            "operation": "scale",
+            "distribution": "uniform",
+        },
+    )
+
+    randomize_reset_base = EventTerm(
         func=mdp.reset_root_state_uniform,
         mode="reset",
         params={
@@ -223,17 +269,8 @@ class EventCfg:
         },
     )
 
-    reset_robot_joints = EventTerm(
-        func=mdp.reset_joints_by_scale,
-        mode="reset",
-        params={
-            "position_range": (0.5, 1.5),
-            "velocity_range": (0.0, 0.0),
-        },
-    )
-
     # interval
-    push_robot = EventTerm(
+    randomize_push_robot = EventTerm(
         func=mdp.push_by_setting_velocity,
         mode="interval",
         interval_range_s=(10.0, 15.0),
@@ -241,28 +278,121 @@ class EventCfg:
     )
 
 
+    # startup
+    physics_material = EventTerm(
+        func=mdp.randomize_rigid_body_material,
+        mode="startup",
+        params={
+            "asset_cfg": SceneEntityCfg("robot", body_names=".*"),
+            "static_friction_range": (0.8, 0.8),
+            "dynamic_friction_range": (0.6, 0.6),
+            "restitution_range": (0.0, 0.0),
+            "num_buckets": 64,
+        },
+    )
+
+
 @configclass
 class RewardsCfg:
     """Reward terms for the MDP."""
 
+    # ==================== General Rewards ====================
+    is_alive = RewTerm(func=mdp.is_alive, weight=0.0)
     is_terminated = RewTerm(func=mdp.is_terminated, weight=0.0)
 
-    stand_till = RewTerm(func=mdp.stand_still_joint_deviation_l1, weight=0.0)
+    # ==================== Base Rewards ====================
+    # Tracking rewards
     track_lin_vel_xy_exp = RewTerm(
-        func=mdp.track_lin_vel_xy_exp, weight=1.0, params={"command_name": "base_velocity", "std": math.sqrt(0.25)}
-    ) #X,Y linear velocity
+        func=mdp.track_lin_vel_xy_exp, 
+        weight=1.0, 
+        params={"command_name": "base_velocity", "std": math.sqrt(0.25)}
+    )
     track_ang_vel_z_exp = RewTerm(
-        func=mdp.track_ang_vel_z_exp, weight=0.5, params={"command_name": "base_velocity", "std": math.sqrt(0.25)}
-    ) #Z angular velocity
-    # -- penalties
-    lin_vel_z_l2 = RewTerm(func=mdp.lin_vel_z_l2, weight=-2.0) #消除z轴上下的线速度
-    ang_vel_xy_l2 = RewTerm(func=mdp.ang_vel_xy_l2, weight=-0.05) #消除x y轴的角速度(俯仰角和横滚角)
+        func=mdp.track_ang_vel_z_exp, 
+        weight=0.5, 
+        params={"command_name": "base_velocity", "std": math.sqrt(0.25)}
+    )
+    
+    # Base penalties
+    lin_vel_z_l2 = RewTerm(func=mdp.lin_vel_z_l2, weight=0.0)
+    ang_vel_xy_l2 = RewTerm(func=mdp.ang_vel_xy_l2, weight=0.0)
+    flat_orientation_l2 = RewTerm(func=mdp.flat_orientation_l2, weight=0.0)
+    base_height_l2 = RewTerm(
+        func=mdp.base_height_l2,
+        weight=0.0,
+        params={"target_height": 0.34, "asset_cfg": SceneEntityCfg("robot")},
+    )
+    body_lin_acc_l2 = RewTerm(
+        func=mdp.body_lin_acc_l2,
+        weight=0.0,
+        params={"asset_cfg": SceneEntityCfg("robot")},
+    )
+    base_ang_vel_x_l2 = RewTerm(
+        func=mdp.reward_base_ang_vel_x_l2,  
+        weight=0.0,
+        params={"asset_cfg": SceneEntityCfg("robot")},
+    )
+
+    # ==================== Joint Rewards ====================
     joint_torques_l2 = RewTerm(func=mdp.joint_torques_l2, weight=-1.0e-5)
+    joint_vel_l1 = RewTerm(
+        func=mdp.joint_vel_l1,
+        weight=0.0,
+        params={"asset_cfg": SceneEntityCfg("robot")},
+    )
+    joint_vel_l2 = RewTerm(
+        func=mdp.joint_vel_l2,
+        weight=0.0,
+        params={"asset_cfg": SceneEntityCfg("robot")},
+    )
     joint_acc_l2 = RewTerm(func=mdp.joint_acc_l2, weight=-2.5e-7)
+    joint_deviation_l1 = RewTerm(
+        func=mdp.joint_deviation_l1,
+        weight=0.0,
+        params={"asset_cfg": SceneEntityCfg("robot")},
+    )
+    joint_pos_limits = RewTerm(func=mdp.joint_pos_limits, weight=0.0)
+    joint_vel_limits = RewTerm(
+        func=mdp.joint_vel_limits,
+        weight=0.0,
+        params={"soft_ratio": 0.9, "asset_cfg": SceneEntityCfg("robot")},
+    )
+    applied_torque_limits = RewTerm(
+        func=mdp.applied_torque_limits,
+        weight=0.0,
+        params={"asset_cfg": SceneEntityCfg("robot")},
+    )
+    joint_power = RewTerm( 
+        func=mdp.joint_power,
+        weight=0.0,
+        params={"asset_cfg": SceneEntityCfg("robot", joint_names=".*")},
+    )   
+        
+    # Action penalties
     action_rate_l2 = RewTerm(func=mdp.action_rate_l2, weight=-0.01)
+    action_l2 = RewTerm(func=mdp.action_l2, weight=0.0)
+
+    # ==================== Contact Rewards ====================
+    undesired_contacts = RewTerm(
+        func=mdp.undesired_contacts,
+        weight=0.0,
+        params={"sensor_cfg": SceneEntityCfg("contact_forces", body_names=".*_thigh"), "threshold": 1.0},
+    )
+    desired_contacts = RewTerm(
+        func=mdp.desired_contacts,
+        weight=0.0,
+        params={"sensor_cfg": SceneEntityCfg("contact_forces", body_names=".*_foot"), "threshold": 1.0},
+    )
+    contact_forces = RewTerm(
+        func=mdp.contact_forces,
+        weight=0.0,
+        params={"sensor_cfg": SceneEntityCfg("contact_forces", body_names=".*_foot"), "threshold": 1.0},
+    )
+    
+    # Feet-specific rewards
     feet_air_time = RewTerm(
         func=mdp.feet_air_time,
-        weight=0.125,
+        weight=0.0,
         params={
             "sensor_cfg": SceneEntityCfg("contact_forces", body_names=".*_foot"),
             "command_name": "base_velocity",
@@ -286,40 +416,29 @@ class RewardsCfg:
             "sensor_cfg": SceneEntityCfg("contact_forces", body_names=".*_foot"),
             "asset_cfg": SceneEntityCfg("robot", body_names=".*_foot"),
         },
-    )       
-    # feet_height_body = RewTerm(
-    #     func=mdp.feet_height_body,
-    #     weight=0.0,
-    #     params={
-    #         "asset_cfg": SceneEntityCfg("robot", body_names=".*_foot"),
-    #         "tanh_mult": 2.0,
-    #         "target_height": -0.3,
-    #         "command_name": "base_velocity",
-    #     },
-    # )
-    undesired_contacts = RewTerm(
-        func=mdp.undesired_contacts,
-        weight=-1.0,
-        params={"sensor_cfg": SceneEntityCfg("contact_forces", body_names=".*_thigh"), "threshold": 1.0},
     )
-    flat_orientation_l2 = RewTerm(
-        func=mdp.flat_orientation_l2,
-        weight=0.0,  
+
+    # ==================== Other/Custom Rewards ====================
+    # Standing still
+    stand_till = RewTerm(
+        func=mdp.stand_still_joint_deviation_l1, 
+        weight=0.0,
+        params={"command_name": "base_velocity"}
     )
-    joint_pos_limits = RewTerm(func=mdp.joint_pos_limits, weight=0.0)
     
-    base_height_l2 = RewTerm(
-        func=mdp.base_height_l2,
+    # Body orientation penalties
+    body_roll_l2 = RewTerm(
+        func=mdp.body_roll_l2,
         weight=0.0,
-        params={"target_height": 0.34, "asset_cfg": SceneEntityCfg("robot")},
+        params={"asset_cfg": SceneEntityCfg("robot")},
     )
-    # 前腿 hip 关节角度偏差奖励(防止前腿外扩)- 使用 L1 偏差
-    front_hip_deviation_l1 = RewTerm(
-        func=mdp.joint_deviation_l1,
+    body_pitch_l2 = RewTerm(
+        func=mdp.body_pitch_l2,
         weight=0.0,
-        params={"asset_cfg": SceneEntityCfg("robot", joint_names=[".*_hip_joint"])},
+        params={"asset_cfg": SceneEntityCfg("robot")},
     )
-    # 左右腿关节对称奖励 - 鼓励对称步态
+    
+    # Symmetry rewards
     joint_symmetry_l2 = RewTerm(
         func=mdp.joint_mirror,
         weight=0.0,
@@ -328,7 +447,6 @@ class RewardsCfg:
             "mirror_joints": [[".*L_hip_joint"], [".*R_hip_joint"]],
         },
     )
-    # 左右腿动作对称奖励 - 鼓励对称控制
     action_symmetry_l2 = RewTerm(
         func=mdp.action_mirror,
         weight=0.0,
@@ -337,17 +455,39 @@ class RewardsCfg:
             "mirror_joints": [[".*L_hip_joint"], [".*R_hip_joint"]],
         },
     )
-    # Roll角惩罚 - 防止机身左右倾斜
-    body_roll_l2 = RewTerm(
-        func=mdp.body_roll_l2,
+    
+    # ==================== Handstand/Footstand Rewards ====================
+    handstand_feet_height_exp = RewTerm(
+        func=mdp.handstand_feet_height_exp,
         weight=0.0,
-        params={"asset_cfg": SceneEntityCfg("robot")},
+        params={
+            "asset_cfg": SceneEntityCfg("robot"),
+            "target_height": 0.30,
+            "std": math.sqrt(0.25)
+        },
     )
-    # Pitch角惩罚 - 防止机身前后倾斜
-    body_pitch_l2 = RewTerm(
-        func=mdp.body_pitch_l2,
+    handstand_feet_on_air = RewTerm(
+        func=mdp.handstand_feet_on_air,
         weight=0.0,
-        params={"asset_cfg": SceneEntityCfg("robot")},
+        params={
+            "sensor_cfg": SceneEntityCfg("contact_forces", body_names=["FL_foot", "FR_foot"]),
+        }
+    )
+    handstand_feet_air_time = RewTerm(
+        func=mdp.handstand_feet_air_time,
+        weight=0.0,
+        params={
+            "sensor_cfg": SceneEntityCfg("contact_forces", body_names=["FL_foot", "FR_foot"]),
+            "threshold": 5.0
+        }
+    )
+    handstand_orientation_l2 = RewTerm(
+        func=mdp.handstand_orientation_l2,
+        weight=0.0,
+        params={
+            "asset_cfg": SceneEntityCfg("robot"),
+            "target_gravity": [],
+        }
     )
 
 
@@ -356,7 +496,7 @@ class TerminationsCfg:
     """Termination terms for the MDP."""
 
     time_out = DoneTerm(func=mdp.time_out, time_out=True)
-    base_contact = DoneTerm(
+    illegal_contact = DoneTerm(
         func=mdp.illegal_contact,
         params={"sensor_cfg": SceneEntityCfg("contact_forces", body_names="trunk"), "threshold": 1.0},
     )
@@ -415,3 +555,11 @@ class LocomotionVelocityRoughEnvCfg(ManagerBasedRLEnvCfg):
         else:
             if self.scene.terrain.terrain_generator is not None:
                 self.scene.terrain.terrain_generator.curriculum = False
+
+    def disable_zero_weight_rewards(self):
+        """If the weight of rewards is 0, set rewards to None"""
+        for attr in dir(self.rewards):
+            if not attr.startswith("__"):
+                reward_attr = getattr(self.rewards, attr)
+                if not callable(reward_attr) and hasattr(reward_attr, 'weight') and reward_attr.weight == 0:
+                    setattr(self.rewards, attr, None)

@@ -309,7 +309,7 @@ def handstand_feet_height_exp(
 
 def handstand_feet_on_air(env: ManagerBasedRLEnv, sensor_cfg: SceneEntityCfg) -> torch.Tensor:
     """
-    所有足部都在空中时奖励 1,否则奖励 0
+    Reward feet being on air. 两只脚同时从接地到腾空的时刻，给予奖励
     """
     # extract the used quantities (to enable type-hinting)
     contact_sensor: ContactSensor = env.scene.sensors[sensor_cfg.name]
