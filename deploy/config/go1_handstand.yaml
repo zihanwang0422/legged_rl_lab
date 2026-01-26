@@ -1,0 +1,66 @@
+# ========== Paths ==========
+policy_path: "./exported_policy/go1/handstand"
+xml_path: "../source/legged_rl_lab/legged_rl_lab/data/robots/go1_description/mjcf/scene.xml"
+
+# ========== Time parameters ==========
+simulation_duration: 60.0
+sim_dt: 0.005          # simulation/control timestep (200Hz)
+policy_dt: 0.02          # policy inference frequency (Hz) - matched with training
+control_decimation: 4 # sim_dt * control_decimation = policy_dt (0.02s = 50Hz)
+
+# ========== Stand / stabilize durations ==========
+standup_duration: 2.0      # standup duration (s)
+stabilize_duration: 0.5    # stabilize duration (s)
+
+# ========== PD gains ==========
+kp_stand: 25.0
+kd_stand: 2.0  
+
+# PD Actuator
+kp_walk: 100.0
+kd_walk: 0.5   
+
+# ========== Joint ordering configuration(MuJoCo Order) ==========
+# Joint name suffixes (MuJoCo joint name = leg_prefix + joint_suffix)
+joint_suffixes: ['hip', 'thigh', 'calf']  # per-leg joint sequence
+leg_order: ['FL', 'FR', 'RL', 'RR']       # leg order in MuJoCo XML
+
+# SDK joint order (Unitree SDK)
+sdk_joint_order: ['FR_0', 'FR_1', 'FR_2',
+                  'FL_0', 'FL_1', 'FL_2',
+                  'RR_0', 'RR_1', 'RR_2',
+                  'RL_0', 'RL_1', 'RL_2']
+
+# Joint mapping: 
+isaac_to_mujoco_map: [0, 4, 8, 1, 5, 9, 2, 6, 10, 3, 7, 11]
+mujoco_to_isaac_map: [0, 3, 6, 9, 1, 4, 7, 10, 2, 5, 8, 11]
+
+# ========== Default Standing Joint Angles(Isaac Order) ==========
+#                [FL|   FR|  RL|  RR]
+default_dPos_isaac: [0.1, -0.1, 0.1, -0.1,    #hip  
+                  0.8,  0.8, 1.0, 1.0,     #thigh  
+                 -1.5, -1.5, -1.5, -1.5]   #calf
+                
+
+# ========== Observation scales (matched with velocity_env_cfg.py) ==========
+obs_scales:
+  base_lin_vel: 0.2      # lin_vel scale from IsaacLab default
+  base_ang_vel: 0.2     # ang_vel scale from IsaacLab default  
+  joint_vel: 0.05        # dof_vel scale from IsaacLab default  
+
+
+# ========== Action scale (matched with rough_env_cfg.py) ==========
+action_scale: 
+  pos: 0.25
+  vel: 0.5   
+
+# ========== Command velocity ranges (matched with rough_env_cfg.py) ==========
+vx_range: [-1.0, 2.5]       # m/s - increased max forward speed to 2.5 m/s
+vy_range: [-0.8, 0.8]       # m/s - increased lateral speed to 0.8 m/s
+vyaw_range: [-1.5, 1.5]     # rad/s - increased yaw speed to 1.5 rad/s
+
+# ========== Sim2Real configuration ==========
+robot_ip: "192.168.123.10"
+robot_port: 8007
+local_port: 8080
+
