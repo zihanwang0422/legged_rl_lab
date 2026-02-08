@@ -1,0 +1,4 @@
+{
+    "github.copilot.chat.codeGeneration.useInstructionFiles": true,
+    "ros.distro": "humble"
+}

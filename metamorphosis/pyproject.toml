@@ -1,0 +1,16 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "metamorphosis"
+version = "0.1.0"
+description = "Metamorphosis: A Framework for Procedural Asset Generation in Isaac Sim"
+requires-python = ">=3.8"
+authors = [
+    { name="Botian Xu", email="btx0424@outlook.com" }
+]
+dependencies = [
+    "mujoco",
+    "torch",
+]
