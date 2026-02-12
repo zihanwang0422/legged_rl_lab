@@ -20,22 +20,22 @@ class UnitreeGo1FlatEnvCfg(LocomotionVelocityRoughEnvCfg):
         super().__post_init__()
 
         self.scene.robot = UNITREE_GO1_CFG.replace(prim_path="{ENV_REGEX_NS}/Robot")
-        self.scene.height_scanner.prim_path = "{ENV_REGEX_NS}/Robot/base"
+        self.scene.height_scanner.prim_path = "{ENV_REGEX_NS}/Robot/trunk"  # Go1's base link name
         
         # ====Terrain Cfg====
         # change terrain to flat
         self.scene.terrain.terrain_type = "plane"
         self.scene.terrain.terrain_generator = None
-        # no height scan
-        self.scene.height_scanner = None
-        self.observations.policy.height_scan = None
+        # Keep height_scanner for navigation compatibility (48 + 160 = 208 dims)
+        # If you want to train without height_scan (48 dims only), uncomment the following lines:
+        # self.scene.height_scanner = None
+        # self.observations.policy.height_scan = None
 
         # no terrain curriculum
         self.curriculum.terrain_levels = None
 
         # action
         self.actions.joint_pos.scale = 0.25
-        self.actions.joint_vel = None
 
         # event
         self.events.randomize_push_robot = None

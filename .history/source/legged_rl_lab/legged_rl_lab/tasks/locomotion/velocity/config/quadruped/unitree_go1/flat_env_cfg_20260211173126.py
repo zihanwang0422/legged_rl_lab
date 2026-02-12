@@ -35,7 +35,6 @@ class UnitreeGo1FlatEnvCfg(LocomotionVelocityRoughEnvCfg):
 
         # action
         self.actions.joint_pos.scale = 0.25
-        self.actions.joint_vel = None
 
         # event
         self.events.randomize_push_robot = None

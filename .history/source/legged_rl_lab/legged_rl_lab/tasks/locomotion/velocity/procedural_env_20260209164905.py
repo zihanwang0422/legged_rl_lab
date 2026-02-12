@@ -43,9 +43,6 @@ class ProceduralRobotEnv(ManagerBasedRLEnv):
         # After scene setup, modify articulation properties based on morphology
         # This also sets per-robot default joint positions and initial heights
         self._modify_procedural_articulations()
-        
-        # Set morphology parameters as observation (for heterogeneous training)
-        self._set_morphology_params()
     
     def _modify_procedural_articulations(self):
         """Modify articulation properties for procedural robots.
@@ -103,58 +100,5 @@ class ProceduralRobotEnv(ManagerBasedRLEnv):
                 pass
         except ImportError:
             pass
-    
-    def _set_morphology_params(self):
-        """Extract morphology parameters and store as normalized tensor for observations."""
-        import torch
-        
-        # Try QuadrupedBuilder
-        try:
-            from metamorphosis.builder import QuadrupedBuilder
-            
-            try:
-                builder = QuadrupedBuilder.get_instance()
-                if builder is not None and len(builder.params) > 0:
-                    # Extract parameters: [base_length, base_width, base_height, 
-                    #                      thigh_length, calf_length, thigh_radius, parallel_abduction]
-                    params_list = []
-                    for param in builder.params:
-                        params_list.append([
-                            param.base_length,
-                            param.base_width,
-                            param.base_height,
-                            param.thigh_length,
-                            param.calf_length,
-                            param.thigh_radius,
-                            float(param.parallel_abduction),  # bool -> float
-                        ])
-                    
-                    params_tensor = torch.tensor(params_list, device=self.device, dtype=torch.float32)
-                    
-                    # Normalize to roughly [-1, 1] for better learning
-                    # Using approximate ranges: base(0.5-1.0), width(0.3-0.4), height(0.15-0.25),
-                    # thigh(0.2-0.8), calf(0.18-0.8), radius(0.03-0.05), parallel(0-1)
-                    normalization = torch.tensor(
-                        [[0.75, 0.35, 0.20, 0.50, 0.50, 0.04, 0.5]],  # mean
-                        device=self.device
-                    )
-                    scale = torch.tensor(
-                        [[0.25, 0.05, 0.05, 0.30, 0.30, 0.01, 0.5]],  # std/range
-                        device=self.device
-                    )
-                    self.morphology_params_tensor = (params_tensor - normalization) / scale
-                    
-                    print(f"[INFO] Set morphology parameters for {len(builder.params)} robots")
-                    print(f"       Shape: {self.morphology_params_tensor.shape}")
-                    print(f"       Example env0: {self.morphology_params_tensor[0].cpu().numpy()}")
-                    return
-            except (RuntimeError, KeyError):
-                pass
-        except ImportError:
-            pass
-        
-        # Fallback: set zeros if no builder found
-        self.morphology_params_tensor = torch.zeros(self.num_envs, 7, device=self.device)
-
     
 

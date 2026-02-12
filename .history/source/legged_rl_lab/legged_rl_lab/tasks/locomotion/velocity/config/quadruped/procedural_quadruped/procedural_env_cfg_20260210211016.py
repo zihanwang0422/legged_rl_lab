@@ -86,16 +86,16 @@ class ProceduralQuadrupedFlatEnvCfg(LocomotionVelocityRoughEnvCfg):
 
         # ====Terrain Cfg====
         # flat terrain
-        self.scene.terrain.terrain_type = "plane"
+        self.scene.terrain.terrain_type = "plane"写的
         self.scene.terrain.terrain_generator = None
         # no height scan
         self.scene.height_scanner = None
         self.observations.policy.height_scan = None
         
-        # Add morphology parameters as observation for heterogeneous training
-        from isaaclab.managers import ObservationTermCfg as ObsTerm
-        from legged_rl_lab.tasks.locomotion.velocity.mdp import observations
-        self.observations.policy.morphology_params = ObsTerm(func=observations.morphology_params)
+        # # Add morphology parameters as observation for heterogeneous training
+        # from isaaclab.managers import ObservationTermCfg as ObsTerm
+        # from legged_rl_lab.tasks.locomotion.velocity.mdp import observations
+        # self.observations.policy.morphology_params = ObsTerm(func=observations.morphology_params)
 
         # no terrain curriculum
         self.curriculum.terrain_levels = None

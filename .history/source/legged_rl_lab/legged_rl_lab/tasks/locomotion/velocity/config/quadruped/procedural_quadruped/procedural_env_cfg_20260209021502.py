@@ -44,7 +44,7 @@ PROCEDURAL_QUADRUPED_CFG = ArticulationCfg(
         calf_length_ratio=(0.9, 1.0),
     ),
     init_state=ArticulationCfg.InitialStateCfg(
-        pos=(0.0, 0.0, 0.5),  # Initial value, overridden per-robot during spawn and modify_articulation
+        pos=(0.0, 0.0, 0.6),  # Fallback height, overridden per-robot by modify_articulation
         joint_pos={
             ".*": 0.0,  # Placeholder, overridden per-robot by QuadrupedBuilder.modify_articulation
         },
@@ -91,11 +91,6 @@ class ProceduralQuadrupedFlatEnvCfg(LocomotionVelocityRoughEnvCfg):
         # no height scan
         self.scene.height_scanner = None
         self.observations.policy.height_scan = None
-        
-        # Add morphology parameters as observation for heterogeneous training
-        from isaaclab.managers import ObservationTermCfg as ObsTerm
-        from legged_rl_lab.tasks.locomotion.velocity.mdp import observations
-        self.observations.policy.morphology_params = ObsTerm(func=observations.morphology_params)
 
         # no terrain curriculum
         self.curriculum.terrain_levels = None
@@ -104,8 +99,6 @@ class ProceduralQuadrupedFlatEnvCfg(LocomotionVelocityRoughEnvCfg):
         self.actions.joint_pos.scale = 0.25
         # procedural quadrupeds have wider joint ranges, remove Go1-specific clips
         self.actions.joint_pos.clip = None
-        # Only use position control for procedural robots (disable velocity control)
-        self.actions.joint_vel = None
 
         # ====Event Cfg====
         self.events.randomize_push_robot = None
@@ -244,11 +237,6 @@ class ProceduralQuadrupedRoughEnvCfg(LocomotionVelocityRoughEnvCfg):
 
         # procedural robots are non-homogeneous
         self.scene.replicate_physics = False
-        
-        # Add morphology parameters as observation
-        from isaaclab.managers import ObservationTermCfg as ObsTerm
-        from legged_rl_lab.tasks.locomotion.velocity.mdp import observations
-        self.observations.policy.morphology_params = ObsTerm(func=observations.morphology_params)
 
         # ====Action Cfg====
         self.actions.joint_pos.scale = 0.25

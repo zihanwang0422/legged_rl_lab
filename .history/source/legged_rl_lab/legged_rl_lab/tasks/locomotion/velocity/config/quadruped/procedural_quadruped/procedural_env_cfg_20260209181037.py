@@ -104,8 +104,6 @@ class ProceduralQuadrupedFlatEnvCfg(LocomotionVelocityRoughEnvCfg):
         self.actions.joint_pos.scale = 0.25
         # procedural quadrupeds have wider joint ranges, remove Go1-specific clips
         self.actions.joint_pos.clip = None
-        # Only use position control for procedural robots (disable velocity control)
-        self.actions.joint_vel = None
 
         # ====Event Cfg====
         self.events.randomize_push_robot = None

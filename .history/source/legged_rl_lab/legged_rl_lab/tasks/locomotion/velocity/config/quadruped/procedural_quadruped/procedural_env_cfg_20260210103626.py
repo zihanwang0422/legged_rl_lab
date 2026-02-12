@@ -92,10 +92,10 @@ class ProceduralQuadrupedFlatEnvCfg(LocomotionVelocityRoughEnvCfg):
         self.scene.height_scanner = None
         self.observations.policy.height_scan = None
         
-        # Add morphology parameters as observation for heterogeneous training
-        from isaaclab.managers import ObservationTermCfg as ObsTerm
-        from legged_rl_lab.tasks.locomotion.velocity.mdp import observations
-        self.observations.policy.morphology_params = ObsTerm(func=observations.morphology_params)
+        # # Add morphology parameters as observation for heterogeneous training
+        # from isaaclab.managers import ObservationTermCfg as ObsTerm
+        # from legged_rl_lab.tasks.locomotion.velocity.mdp import observations
+        # self.observations.policy.morphology_params = ObsTerm(func=observations.morphology_params)
 
         # no terrain curriculum
         self.curriculum.terrain_levels = None
@@ -104,8 +104,6 @@ class ProceduralQuadrupedFlatEnvCfg(LocomotionVelocityRoughEnvCfg):
         self.actions.joint_pos.scale = 0.25
         # procedural quadrupeds have wider joint ranges, remove Go1-specific clips
         self.actions.joint_pos.clip = None
-        # Only use position control for procedural robots (disable velocity control)
-        self.actions.joint_vel = None
 
         # ====Event Cfg====
         self.events.randomize_push_robot = None

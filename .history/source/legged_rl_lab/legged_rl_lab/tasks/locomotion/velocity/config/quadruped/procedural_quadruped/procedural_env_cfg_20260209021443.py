@@ -44,7 +44,7 @@ PROCEDURAL_QUADRUPED_CFG = ArticulationCfg(
         calf_length_ratio=(0.9, 1.0),
     ),
     init_state=ArticulationCfg.InitialStateCfg(
-        pos=(0.0, 0.0, 0.5),  # Initial value, overridden per-robot during spawn and modify_articulation
+        pos=(0.0, 0.0, 0.6),  # Fallback height, overridden per-robot by modify_articulation
         joint_pos={
             ".*": 0.0,  # Placeholder, overridden per-robot by QuadrupedBuilder.modify_articulation
         },
@@ -91,11 +91,6 @@ class ProceduralQuadrupedFlatEnvCfg(LocomotionVelocityRoughEnvCfg):
         # no height scan
         self.scene.height_scanner = None
         self.observations.policy.height_scan = None
-        
-        # Add morphology parameters as observation for heterogeneous training
-        from isaaclab.managers import ObservationTermCfg as ObsTerm
-        from legged_rl_lab.tasks.locomotion.velocity.mdp import observations
-        self.observations.policy.morphology_params = ObsTerm(func=observations.morphology_params)
 
         # no terrain curriculum
         self.curriculum.terrain_levels = None
@@ -104,8 +99,6 @@ class ProceduralQuadrupedFlatEnvCfg(LocomotionVelocityRoughEnvCfg):
         self.actions.joint_pos.scale = 0.25
         # procedural quadrupeds have wider joint ranges, remove Go1-specific clips
         self.actions.joint_pos.clip = None
-        # Only use position control for procedural robots (disable velocity control)
-        self.actions.joint_vel = None
 
         # ====Event Cfg====
         self.events.randomize_push_robot = None
@@ -142,8 +135,8 @@ class ProceduralQuadrupedFlatEnvCfg(LocomotionVelocityRoughEnvCfg):
         self.rewards.ang_vel_xy_l2.weight = -0.1
         self.rewards.flat_orientation_l2.weight = -3.0
 
-        # Disable base_height_l2: each robot has different standing height
-        self.rewards.base_height_l2 = None
+        self.rewards.base_height_l2.weight = -2.0
+        self.rewards.base_height_l2.params["target_height"] = 0.3
         self.rewards.body_lin_acc_l2 = None
         self.rewards.base_ang_vel_x_l2 = None
 
@@ -244,11 +237,6 @@ class ProceduralQuadrupedRoughEnvCfg(LocomotionVelocityRoughEnvCfg):
 
         # procedural robots are non-homogeneous
         self.scene.replicate_physics = False
-        
-        # Add morphology parameters as observation
-        from isaaclab.managers import ObservationTermCfg as ObsTerm
-        from legged_rl_lab.tasks.locomotion.velocity.mdp import observations
-        self.observations.policy.morphology_params = ObsTerm(func=observations.morphology_params)
 
         # ====Action Cfg====
         self.actions.joint_pos.scale = 0.25
@@ -271,7 +259,8 @@ class ProceduralQuadrupedRoughEnvCfg(LocomotionVelocityRoughEnvCfg):
         self.rewards.lin_vel_z_l2 = None
         self.rewards.ang_vel_xy_l2.weight = -0.1
         self.rewards.flat_orientation_l2.weight = -3.0
-        self.rewards.base_height_l2 = None  # Each robot has different standing height
+        self.rewards.base_height_l2.weight = -2.0
+        self.rewards.base_height_l2.params["target_height"] = 0.3
         self.rewards.body_lin_acc_l2 = None
         self.rewards.base_ang_vel_x_l2 = None
 
