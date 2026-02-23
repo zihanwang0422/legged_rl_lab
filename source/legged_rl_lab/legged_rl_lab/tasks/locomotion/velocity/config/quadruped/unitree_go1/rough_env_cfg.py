@@ -21,7 +21,7 @@ class UnitreeGo1RoughEnvCfg(LocomotionVelocityRoughEnvCfg):
         super().__post_init__()
 
         self.scene.robot = UNITREE_GO1_CFG.replace(prim_path="{ENV_REGEX_NS}/Robot")
-        self.scene.height_scanner.prim_path = "{ENV_REGEX_NS}/Robot/trunk"
+        self.scene.height_scanner.prim_path = "{ENV_REGEX_NS}/Robot/base"
         
         
         #------------------------------- Terrain -------------------------------
@@ -67,7 +67,7 @@ class UnitreeGo1RoughEnvCfg(LocomotionVelocityRoughEnvCfg):
 
         #------------------------------- Event -------------------------------
         self.events.randomize_push_robot = None
-        self.events.randomize_rigid_body_mass_base.params["mass_distribution_params"] = (0.8, 1.2)  # 修复质量随机化
+        self.events.randomize_rigid_body_mass_base.params["mass_distribution_params"] = (-1.0, 3.0)  # 修复质量随机化
         self.events.randomize_rigid_body_mass_base.params["asset_cfg"].body_names = "trunk"
         self.events.randomize_apply_external_force_torque.params["asset_cfg"].body_names = "trunk"
         self.events.randomize_reset_joints.params["position_range"] = (1.0, 1.0)
@@ -82,78 +82,75 @@ class UnitreeGo1RoughEnvCfg(LocomotionVelocityRoughEnvCfg):
                 "yaw": (0.0, 0.0),
             },
         }
+        self.events.base_com = None
 
-        # ==================== Rewards Configuration ====================
-        # ===== General Rewards =====
-        self.rewards.is_alive = None
-        self.rewards.is_terminated = None
+         #------------------------------- Rewards -------------------------------
         
-        # ===== Base Rewards =====
+        #general rewards
+        self.rewards.is_terminated.weight = 0.0  
+        
+          # ===== Base Rewards =====
         # Tracking rewards
         self.rewards.track_lin_vel_xy_exp.weight = 3.0
         self.rewards.track_ang_vel_z_exp.weight = 1.5
         
         # Base penalties
-        self.rewards.lin_vel_z_l2 = None
-        self.rewards.ang_vel_xy_l2 = None
-        self.rewards.flat_orientation_l2 = None
-        self.rewards.base_height_l2 = None
-        self.rewards.body_lin_acc_l2 = None
-        self.rewards.base_ang_vel_x_l2 = None
+        self.rewards.flat_orientation_l2.weight = 0.0
         
         # ===== Joint Rewards =====
         self.rewards.joint_torques_l2.weight = -0.0002
-        self.rewards.joint_vel_l1 = None
-        self.rewards.joint_vel_l2 = None
         self.rewards.joint_acc_l2.weight = -2.5e-7
-        self.rewards.joint_deviation_l1 = None
-        self.rewards.joint_pos_limits = None
-        self.rewards.joint_vel_limits = None
-        self.rewards.applied_torque_limits = None
-        self.rewards.joint_power = None
-        
-        # Action penalties
-        self.rewards.action_rate_l2 = None
-        self.rewards.action_l2 = None
+        self.rewards.joint_pos_limits.weight = -5.0
         
         # ===== Contact Rewards =====
         self.rewards.undesired_contacts = None
-        self.rewards.desired_contacts = None
-        self.rewards.contact_forces = None
         
         # Feet rewards
-        self.rewards.feet_air_time.weight = 0.5
+        self.rewards.feet_air_time.weight = 0.1
         self.rewards.feet_air_time.params["sensor_cfg"].body_names = ".*_foot"
-        self.rewards.feet_height = None
+
+        
         self.rewards.feet_slide.weight = -0.1
         self.rewards.feet_slide.params["sensor_cfg"].body_names = ".*_foot"
-    
+        self.rewards.feet_height.weight = 0
+        self.rewards.feet_height.params["target_height"] = 0.05
+        self.rewards.feet_height.params["asset_cfg"].body_names = ".*_foot"
+     
+
+        self.rewards.stand_till.weight = -2.0
+        self.rewards.stand_till.params["command_name"] = "base_velocity"
+        self.rewards.track_lin_vel_xy_exp.weight = 3.0
+        self.rewards.track_ang_vel_z_exp.weight = 1.5
+        self.rewards.flat_orientation_l2.weight = 0.0
+        
         # ===== Other/Custom Rewards =====
         # Standing still
         self.rewards.stand_till.weight = -2.0
         self.rewards.stand_till.params["command_name"] = "base_velocity"
         
-        # Body orientation penalties
-        self.rewards.body_roll_l2 = None
-        self.rewards.body_pitch_l2 = None
         
-        # Symmetry rewards
-        self.rewards.joint_symmetry_l2 = None
-        self.rewards.action_symmetry_l2 = None
         
-        # ==================== Handstand/Footstand Rewards ====================
-        self.rewards.handstand_feet_height_exp = None
-        self.rewards.handstand_feet_on_air = None
-        self.rewards.handstand_feet_air_time = None
-        self.rewards.handstand_orientation_l2 = None
+        # ===对角线步态对称性 (Trot Gait)===
+        # FL+RR 为一组对角线, FR+RL 为另一组对角线
+        # self.rewards.joint_symmetry_l2.weight = -0.1  # 降低权重避免过度约束
+        # self.rewards.joint_symmetry_l2.params["mirror_joints"] = [
+        #     ["FL_.*_joint", "RR_.*_joint"],  # 前左 + 后右 (对角线1)
+        #     ["FR_.*_joint", "RL_.*_joint"],  # 前右 + 后左 (对角线2)
+        # ]
+
+        # self.rewards.action_symmetry_l2.weight = -0.05  # 降低权重
+        # self.rewards.action_symmetry_l2.params["mirror_joints"] = [
+        #     ["FL_.*_joint", "RR_.*_joint"],  # 前左 + 后右 (对角线1)
+        #     ["FR_.*_joint", "RL_.*_joint"],  # 前右 + 后左 (对角线2)
+        # ]
         
         #------------------------------- Terminations -------------------------------
         self.terminations.illegal_contact.params["sensor_cfg"].body_names = "trunk"
         
         #------------------------------- Commands -------------------------------
         self.commands.base_velocity.ranges.lin_vel_x = (-1.0, 1.0)  
-        self.commands.base_velocity.ranges.lin_vel_y = (-0.8, 0.8) 
-        self.commands.base_velocity.ranges.ang_vel_z = (-1.0, 1.0) 
+        # self.commands.base_velocity.ranges.lin_vel_y = (-0.8, 0.8) 
+        # self.commands.base_velocity.ranges.ang_vel_z = (-1.0, 1.0) 
 
 
 @configclass

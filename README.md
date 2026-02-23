@@ -62,7 +62,17 @@ python scripts/list_envs.py
 
 ## 🚀Train
 
-### Walk (Flat/Rough)
+### Convert URDF to USD (recommend)
+
+```bash
+cd ~/legged_rl_lab
+
+python scripts/tools/convert_urdf.py   source/legged_rl_lab/legged_rl_lab/data/robots/go1_description/urdf/go1.urdf   source/legged_rl_lab/legged_rl_lab/data/robots/go1_description/usd/go1.usd   --merge-joints   --joint-stiffness 100.0   --joint-damping 0.5   --joint-target-type position
+```
+
+Then modify the `unitree.py` motor configration to align with the USD parameters.
+
+### Walk (Flat)
 
 [<img src="media/walkflat_isaac.gif" width="300px">](gifs/isaac.gif)
 
@@ -86,6 +96,23 @@ python scripts/rsl_rl/play.py \
     --num_envs 16
 ```
 
+### Walk(rough)
+
+#### Train
+```bash
+python scripts/rsl_rl/train.py \
+  --task=LeggedRLLab-Isaac-Velocity-Rough-Unitree-Go1-v0 \
+  --num_envs 4096 \
+  --headless
+```
+
+#### Play
+```bash
+python scripts/rsl_rl/play.py \
+    --task=LeggedRLLab-Isaac-Velocity-Rough-Unitree-Go1-v0 \
+    --num_envs 16
+```
+
 ### Handstand
 
 [<img src="media/footstand_isaac.gif" width="300px">](gifs/isaac.gif)
@@ -96,10 +123,7 @@ python scripts/rsl_rl/play.py \
 python scripts/rsl_rl/train.py \
   --task=LeggedRLLab-Isaac-Velocity-Handstand-Unitree-Go1-v0 \
   --num_envs 4096 \
-  --headless \
-  --resume \
-  --load_run /path/to/log/folder \
-  --checkpoint model_xx.pt  
+  --headless
 ```
 
 #### Play
@@ -118,9 +142,12 @@ python scripts/rsl_rl/train.py --task LeggedRLLab-Isaac-Navigation-Flat-Unitree-
 
 # Obstacle terrain navigation (with cylinders)
 python scripts/rsl_rl/train.py \
-  --task=LeggedRLLab-Isaac-Navigation-Obstacle-Unitree-Go1-v0 \
-  --num_envs 2048 \
-  --headless
+  --task LeggedRLLab-Isaac-Navigation-Obstacle-Unitree-Go1-v0 \
+  --num_envs 4096 \
+  --headless \
+  --resume \
+  --load_run 2026-02-13_14-44-01 \
+  --checkpoint model_1700.pt
 ```
 
 #### Play

@@ -44,7 +44,7 @@ _LEGGED_RL_LAB_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dir
 # TODO: Update to your newly trained policy with height_scan (208 dims)
 # Using temporary 48-dim policy for testing - replace after training new policy
 GO1_FLAT_POLICY_PATH = os.path.join(
-    _LEGGED_RL_LAB_DIR, "logs", "rsl_rl", "unitree_go1_flat", "2026-01-04_16-45-19", "exported", "policy.pt"
+    _LEGGED_RL_LAB_DIR, "logs", "rsl_rl", "unitree_go1_flat", "2026-02-12_09-04-27", "exported", "policy.pt"
 )
 
 
