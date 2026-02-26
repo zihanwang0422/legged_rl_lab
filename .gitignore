@@ -77,4 +77,6 @@ tests/
 
 # Hugging Face Assets (managed separately)
 source/legged_rl_lab/legged_rl_lab/data/*
+!source/legged_rl_lab/legged_rl_lab/data/.gitkeep
 deploy/exported_policy/*
+!deploy/exported_policy/.gitkeep
