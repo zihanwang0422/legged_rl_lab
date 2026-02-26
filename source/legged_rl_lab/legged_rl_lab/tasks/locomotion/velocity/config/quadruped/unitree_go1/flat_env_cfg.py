@@ -70,10 +70,10 @@ class UnitreeGo1FlatEnvCfg(LocomotionVelocityRoughEnvCfg):
         # Base penalties
         self.rewards.lin_vel_z_l2 = None
         self.rewards.ang_vel_xy_l2.weight = -0.1  
-        self.rewards.flat_orientation_l2.weight = -3.0
+        self.rewards.flat_orientation_l2.weight = -5.0
         
         self.rewards.base_height_l2.weight = -2.0
-        self.rewards.base_height_l2.params["target_height"] = 0.3
+        self.rewards.base_height_l2.params["target_height"] = 0.35
         self.rewards.body_lin_acc_l2 = None
         self.rewards.base_ang_vel_x_l2 = None
         
@@ -100,9 +100,9 @@ class UnitreeGo1FlatEnvCfg(LocomotionVelocityRoughEnvCfg):
         self.rewards.contact_forces = None
         
         # Feet rewards - 关键：鼓励正常步态
-        self.rewards.feet_air_time.weight = 0.5  # 大幅增加权重，鼓励足够的腾空时间
+        self.rewards.feet_air_time.weight = 0.3  # 大幅增加权重，鼓励足够的腾空时间
         self.rewards.feet_air_time.params["sensor_cfg"].body_names = ".*_foot"
-        self.rewards.feet_air_time.params["threshold"] = 0.4  # 设置最小腾空时间阈值
+        self.rewards.feet_air_time.params["threshold"] = 0.5  # 设置最小腾空时间阈值
         self.rewards.feet_height = None
         self.rewards.feet_slide.weight = -0.1  # 启用，惩罚脚部滑动
         
@@ -112,8 +112,8 @@ class UnitreeGo1FlatEnvCfg(LocomotionVelocityRoughEnvCfg):
         self.rewards.stand_till.params["command_name"] = "base_velocity"
         
         # Body orientation
-        self.rewards.body_roll_l2.weight = -5.0
-        self.rewards.body_pitch_l2 = None
+        self.rewards.body_roll_l2.weight = -2.0
+        self.rewards.body_pitch_l2.weight = -3.0
         
         # Diagonal gait symmetry (Trot Gait: FL+RR, FR+RL)
         self.rewards.joint_symmetry_l2.weight = -0.1

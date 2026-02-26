@@ -62,6 +62,13 @@ python scripts/list_envs.py
 
 ## 🚀Train
 
+### Clone USD model
+```bash
+git clone https://huggingface.co/zihan0422/legged_rl_lab
+```
+
+Then
+
 ### Convert URDF to USD (recommend)
 
 ```bash
@@ -71,6 +78,8 @@ python scripts/tools/convert_urdf.py   source/legged_rl_lab/legged_rl_lab/data/r
 ```
 
 Then modify the `unitree.py` motor configration to align with the USD parameters.
+
+
 
 ### Walk (Flat)
 
@@ -163,9 +172,13 @@ python scripts/rsl_rl/play.py \
     --num_envs 16
 ```
 
-
+### Metamorphology
+#### Train
 ```bash
 python scripts/rsl_rl/train.py     --task LeggedRLLab-Isaac-Velocity-Flat-Procedural-Quadruped-v0     --num_envs 4096     --headless
+```
+#### Play
+```bash
 python scripts/rsl_rl/play.py     --task LeggedRLLab-Isaac-Velocity-Flat-Procedural-Quadruped-v0     --num_envs 32
 ```
 

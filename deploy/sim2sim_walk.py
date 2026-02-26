@@ -108,37 +108,36 @@ def build_obs(base_lin_vel, base_ang_vel, projected_gravity, commands, dof_pos_r
     1-3:   base linear velocity (scaled by base_lin_vel)
     4-6:   base angular velocity (scaled by base_ang_vel)
     7-9:   projected gravity
-    10-11: commands xy (lin_vel_x, lin_vel_y)
-    12:    commands yaw (ang_vel_z)
-    13-24: joint position relative to default (dof_pos_rel) - matches joint_pos_rel in training
+    10-12: commands [vx, vy, vyaw]
+    13-24: joint position relative to default (dof_pos_rel)
     25-36: joint velocities (scaled by joint_vel)
-    37-48: last actions
+    37-48: last actions (12D position actions only)
     Total: 48 dims
     """
     obs = []
     
-    # 1-3: Base linear velocity (scaled and clipped)
+    # 1-3: Base linear velocity (scaled)
     base_lin_vel_scaled = base_lin_vel * config.obs_scales['base_lin_vel']
-    obs.extend(list(np.clip(base_lin_vel_scaled, -100.0, 100.0)))
+    obs.extend(list(base_lin_vel_scaled))
     
-    # 4-6: Base angular velocity (scaled and clipped)
+    # 4-6: Base angular velocity (scaled)
     base_ang_vel_scaled = base_ang_vel * config.obs_scales['base_ang_vel']
-    obs.extend(list(np.clip(base_ang_vel_scaled, -100.0, 100.0)))
+    obs.extend(list(base_ang_vel_scaled))
     
-    # 7-9: Projected gravity (clipped)
-    obs.extend(list(np.clip(projected_gravity, -100.0, 100.0)))
+    # 7-9: Projected gravity
+    obs.extend(list(projected_gravity))
     
-    # 10-12: Commands [vx, vy, vyaw] (clipped)
-    obs.extend(list(np.clip(commands, -100.0, 100.0)))
+    # 10-12: Commands [vx, vy, vyaw]
+    obs.extend(list(commands))
     
-    # 13-24: joint position relative to default (clipped)
-    obs.extend(list(np.clip(dof_pos_rel, -100.0, 100.0)))
+    # 13-24: joint position relative to default
+    obs.extend(list(dof_pos_rel))
     
-    # 25-36: dof_vel (scaled and clipped)
+    # 25-36: dof_vel (scaled)
     dof_vel_scaled = dof_vel * config.obs_scales['joint_vel']
-    obs.extend(list(np.clip(dof_vel_scaled, -100.0, 100.0)))
+    obs.extend(list(dof_vel_scaled))
     
-    # 37-48: Last action (already clipped when stored)
+    # 37-48: Last action
     obs.extend(list(last_action))
     
     return np.array(obs, dtype=np.float32)
@@ -340,10 +339,10 @@ class Sim2SimController:
         self.policy.eval()
         
         # Initialize state
-        self.last_action = np.zeros(24, dtype=np.float32)  # 24D: 12 pos + 12 vel
+        self.last_action = np.zeros(12, dtype=np.float32)  # 12D: position actions only
         self.qPos_isaac = np.zeros(12, dtype=np.float32)  # Target position (Isaac relative)
         self.qPos_mj = np.zeros(12, dtype=np.float32)      # Target position (MuJoCo)
-        self.qVel = np.zeros(12, dtype=np.float32)  # Target velocity
+        # self.qVel = np.zeros(12, dtype=np.float32)  # Target velocity (not used in position-only control)
         
         # Policy frequency control
         self.policy_decimation = config.control_decimation
@@ -464,7 +463,7 @@ class Sim2SimController:
                         # cmd_vx, cmd_vy, cmd_vyaw = gamepad.get_velocity()
                         # commands = np.array([cmd_vx, cmd_vy, cmd_vyaw], dtype=np.float32)
                         
-                        cmd_vx, cmd_vy, cmd_vyaw = [2.0, 0.0, 0.0]  # FOR TESTING ONLY
+                        cmd_vx, cmd_vy, cmd_vyaw = [1.2, 0.0, 0.0]  # FOR TESTING ONLY
                         commands = np.array([cmd_vx, cmd_vy, cmd_vyaw], dtype=np.float32)
                         
                         # Prepare observation for the policy
@@ -480,16 +479,15 @@ class Sim2SimController:
                                 action_tensor = action_tensor[0]
                             action = action_tensor.cpu().numpy().flatten().astype(np.float32)
                         
-                        # Parse 24D action: [12 pos + 12 vel]
-                        # Update target position and velocity (only when policy infers)
-                        self.last_action = action.copy()  # Store full 24D action (clipped)
+                        # Parse 12D action: [12 position offsets only]
+                        # Update target position (only when policy infers)
+                        self.last_action = action.copy()  # Store 12D action for next obs
                         
-                        # Position action: first 12 dims (relative to default), scale and clip
+                        # Position action: 12 dims (relative to default), scale and clip
                         self.qPos_isaac = action[:12] * self.config.action_scale['pos']
                         self.qPos_mj = self.qPos_isaac[self.config.isaac_to_mujoco_map] + self.default_dPos_mj
-                                              
-                        # Velocity action: last 12 dims, scale and clip
-                        self.qVel = action[12:24] * self.config.action_scale['vel']
+                        
+                        # self.qVel = action[12:24] * self.config.action_scale['vel']  # Not used
                     
                     # PD control: smooth tracking towards target with velocity feedforward (every control step)
                     self.send_command(self.qPos_mj)

@@ -57,7 +57,7 @@ _build
 
 # RL-Games
 **/runs/*
-**/logs/*
+**/logs/
 **/recordings/*
 **/amp-rsl-rl/*
 
@@ -72,3 +72,7 @@ tests/
 
 # Docker history
 .isaac-lab-docker-history
+
+# Hugging Face Assets (managed separately)
+source/legged_rl_lab/legged_rl_lab/data/*
+deploy/exported_policy/*

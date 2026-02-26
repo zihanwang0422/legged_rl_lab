@@ -148,11 +148,6 @@ class UnitreeGo1FootstandEnvCfg(LocomotionVelocityRoughEnvCfg):
         # terminate on contact for any body except feet
         self.terminations.illegal_contact.params["sensor_cfg"].body_names = ["(?!.*_foot).*"]
         
-        #------------------------------- Commands -------------------------------
-        # self.commands.base_velocity.ranges.lin_vel_x = (0.0, 0.0)  
-        # self.commands.base_velocity.ranges.lin_vel_y = (0.0, 0.0) 
-        # self.commands.base_velocity.ranges.ang_vel_z = (0.0, 0.0)
-        
         # Disable all rewards with zero weight
         self.disable_zero_weight_rewards() 
 
