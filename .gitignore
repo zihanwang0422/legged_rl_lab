@@ -22,7 +22,8 @@
 **/*.pyc
 **/*.pb
 
-**/*.pt
+# Instructions
+Instruction_CN.md
 
 # Docker/Singularity
 **/*.sif
@@ -36,6 +37,7 @@ docker/.container.cfg
 # used to configure VS Code settings
 !.vscode
 **/.history/
+
 
 # Outputs
 **/output/*
