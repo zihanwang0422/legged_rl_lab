@@ -22,6 +22,8 @@
 **/*.pyc
 **/*.pb
 
+**/*.pt
+
 # Docker/Singularity
 **/*.sif
 docker/cluster/exports/
