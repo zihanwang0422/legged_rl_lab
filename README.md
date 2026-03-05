@@ -8,13 +8,36 @@
 
 ## Overview
 
-This project is a set of tools for end-to-end development of RL for robots. Specifically, we support:
-
-* RL tasks in IsaacLab.
-  * Quadruped blind climb stairs.
-  * Quadruped footstand.
-* Sim2Sim transfer using Mujoco.
-* Sim2Real transfer using Unitree_legged_sdk.
+<table>
+  <tr>
+    <th>Robot</th>
+    <th>Task</th>
+    <th>Sim2Sim</th>
+    <th>Sim2Real</th>
+  </tr>
+  <tr>
+    <td rowspan="3">Unitree Go1</td>
+    <td>Flat</td>
+    <td>✅</td>
+    <td>✅</td>
+  </tr>
+  <tr>
+    <td>Rough</td>
+    <td></td>
+    <td></td>
+  </tr>
+  <tr>
+    <td>Footstand</td>
+    <td></td>
+    <td></td>
+  </tr>
+  <tr>
+    <td>OpenDuck Mini</td>
+    <td>Flat</td>
+    <td></td>
+    <td></td>
+  </tr>
+</table>
 
 <div align="center">
 
@@ -106,6 +129,8 @@ python scripts/rsl_rl/play.py \
 ```
 
 ### Walk(rough)
+
+[<img src="media/walkrough_isaac.gif" width="300px">](gifs/walkrough.gif)
 
 #### Train
 ```bash
@@ -203,8 +228,19 @@ python deploy/sim2sim_handstand.py --mode sim --model policy.pt
 ```
 
 ## Sim2Real
+
+Install [unitree_legged_sdk](https://github.com/unitreerobotics/unitree_legged_sdk) for go1:
 ```bash
-python sim2sim2real_joystick.py --mode real --model policy_45_continus.pt #play in real-world
+git clone https://github.com/unitreerobotics/unitree_legged_sdk.git
+```
+
+
+
+
+
+
+```bash
+python sim2real_walk.py --mode real --model policy.pt
 ```
 
 

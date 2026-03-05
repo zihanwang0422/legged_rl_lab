@@ -3,11 +3,11 @@
 
 from isaaclab.utils import configclass
 
-from .rough_env_cfg import UnitreeB2RoughEnvCfg
+from .rough_env_cfg import UnitreeG1RoughEnvCfg
 
 
 @configclass
-class UnitreeB2FlatEnvCfg(UnitreeB2RoughEnvCfg):
+class OpenDuckMiniFlatEnvCfg(OpenDuckMiniRoughEnvCfg):
     def __post_init__(self):
         # post init of parent
         super().__post_init__()
@@ -25,6 +25,14 @@ class UnitreeB2FlatEnvCfg(UnitreeB2RoughEnvCfg):
         # no terrain curriculum
         self.curriculum.terrain_levels = None
 
+        # Rewards
+        self.rewards.track_ang_vel_z_exp.weight = 1.0
+        self.rewards.lin_vel_z_l2.weight = -0.2
+        self.rewards.action_rate_l2.weight = -0.005
+        self.rewards.joint_acc_l2.weight = -1.0e-7
+        self.rewards.joint_torques_l2.weight = -2.0e-6
+        self.rewards.joint_torques_l2.params["asset_cfg"].joint_names = [".*_hip_.*", ".*_knee_joint"]
+
         # If the weight of rewards is 0, set rewards to None
-        if self.__class__.__name__ == "UnitreeB2FlatEnvCfg":
+        if self.__class__.__name__ == "OpenDuckMiniFlatEnvCfg":
             self.disable_zero_weight_rewards()

@@ -24,6 +24,8 @@ class UnitreeGo2FlatEnvCfg(UnitreeGo2RoughEnvCfg):
         # no height scan
         self.scene.height_scanner = None
         self.observations.policy.height_scan = None
+        self.observations.critic.height_scan = None
+        self.rewards.base_height_l2.params.pop("sensor_cfg", None)  # flat环境无height_scanner
         #no base_lin_vel
         self.observations.policy.base_lin_vel = None
         # no terrain curriculum

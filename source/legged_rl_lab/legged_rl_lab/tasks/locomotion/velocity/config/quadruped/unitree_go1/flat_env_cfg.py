@@ -29,6 +29,8 @@ class UnitreeGo1FlatEnvCfg(LocomotionVelocityRoughEnvCfg):
         # no height scan
         self.scene.height_scanner = None
         self.observations.policy.height_scan = None
+        self.observations.critic.height_scan = None
+        self.observations.critic.height_scan = None
 
         # no terrain curriculum
         self.curriculum.terrain_levels = None
@@ -74,6 +76,7 @@ class UnitreeGo1FlatEnvCfg(LocomotionVelocityRoughEnvCfg):
         
         self.rewards.base_height_l2.weight = -2.0
         self.rewards.base_height_l2.params["target_height"] = 0.35
+        self.rewards.base_height_l2.params.pop("sensor_cfg", None)  # flat环境无height_scanner
         self.rewards.body_lin_acc_l2 = None
         self.rewards.base_ang_vel_x_l2 = None
         
@@ -89,7 +92,7 @@ class UnitreeGo1FlatEnvCfg(LocomotionVelocityRoughEnvCfg):
         self.rewards.joint_power = None
         
         # Action penalties 
-        self.rewards.action_rate_l2.weight = -0.01  
+        self.rewards.action_rate_l2.weight = -0.005  # 降低权重防止action爆炸时传播
         self.rewards.action_l2 = None
         
         # ===== Contact Rewards =====
@@ -100,7 +103,7 @@ class UnitreeGo1FlatEnvCfg(LocomotionVelocityRoughEnvCfg):
         self.rewards.contact_forces = None
         
         # Feet rewards - 关键：鼓励正常步态
-        self.rewards.feet_air_time.weight = 0.3  # 大幅增加权重，鼓励足够的腾空时间
+        self.rewards.feet_air_time.weight = 0.12  # 大幅增加权重，鼓励足够的腾空时间
         self.rewards.feet_air_time.params["sensor_cfg"].body_names = ".*_foot"
         self.rewards.feet_air_time.params["threshold"] = 0.5  # 设置最小腾空时间阈值
         self.rewards.feet_height = None
@@ -113,7 +116,7 @@ class UnitreeGo1FlatEnvCfg(LocomotionVelocityRoughEnvCfg):
         
         # Body orientation
         self.rewards.body_roll_l2.weight = -2.0
-        self.rewards.body_pitch_l2.weight = -3.0
+        self.rewards.body_pitch_l2.weight = -5.0
         
         # Diagonal gait symmetry (Trot Gait: FL+RR, FR+RL)
         self.rewards.joint_symmetry_l2.weight = -0.1
@@ -121,7 +124,7 @@ class UnitreeGo1FlatEnvCfg(LocomotionVelocityRoughEnvCfg):
             ["FL_.*_joint", "RR_.*_joint"],  # 前左 + 后右 (对角线1)
             ["FR_.*_joint", "RL_.*_joint"],  # 前右 + 后左 (对角线2)
         ]
-        self.rewards.action_symmetry_l2.weight = -0.05
+        self.rewards.action_symmetry_l2.weight = -0.02  # 降低权重，防止数值爆炸
         self.rewards.action_symmetry_l2.params["mirror_joints"] = [
             ["FL_.*_joint", "RR_.*_joint"],  # 前左 + 后右 (对角线1)
             ["FR_.*_joint", "RL_.*_joint"],  # 前右 + 后左 (对角线2)

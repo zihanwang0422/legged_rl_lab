@@ -6,11 +6,11 @@ from isaaclab_rl.rsl_rl import RslRlOnPolicyRunnerCfg, RslRlPpoActorCriticCfg, R
 
 
 @configclass
-class UnitreeH1RoughPPORunnerCfg(RslRlOnPolicyRunnerCfg):
+class OpenDuckMiniRoughPPORunnerCfg(RslRlOnPolicyRunnerCfg):
     num_steps_per_env = 24
     max_iterations = 3000
-    save_interval = 100
-    experiment_name = "unitree_h1_rough"
+    save_interval = 50
+    experiment_name = "open_duck_mini_rough"
     policy = RslRlPpoActorCriticCfg(
         noise_std_type="scalar",
         init_noise_std=1.0,
@@ -24,7 +24,7 @@ class UnitreeH1RoughPPORunnerCfg(RslRlOnPolicyRunnerCfg):
         value_loss_coef=1.0,
         use_clipped_value_loss=True,
         clip_param=0.2,
-        entropy_coef=0.01,
+        entropy_coef=0.008,
         num_learning_epochs=5,
         num_mini_batches=4,
         learning_rate=1.0e-3,
@@ -37,9 +37,9 @@ class UnitreeH1RoughPPORunnerCfg(RslRlOnPolicyRunnerCfg):
 
 
 @configclass
-class UnitreeH1FlatPPORunnerCfg(UnitreeH1RoughPPORunnerCfg):
+class OpenDuckMiniFlatPPORunnerCfg(OpenDuckMiniRoughPPORunnerCfg):
     def __post_init__(self):
         super().__post_init__()
 
-        self.max_iterations = 1000
-        self.experiment_name = "unitree_h1_flat"
+        self.max_iterations = 1500
+        self.experiment_name = "open_duck_mini_flat"

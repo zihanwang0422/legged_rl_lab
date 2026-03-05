@@ -8,10 +8,11 @@ from isaaclab_rl.rsl_rl import RslRlOnPolicyRunnerCfg, RslRlPpoActorCriticCfg, R
 @configclass
 class UnitreeGo1RoughPPORunnerCfg(RslRlOnPolicyRunnerCfg):
     num_steps_per_env = 24
-    max_iterations = 1500
+    max_iterations = 15000
     save_interval = 50
     experiment_name = "unitree_go1_rough"
     policy = RslRlPpoActorCriticCfg(
+        noise_std_type="scalar",
         init_noise_std=1.0,
         actor_obs_normalization=False,
         critic_obs_normalization=False,

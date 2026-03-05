@@ -31,13 +31,14 @@ class DDTRobotTitaFlatEnvCfg(DDTRobotTitaRoughEnvCfg):
         super().__post_init__()
 
         # override rewards
-        self.rewards.base_height_l2.params["sensor_cfg"] = None
+        self.rewards.base_height_l2.params.pop("sensor_cfg", None)  # flat环境无height_scanner
         # change terrain to flat
         self.scene.terrain.terrain_type = "generator"
         self.scene.terrain.terrain_generator = COBBLESTONE_ROAD_CFG
         # no height scan
         self.scene.height_scanner = None
         self.observations.policy.height_scan = None
+        self.observations.critic.height_scan = None
         self.observations.critic.height_scan = None
         # no terrain curriculum
         self.curriculum.terrain_levels = None

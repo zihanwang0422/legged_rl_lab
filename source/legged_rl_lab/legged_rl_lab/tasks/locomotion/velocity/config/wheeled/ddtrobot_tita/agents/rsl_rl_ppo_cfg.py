@@ -12,6 +12,7 @@ class DDTRobotTitaRoughPPORunnerCfg(RslRlOnPolicyRunnerCfg):
     save_interval = 100
     experiment_name = "ddtrobot_tita_rough"
     policy = RslRlPpoActorCriticCfg(
+        noise_std_type="scalar",
         init_noise_std=1.0,
         actor_obs_normalization=False,
         critic_obs_normalization=False,

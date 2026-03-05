@@ -91,11 +91,27 @@ class ProceduralQuadrupedFlatEnvCfg(LocomotionVelocityRoughEnvCfg):
         # no height scan
         self.scene.height_scanner = None
         self.observations.policy.height_scan = None
+        self.observations.critic.height_scan = None
         
         # Add morphology parameters as observation for heterogeneous training
         from isaaclab.managers import ObservationTermCfg as ObsTerm
         from legged_rl_lab.tasks.locomotion.velocity.mdp import observations
         self.observations.policy.morphology_params = ObsTerm(func=observations.morphology_params)
+        
+        # Add scale and clip to observations for better training stability
+        self.observations.policy.base_lin_vel.scale = 0.2
+        self.observations.policy.base_lin_vel.clip = (-100.0, 100.0)
+        self.observations.policy.base_ang_vel.scale = 0.2
+        self.observations.policy.base_ang_vel.clip = (-100.0, 100.0)
+        self.observations.policy.projected_gravity.scale = 1.0
+        self.observations.policy.projected_gravity.clip = (-100.0, 100.0)
+        self.observations.policy.velocity_commands.clip = (-100.0, 100.0)
+        self.observations.policy.joint_pos.scale = 1.0
+        self.observations.policy.joint_pos.clip = (-100.0, 100.0)
+        self.observations.policy.joint_vel.scale = 0.05
+        self.observations.policy.joint_vel.clip = (-100.0, 100.0)
+        self.observations.policy.actions.scale = 1.0
+        self.observations.policy.actions.clip = (-100.0, 100.0)
 
         # no terrain curriculum
         self.curriculum.terrain_levels = None
@@ -249,6 +265,22 @@ class ProceduralQuadrupedRoughEnvCfg(LocomotionVelocityRoughEnvCfg):
         from isaaclab.managers import ObservationTermCfg as ObsTerm
         from legged_rl_lab.tasks.locomotion.velocity.mdp import observations
         self.observations.policy.morphology_params = ObsTerm(func=observations.morphology_params)
+        
+        # Add scale and clip to observations for better training stability
+        self.observations.policy.base_lin_vel.scale = 0.2
+        self.observations.policy.base_lin_vel.clip = (-100.0, 100.0)
+        self.observations.policy.base_ang_vel.scale = 0.2
+        self.observations.policy.base_ang_vel.clip = (-100.0, 100.0)
+        self.observations.policy.projected_gravity.scale = 1.0
+        self.observations.policy.projected_gravity.clip = (-100.0, 100.0)
+        self.observations.policy.velocity_commands.clip = (-100.0, 100.0)
+        self.observations.policy.joint_pos.scale = 1.0
+        self.observations.policy.joint_pos.clip = (-100.0, 100.0)
+        self.observations.policy.joint_vel.scale = 0.05
+        self.observations.policy.joint_vel.clip = (-100.0, 100.0)
+        self.observations.policy.actions.scale = 1.0
+        self.observations.policy.actions.clip = (-100.0, 100.0)
+        self.observations.policy.height_scan.scale = 1.0
 
         # ====Action Cfg====
         self.actions.joint_pos.scale = 0.25

@@ -18,6 +18,7 @@ class ProceduralQuadrupedBasePPORunnerCfg(RslRlOnPolicyRunnerCfg):
     empirical_normalization = False
     
     policy = RslRlPpoActorCriticCfg(
+        noise_std_type="scalar",
         init_noise_std=1.0,
         actor_obs_normalization=True,  # Important for handling varying morphologies
         critic_obs_normalization=True,

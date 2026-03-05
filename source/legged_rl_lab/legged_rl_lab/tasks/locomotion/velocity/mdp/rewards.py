@@ -18,7 +18,7 @@ from isaaclab.assets import Articulation
 from isaaclab.envs import mdp
 from isaaclab.managers import SceneEntityCfg
 from isaaclab.sensors import ContactSensor
-from isaaclab.utils.math import quat_apply_inverse, yaw_quat
+from isaaclab.utils.math import quat_apply_inverse,  yaw_quat
 
 if TYPE_CHECKING:
     from isaaclab.envs import ManagerBasedRLEnv
@@ -84,54 +84,43 @@ def feet_slide(env, sensor_cfg: SceneEntityCfg, asset_cfg: SceneEntityCfg = Scen
     reward = torch.sum(body_vel.norm(dim=-1) * contacts, dim=1)
     return reward
 
-def feet_height(
+def feet_clearance(
     env: ManagerBasedRLEnv,
-    command_name: str,
-    asset_cfg: SceneEntityCfg,
-    target_height: float,
-    tanh_mult: float,
+    asset_feet_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
+    asset_base_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
+    target_feet_height: float = 0.35,
 ) -> torch.Tensor:
-    """Reward the swinging feet for clearing a specified height off the ground"""
-    asset: Articulation = env.scene[asset_cfg.name]
-    foot_z_target_error = torch.square(asset.data.body_pos_w[:, asset_cfg.body_ids, 2] - target_height)
-    foot_velocity_tanh = torch.tanh(
-        tanh_mult * torch.linalg.norm(asset.data.body_lin_vel_w[:, asset_cfg.body_ids, :2], dim=2)
-    )
-    reward = torch.sum(foot_z_target_error * foot_velocity_tanh, dim=1)
-    # no reward for zero command
-    reward *= torch.linalg.norm(env.command_manager.get_command(command_name), dim=1) > 0.1
-    reward *= torch.clamp(-env.scene["robot"].data.projected_gravity_b[:, 2], 0, 0.7) / 0.7
-    return reward
+    """Reward swinging feet for reaching a target height relative to the base frame.
 
+    This function rewards the agent for lifting its feet to a target height during the swing phase.
+    The reward is computed as the product of the height error and the lateral foot velocity,
+    ensuring the robot is only penalized when the foot is actually moving (swing phase).
+    """
+    asset_feet: Articulation = env.scene[asset_feet_cfg.name]
+    asset_base: Articulation = env.scene[asset_base_cfg.name]
 
-# def feet_height_body(
-#     env: ManagerBasedRLEnv,
-#     command_name: str,
-#     asset_cfg: SceneEntityCfg,
-#     target_height: float,
-#     tanh_mult: float,
-# ) -> torch.Tensor:
-#     """Reward the swinging feet for clearing a specified height off the ground"""
-#     asset: RigidObject = env.scene[asset_cfg.name]
-#     cur_footpos_translated = asset.data.body_pos_w[:, asset_cfg.body_ids, :] - asset.data.root_pos_w[:, :].unsqueeze(1)
-#     footpos_in_body_frame = torch.zeros(env.num_envs, len(asset_cfg.body_ids), 3, device=env.device)
-#     cur_footvel_translated = asset.data.body_lin_vel_w[:, asset_cfg.body_ids, :] - asset.data.root_lin_vel_w[
-#         :, :
-#     ].unsqueeze(1)
-#     footvel_in_body_frame = torch.zeros(env.num_envs, len(asset_cfg.body_ids), 3, device=env.device)
-#     for i in range(len(asset_cfg.body_ids)):
-#         footpos_in_body_frame[:, i, :] = math_utils.quat_apply_inverse(
-#             asset.data.root_quat_w, cur_footpos_translated[:, i, :]
-#         )
-#         footvel_in_body_frame[:, i, :] = math_utils.quat_apply_inverse(
-#             asset.data.root_quat_w, cur_footvel_translated[:, i, :]
-#         )
-#     foot_z_target_error = torch.square(footpos_in_body_frame[:, :, 2] - target_height).view(env.num_envs, -1)
-#     foot_velocity_tanh = torch.tanh(tanh_mult * torch.norm(footvel_in_body_frame[:, :, :2], dim=2))
-#     reward = torch.sum(foot_z_target_error * foot_velocity_tanh, dim=1)
-#     reward *= torch.linalg.norm(env.command_manager.get_command(command_name), dim=1) > 0.1
-#     reward *= torch.clamp(-env.scene["robot"].data.projected_gravity_b[:, 2], 0, 0.7) / 0.7
-#     return reward
+    feet_positions = asset_feet.data.body_pos_w[:, asset_feet_cfg.body_ids, :]  # (num_envs, num_feet, 3)
+    feet_vels = asset_feet.data.body_lin_vel_w[:, asset_feet_cfg.body_ids, :]  # (num_envs, num_feet, 3)
+    base_rotation = asset_base.data.root_link_quat_w  # (num_envs, 4)
+    base_positions = asset_base.data.root_link_pos_w  # (num_envs, 3)
+    base_vels = asset_base.data.root_link_lin_vel_w  # (num_envs, 3)
+
+    num_envs = feet_positions.shape[0]
+    num_feet = feet_positions.shape[1]
+
+    cur_footpos_translated = feet_positions - base_positions.unsqueeze(1)
+    cur_footvel_translated = feet_vels - base_vels.unsqueeze(1)
+
+    footpos_in_body_frame = torch.zeros(num_envs, num_feet, 3, device=env.device)
+    footvel_in_body_frame = torch.zeros(num_envs, num_feet, 3, device=env.device)
+    for i in range(num_feet):
+        footpos_in_body_frame[:, i, :] = quat_apply_inverse(base_rotation, cur_footpos_translated[:, i, :])
+        footvel_in_body_frame[:, i, :] = quat_apply_inverse(base_rotation, cur_footvel_translated[:, i, :])
+
+    height_error = torch.square(footpos_in_body_frame[:, :, 2] - target_feet_height).view(num_envs, -1)
+    foot_lateral_vel = torch.sqrt(torch.sum(torch.square(footvel_in_body_frame[:, :, :2]), dim=2) + 1e-6).view(num_envs, -1)
+
+    return torch.sum(height_error * foot_lateral_vel, dim=1)
 
 
 def track_lin_vel_xy_yaw_frame_exp(
@@ -235,13 +224,15 @@ def action_mirror(env: ManagerBasedRLEnv, asset_cfg: SceneEntityCfg, mirror_join
             [asset.find_joints(joint_name) for joint_name in joint_pair] for joint_pair in mirror_joints
         ]
     reward = torch.zeros(env.num_envs, device=env.device)
+    # Clip actions to prevent numerical explosion from unstable PPO updates
+    action_clipped = torch.clamp(env.action_manager.action, -10.0, 10.0)
     # Iterate over all joint pairs
     for joint_pair in env.action_mirror_joints_cache:
         # Calculate the difference for each pair and add to the total reward
         diff = torch.sum(
             torch.square(
-                torch.abs(env.action_manager.action[:, joint_pair[0][0]])
-                - torch.abs(env.action_manager.action[:, joint_pair[1][0]])
+                torch.abs(action_clipped[:, joint_pair[0][0]])
+                - torch.abs(action_clipped[:, joint_pair[1][0]])
             ),
             dim=-1,
         )

@@ -32,6 +32,7 @@ class UnitreeGo1FootstandEnvCfg(LocomotionVelocityRoughEnvCfg):
         # no height scan
         self.scene.height_scanner = None
         self.observations.policy.height_scan = None
+        self.observations.critic.height_scan = None
 
         # no terrain curriculum
         self.curriculum.terrain_levels = None
@@ -67,6 +68,7 @@ class UnitreeGo1FootstandEnvCfg(LocomotionVelocityRoughEnvCfg):
         self.rewards.base_height_l2.weight = 0.0
         self.rewards.base_height_l2.params["target_height"] = 0.35
         self.rewards.base_height_l2.params["asset_cfg"].body_names = "base"
+        self.rewards.base_height_l2.params.pop("sensor_cfg", None)  # flat环境无height_scanner
         self.rewards.body_lin_acc_l2.weight = 0.0
         self.rewards.body_lin_acc_l2.params["asset_cfg"].body_names = "base"
 
