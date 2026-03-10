@@ -41,5 +41,5 @@ class UnitreeG1FlatPPORunnerCfg(UnitreeG1RoughPPORunnerCfg):
     def __post_init__(self):
         super().__post_init__()
 
-        self.max_iterations = 1500
+        self.max_iterations = 15000
         self.experiment_name = "unitree_g1_flat"

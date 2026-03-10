@@ -84,44 +84,49 @@ def feet_slide(env, sensor_cfg: SceneEntityCfg, asset_cfg: SceneEntityCfg = Scen
     reward = torch.sum(body_vel.norm(dim=-1) * contacts, dim=1)
     return reward
 
-def feet_clearance(
-    env: ManagerBasedRLEnv,
-    asset_feet_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
-    asset_base_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
-    target_feet_height: float = 0.35,
+def foot_clearance_reward(
+    env: ManagerBasedRLEnv, asset_cfg: SceneEntityCfg, target_height: float, std: float, tanh_mult: float
 ) -> torch.Tensor:
-    """Reward swinging feet for reaching a target height relative to the base frame.
+    """Reward the swinging feet for clearing a specified height off the ground"""
+    asset: RigidObject = env.scene[asset_cfg.name]
+    foot_z_target_error = torch.square(asset.data.body_pos_w[:, asset_cfg.body_ids, 2] - target_height)
+    foot_velocity_tanh = torch.tanh(tanh_mult * torch.norm(asset.data.body_lin_vel_w[:, asset_cfg.body_ids, :2], dim=2))
+    reward = foot_z_target_error * foot_velocity_tanh
+    return torch.exp(-torch.sum(reward, dim=1) / std)
 
-    This function rewards the agent for lifting its feet to a target height during the swing phase.
-    The reward is computed as the product of the height error and the lateral foot velocity,
-    ensuring the robot is only penalized when the foot is actually moving (swing phase).
-    """
-    asset_feet: Articulation = env.scene[asset_feet_cfg.name]
-    asset_base: Articulation = env.scene[asset_base_cfg.name]
 
-    feet_positions = asset_feet.data.body_pos_w[:, asset_feet_cfg.body_ids, :]  # (num_envs, num_feet, 3)
-    feet_vels = asset_feet.data.body_lin_vel_w[:, asset_feet_cfg.body_ids, :]  # (num_envs, num_feet, 3)
-    base_rotation = asset_base.data.root_link_quat_w  # (num_envs, 4)
-    base_positions = asset_base.data.root_link_pos_w  # (num_envs, 3)
-    base_vels = asset_base.data.root_link_lin_vel_w  # (num_envs, 3)
+"""
+Feet Gait rewards.
+"""
 
-    num_envs = feet_positions.shape[0]
-    num_feet = feet_positions.shape[1]
 
-    cur_footpos_translated = feet_positions - base_positions.unsqueeze(1)
-    cur_footvel_translated = feet_vels - base_vels.unsqueeze(1)
+def feet_gait(
+    env: ManagerBasedRLEnv,
+    period: float,
+    offset: list[float],
+    sensor_cfg: SceneEntityCfg,
+    threshold: float = 0.5,
+    command_name=None,
+) -> torch.Tensor:
+    contact_sensor: ContactSensor = env.scene.sensors[sensor_cfg.name]
+    is_contact = contact_sensor.data.current_contact_time[:, sensor_cfg.body_ids] > 0
 
-    footpos_in_body_frame = torch.zeros(num_envs, num_feet, 3, device=env.device)
-    footvel_in_body_frame = torch.zeros(num_envs, num_feet, 3, device=env.device)
-    for i in range(num_feet):
-        footpos_in_body_frame[:, i, :] = quat_apply_inverse(base_rotation, cur_footpos_translated[:, i, :])
-        footvel_in_body_frame[:, i, :] = quat_apply_inverse(base_rotation, cur_footvel_translated[:, i, :])
+    global_phase = ((env.episode_length_buf * env.step_dt) % period / period).unsqueeze(1)
+    phases = []
+    for offset_ in offset:
+        phase = (global_phase + offset_) % 1.0
+        phases.append(phase)
+    leg_phase = torch.cat(phases, dim=-1)
 
-    height_error = torch.square(footpos_in_body_frame[:, :, 2] - target_feet_height).view(num_envs, -1)
-    foot_lateral_vel = torch.sqrt(torch.sum(torch.square(footvel_in_body_frame[:, :, :2]), dim=2) + 1e-6).view(num_envs, -1)
+    reward = torch.zeros(env.num_envs, dtype=torch.float, device=env.device)
+    for i in range(len(sensor_cfg.body_ids)):
+        is_stance = leg_phase[:, i] < threshold
+        reward += ~(is_stance ^ is_contact[:, i])
 
-    return torch.sum(height_error * foot_lateral_vel, dim=1)
-
+    if command_name is not None:
+        cmd_norm = torch.norm(env.command_manager.get_command(command_name), dim=1)
+        reward *= cmd_norm > 0.1
+    return reward
 
 def track_lin_vel_xy_yaw_frame_exp(
     env, std: float, command_name: str, asset_cfg: SceneEntityCfg = SceneEntityCfg("robot")

@@ -51,8 +51,7 @@ obs_scales:
 
 # ========== Action scale (matched with rough_env_cfg.py) ==========
 action_scale: 
-  pos: 0.25
-  vel: 0.5   
+  pos: 0.25  
 
 # ========== Command velocity ranges (matched with rough_env_cfg.py) ==========
 vx_range: [-1.0, 2.5]       # m/s - increased max forward speed to 2.5 m/s

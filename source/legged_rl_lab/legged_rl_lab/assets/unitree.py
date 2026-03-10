@@ -24,30 +24,20 @@ import isaaclab.sim as sim_utils
 from isaaclab.actuators import ActuatorNetMLPCfg, DCMotorCfg, ImplicitActuatorCfg, IdealPDActuatorCfg
 from isaaclab.assets.articulation import ArticulationCfg
 from isaaclab.utils.assets import ISAAC_NUCLEUS_DIR, ISAACLAB_NUCLEUS_DIR
+from isaaclab.utils import configclass
 from .. import LEGGED_RL_LAB_ROOT_DIR
-##
+from legged_rl_lab.assets import unitree_actuators
+
+# #
 # Configuration - Actuators.
-##
+# #
+@configclass
+class UnitreeArticulationCfg(ArticulationCfg):
+    """Configuration for Unitree articulations."""
 
-# GO1_ACTUATOR_CFG = ActuatorNetMLPCfg(
-#     joint_names_expr=[".*_hip_joint", ".*_thigh_joint", ".*_calf_joint"],
-#     network_file=f"{ISAACLAB_NUCLEUS_DIR}/ActuatorNets/Unitree/unitree_go1.pt",
-#     pos_scale=-1.0,
-#     vel_scale=1.0,
-#     torque_scale=1.0,
-#     input_order="pos_vel",
-#     input_idx=[0, 1, 2],
-#     effort_limit=23.7,  # taken from spec sheet
-#     velocity_limit=30.0,  # taken from spec sheet
-#     saturation_effort=23.7,  # same as effort limit
-# )
-"""Configuration of Go1 actuators using MLP model.
+    joint_sdk_names: list[str] = None
 
-Actuator specifications: https://shop.unitree.com/products/go1-motor
-
-This model is taken from: https://github.com/Improbable-AI/walk-these-ways
-"""
-
+    soft_joint_pos_limit_factor = 0.9
 
 ##
 # Configuration
@@ -299,9 +289,11 @@ This configuration removes most collision meshes to speed up simulation.
 """
 
 
-G1_CFG = ArticulationCfg(
-    spawn=sim_utils.UsdFileCfg(
-        usd_path=f"{ISAACLAB_NUCLEUS_DIR}/Robots/Unitree/G1/g1.usd",
+UNITREE_G1_29DOF_CFG = UnitreeArticulationCfg(
+    spawn=sim_utils.UrdfFileCfg(
+        fix_base=False,
+        replace_cylinders_with_capsules=True,
+        asset_path=f"{LEGGED_RL_LAB_ROOT_DIR}/data/robots/g1_description/urdf/g1_29dof_rev_1_0.urdf",
         activate_contact_sensors=True,
         rigid_props=sim_utils.RigidBodyPropertiesCfg(
             disable_gravity=False,
@@ -313,329 +305,116 @@ G1_CFG = ArticulationCfg(
             max_depenetration_velocity=1.0,
         ),
         articulation_props=sim_utils.ArticulationRootPropertiesCfg(
-            enabled_self_collisions=False, solver_position_iteration_count=8, solver_velocity_iteration_count=4
+            enabled_self_collisions=True, solver_position_iteration_count=8, solver_velocity_iteration_count=4
+        ),
+        joint_drive=sim_utils.UrdfConverterCfg.JointDriveCfg(
+            gains=sim_utils.UrdfConverterCfg.JointDriveCfg.PDGainsCfg(stiffness=0, damping=0)
         ),
     ),
     init_state=ArticulationCfg.InitialStateCfg(
-        pos=(0.0, 0.0, 0.74),
+        pos=(0.0, 0.0, 0.8),
         joint_pos={
-            ".*_hip_pitch_joint": -0.20,
-            ".*_knee_joint": 0.42,
-            ".*_ankle_pitch_joint": -0.23,
-            ".*_elbow_pitch_joint": 0.87,
-            "left_shoulder_roll_joint": 0.16,
-            "left_shoulder_pitch_joint": 0.35,
-            "right_shoulder_roll_joint": -0.16,
-            "right_shoulder_pitch_joint": 0.35,
-            "left_one_joint": 1.0,
-            "right_one_joint": -1.0,
-            "left_two_joint": 0.52,
-            "right_two_joint": -0.52,
+            "left_hip_pitch_joint": -0.1,
+            "right_hip_pitch_joint": -0.1,
+            ".*_knee_joint": 0.3,
+            ".*_ankle_pitch_joint": -0.2,
+            ".*_shoulder_pitch_joint": 0.3,
+            "left_shoulder_roll_joint": 0.25,
+            "right_shoulder_roll_joint": -0.25,
+            ".*_elbow_joint": 0.97,
+            "left_wrist_roll_joint": 0.15,
+            "right_wrist_roll_joint": -0.15,
         },
         joint_vel={".*": 0.0},
     ),
-    soft_joint_pos_limit_factor=0.9,
     actuators={
-        "legs": ImplicitActuatorCfg(
-            joint_names_expr=[
-                ".*_hip_yaw_joint",
-                ".*_hip_roll_joint",
-                ".*_hip_pitch_joint",
-                ".*_knee_joint",
-                "torso_joint",
-            ],
-            effort_limit_sim=300,
+        "N7520-14.3": ImplicitActuatorCfg(
+            joint_names_expr=[".*_hip_pitch_.*", ".*_hip_yaw_.*", "waist_yaw_joint"],
+            effort_limit_sim=88,
+            velocity_limit_sim=32.0,
             stiffness={
-                ".*_hip_yaw_joint": 150.0,
-                ".*_hip_roll_joint": 150.0,
-                ".*_hip_pitch_joint": 200.0,
-                ".*_knee_joint": 200.0,
-                "torso_joint": 200.0,
+                ".*_hip_.*": 100.0,
+                "waist_yaw_joint": 200.0,
             },
             damping={
-                ".*_hip_yaw_joint": 5.0,
-                ".*_hip_roll_joint": 5.0,
-                ".*_hip_pitch_joint": 5.0,
-                ".*_knee_joint": 5.0,
-                "torso_joint": 5.0,
+                ".*_hip_.*": 2.0,
+                "waist_yaw_joint": 5.0,
             },
-            armature={
-                ".*_hip_.*": 0.01,
-                ".*_knee_joint": 0.01,
-                "torso_joint": 0.01,
-            },
-        ),
-        "feet": ImplicitActuatorCfg(
-            effort_limit_sim=20,
-            joint_names_expr=[".*_ankle_pitch_joint", ".*_ankle_roll_joint"],
-            stiffness=20.0,
-            damping=2.0,
             armature=0.01,
         ),
-        "arms": ImplicitActuatorCfg(
+        "N7520-22.5": ImplicitActuatorCfg(
+            joint_names_expr=[".*_hip_roll_.*", ".*_knee_.*"],
+            effort_limit_sim=139,
+            velocity_limit_sim=20.0,
+            stiffness={
+                ".*_hip_roll_.*": 100.0,
+                ".*_knee_.*": 150.0,
+            },
+            damping={
+                ".*_hip_roll_.*": 2.0,
+                ".*_knee_.*": 4.0,
+            },
+            armature=0.01,
+        ),
+        "N5020-16": ImplicitActuatorCfg(
             joint_names_expr=[
-                ".*_shoulder_pitch_joint",
-                ".*_shoulder_roll_joint",
-                ".*_shoulder_yaw_joint",
-                ".*_elbow_pitch_joint",
-                ".*_elbow_roll_joint",
-                ".*_five_joint",
-                ".*_three_joint",
-                ".*_six_joint",
-                ".*_four_joint",
-                ".*_zero_joint",
-                ".*_one_joint",
-                ".*_two_joint",
+                ".*_shoulder_.*",
+                ".*_elbow_.*",
+                ".*_wrist_roll.*",
+                ".*_ankle_.*",
+                "waist_roll_joint",
+                "waist_pitch_joint",
             ],
-            effort_limit_sim=300,
+            effort_limit_sim=25,
+            velocity_limit_sim=37,
             stiffness=40.0,
-            damping=10.0,
-            armature={
-                ".*_shoulder_.*": 0.01,
-                ".*_elbow_.*": 0.01,
-                ".*_five_joint": 0.001,
-                ".*_three_joint": 0.001,
-                ".*_six_joint": 0.001,
-                ".*_four_joint": 0.001,
-                ".*_zero_joint": 0.001,
-                ".*_one_joint": 0.001,
-                ".*_two_joint": 0.001,
+            damping={
+                ".*_shoulder_.*": 1.0,
+                ".*_elbow_.*": 1.0,
+                ".*_wrist_roll.*": 1.0,
+                ".*_ankle_.*": 2.0,
+                "waist_.*_joint": 5.0,
             },
+            armature=0.01,
+        ),
+        "W4010-25": ImplicitActuatorCfg(
+            joint_names_expr=[".*_wrist_pitch.*", ".*_wrist_yaw.*"],
+            effort_limit_sim=5,
+            velocity_limit_sim=22,
+            stiffness=40.0,
+            damping=1.0,
+            armature=0.01,
         ),
     },
-)
-"""Configuration for the Unitree G1 Humanoid robot."""
-
-
-G1_MINIMAL_CFG = G1_CFG.copy()
-G1_MINIMAL_CFG.spawn.usd_path = f"{ISAACLAB_NUCLEUS_DIR}/Robots/Unitree/G1/g1_minimal.usd"
-"""Configuration for the Unitree G1 Humanoid robot with fewer collision meshes.
-
-This configuration removes most collision meshes to speed up simulation.
-"""
-
-
-G1_29DOF_CFG = ArticulationCfg(
-    spawn=sim_utils.UsdFileCfg(
-        usd_path=f"{ISAAC_NUCLEUS_DIR}/Robots/Unitree/G1/g1.usd",
-        activate_contact_sensors=False,
-        rigid_props=sim_utils.RigidBodyPropertiesCfg(
-            disable_gravity=False,
-            retain_accelerations=False,
-            linear_damping=0.0,
-            angular_damping=0.0,
-            max_linear_velocity=1000.0,
-            max_angular_velocity=1000.0,
-            max_depenetration_velocity=1.0,
-        ),
-        articulation_props=sim_utils.ArticulationRootPropertiesCfg(
-            enabled_self_collisions=False,
-            fix_root_link=False,  # Configurable - can be set to True for fixed base
-            solver_position_iteration_count=8,
-            solver_velocity_iteration_count=4,
-        ),
-    ),
-    init_state=ArticulationCfg.InitialStateCfg(
-        pos=(0.0, 0.0, 0.75),
-        rot=(0.7071, 0, 0, 0.7071),
-        joint_pos={
-            ".*_hip_pitch_joint": -0.10,
-            ".*_knee_joint": 0.30,
-            ".*_ankle_pitch_joint": -0.20,
-        },
-        joint_vel={".*": 0.0},
-    ),
-    soft_joint_pos_limit_factor=0.9,
-    actuators={
-        "legs": DCMotorCfg(
-            joint_names_expr=[
-                ".*_hip_yaw_joint",
-                ".*_hip_roll_joint",
-                ".*_hip_pitch_joint",
-                ".*_knee_joint",
-            ],
-            effort_limit={
-                ".*_hip_yaw_joint": 88.0,
-                ".*_hip_roll_joint": 88.0,
-                ".*_hip_pitch_joint": 88.0,
-                ".*_knee_joint": 139.0,
-            },
-            velocity_limit={
-                ".*_hip_yaw_joint": 32.0,
-                ".*_hip_roll_joint": 32.0,
-                ".*_hip_pitch_joint": 32.0,
-                ".*_knee_joint": 20.0,
-            },
-            stiffness={
-                ".*_hip_yaw_joint": 100.0,
-                ".*_hip_roll_joint": 100.0,
-                ".*_hip_pitch_joint": 100.0,
-                ".*_knee_joint": 200.0,
-            },
-            damping={
-                ".*_hip_yaw_joint": 2.5,
-                ".*_hip_roll_joint": 2.5,
-                ".*_hip_pitch_joint": 2.5,
-                ".*_knee_joint": 5.0,
-            },
-            armature={
-                ".*_hip_.*": 0.03,
-                ".*_knee_joint": 0.03,
-            },
-            saturation_effort=180.0,
-        ),
-        "feet": DCMotorCfg(
-            joint_names_expr=[".*_ankle_pitch_joint", ".*_ankle_roll_joint"],
-            stiffness={
-                ".*_ankle_pitch_joint": 20.0,
-                ".*_ankle_roll_joint": 20.0,
-            },
-            damping={
-                ".*_ankle_pitch_joint": 0.2,
-                ".*_ankle_roll_joint": 0.1,
-            },
-            effort_limit={
-                ".*_ankle_pitch_joint": 50.0,
-                ".*_ankle_roll_joint": 50.0,
-            },
-            velocity_limit={
-                ".*_ankle_pitch_joint": 37.0,
-                ".*_ankle_roll_joint": 37.0,
-            },
-            armature=0.03,
-            saturation_effort=80.0,
-        ),
-        "waist": ImplicitActuatorCfg(
-            joint_names_expr=[
-                "waist_.*_joint",
-            ],
-            effort_limit={
-                "waist_yaw_joint": 88.0,
-                "waist_roll_joint": 50.0,
-                "waist_pitch_joint": 50.0,
-            },
-            velocity_limit={
-                "waist_yaw_joint": 32.0,
-                "waist_roll_joint": 37.0,
-                "waist_pitch_joint": 37.0,
-            },
-            stiffness={
-                "waist_yaw_joint": 5000.0,
-                "waist_roll_joint": 5000.0,
-                "waist_pitch_joint": 5000.0,
-            },
-            damping={
-                "waist_yaw_joint": 5.0,
-                "waist_roll_joint": 5.0,
-                "waist_pitch_joint": 5.0,
-            },
-            armature=0.001,
-        ),
-        "arms": ImplicitActuatorCfg(
-            joint_names_expr=[
-                ".*_shoulder_pitch_joint",
-                ".*_shoulder_roll_joint",
-                ".*_shoulder_yaw_joint",
-                ".*_elbow_joint",
-                ".*_wrist_.*_joint",
-            ],
-            effort_limit=300,
-            velocity_limit=100,
-            stiffness=3000.0,
-            damping=10.0,
-            armature={
-                ".*_shoulder_.*": 0.001,
-                ".*_elbow_.*": 0.001,
-                ".*_wrist_.*_joint": 0.001,
-            },
-        ),
-        "hands": ImplicitActuatorCfg(
-            joint_names_expr=[
-                ".*_index_.*",
-                ".*_middle_.*",
-                ".*_thumb_.*",
-            ],
-            effort_limit=300,
-            velocity_limit=100,
-            stiffness=20,
-            damping=2,
-            armature=0.001,
-        ),
-    },
-    prim_path="/World/envs/env_.*/Robot",
-)
-"""Configuration for the Unitree G1 Humanoid robot for locomanipulation tasks.
-
-This configuration sets up the G1 humanoid robot for locomanipulation tasks,
-allowing both locomotion and manipulation capabilities. The robot can be configured
-for either fixed base or mobile scenarios by modifying the fix_root_link parameter.
-
-Key features:
-- Configurable base (fixed or mobile) via fix_root_link parameter
-- Optimized actuator parameters for locomanipulation tasks
-- Enhanced hand and arm configurations for manipulation
-
-Usage examples:
-    # For fixed base scenarios (upper body manipulation only)
-    fixed_base_cfg = G1_29DOF_CFG.copy()
-    fixed_base_cfg.spawn.articulation_props.fix_root_link = True
-
-    # For mobile scenarios (locomotion + manipulation)
-    mobile_cfg = G1_29DOF_CFG.copy()
-    mobile_cfg.spawn.articulation_props.fix_root_link = False
-"""
-
-"""
-Configuration for the Unitree G1 Humanoid robot with Inspire 5fingers hand.
-The Unitree G1 URDF can be found here: https://github.com/unitreerobotics/unitree_ros/tree/master/robots/g1_description/g1_29dof_with_hand_rev_1_0.urdf
-The Inspire hand URDF is available at: https://github.com/unitreerobotics/xr_teleoperate/tree/main/assets/inspire_hand
-The merging code for the hand and robot can be found here: https://github.com/unitreerobotics/unitree_ros/blob/master/robots/g1_description/merge_g1_29dof_and_inspire_hand.ipynb,
-Necessary modifications should be made to ensure the correct parent–child relationship.
-"""
-# Inherit PD settings from G1_29DOF_CFG, with minor adjustments for grasping task
-G1_INSPIRE_FTP_CFG = G1_29DOF_CFG.copy()
-G1_INSPIRE_FTP_CFG.spawn.usd_path = f"{ISAACLAB_NUCLEUS_DIR}/Robots/Unitree/G1/g1_29dof_inspire_hand.usd"
-G1_INSPIRE_FTP_CFG.spawn.activate_contact_sensors = True
-G1_INSPIRE_FTP_CFG.spawn.rigid_props.disable_gravity = True
-G1_INSPIRE_FTP_CFG.spawn.articulation_props.fix_root_link = True
-G1_INSPIRE_FTP_CFG.init_state = ArticulationCfg.InitialStateCfg(
-    pos=(0.0, 0.0, 1.0),
-    joint_pos={".*": 0.0},
-    joint_vel={".*": 0.0},
-)
-# Actuator configuration for arms (stability focused for manipulation)
-# Increased damping improves stability of arm movements
-G1_INSPIRE_FTP_CFG.actuators["arms"] = ImplicitActuatorCfg(
-    joint_names_expr=[
-        ".*_shoulder_pitch_joint",
-        ".*_shoulder_roll_joint",
-        ".*_shoulder_yaw_joint",
-        ".*_elbow_joint",
-        ".*_wrist_.*_joint",
+    joint_sdk_names=[
+        "left_hip_pitch_joint",
+        "left_hip_roll_joint",
+        "left_hip_yaw_joint",
+        "left_knee_joint",
+        "left_ankle_pitch_joint",
+        "left_ankle_roll_joint",
+        "right_hip_pitch_joint",
+        "right_hip_roll_joint",
+        "right_hip_yaw_joint",
+        "right_knee_joint",
+        "right_ankle_pitch_joint",
+        "right_ankle_roll_joint",
+        "waist_yaw_joint",
+        "waist_roll_joint",
+        "waist_pitch_joint",
+        "left_shoulder_pitch_joint",
+        "left_shoulder_roll_joint",
+        "left_shoulder_yaw_joint",
+        "left_elbow_joint",
+        "left_wrist_roll_joint",
+        "left_wrist_pitch_joint",
+        "left_wrist_yaw_joint",
+        "right_shoulder_pitch_joint",
+        "right_shoulder_roll_joint",
+        "right_shoulder_yaw_joint",
+        "right_elbow_joint",
+        "right_wrist_roll_joint",
+        "right_wrist_pitch_joint",
+        "right_wrist_yaw_joint",
     ],
-    effort_limit=300,
-    velocity_limit=100,
-    stiffness=3000.0,
-    damping=100.0,
-    armature={
-        ".*_shoulder_.*": 0.001,
-        ".*_elbow_.*": 0.001,
-        ".*_wrist_.*_joint": 0.001,
-    },
-)
-# Actuator configuration for hands (flexibility focused for grasping)
-# Lower stiffness and damping to improve finger flexibility when grasping objects
-G1_INSPIRE_FTP_CFG.actuators["hands"] = ImplicitActuatorCfg(
-    joint_names_expr=[
-        ".*_index_.*",
-        ".*_middle_.*",
-        ".*_thumb_.*",
-        ".*_ring_.*",
-        ".*_pinky_.*",
-    ],
-    effort_limit_sim=30.0,
-    velocity_limit_sim=10.0,
-    stiffness=10.0,
-    damping=0.2,
-    armature=0.001,
 )

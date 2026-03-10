@@ -109,7 +109,9 @@ class CommandsCfg:
 class ActionsCfg:
     """Action specifications for the MDP."""
 
-    joint_pos = mdp.JointPositionActionCfg(asset_name="robot", joint_names=[".*"], scale=0.5, use_default_offset=True)
+    joint_pos = mdp.JointPositionActionCfg(
+        asset_name="robot", joint_names=[".*"], scale=0.5, use_default_offset=True
+    )
 
 @configclass
 class ObservationsCfg:
@@ -215,12 +217,12 @@ class EventCfg:
         params={
             "pose_range": {"x": (-0.5, 0.5), "y": (-0.5, 0.5), "yaw": (-3.14, 3.14)},
             "velocity_range": {
-                "x": (-0.5, 0.5),
-                "y": (-0.5, 0.5),
-                "z": (-0.5, 0.5),
-                "roll": (-0.5, 0.5),
-                "pitch": (-0.5, 0.5),
-                "yaw": (-0.5, 0.5),
+                "x": (0.0, 0.0),
+                "y": (0.0, 0.0),
+                "z": (0.0, 0.0),
+                "roll": (0.0, 0.0),
+                "pitch": (0.0, 0.0),
+                "yaw": (0.0, 0.0),
             },
         },
     )
@@ -250,7 +252,7 @@ class RewardsCfg:
 
     # ==================== General Rewards ====================
     is_alive = RewTerm(func=mdp.is_alive, weight=0.0)
-    is_terminated = RewTerm(func=mdp.is_terminated, weight=0.0)
+    # is_terminated = RewTerm(func=mdp.is_terminated, weight=0.0)
 
     # ==================== Base Rewards ====================
     # Tracking rewards
@@ -355,12 +357,13 @@ class RewardsCfg:
         },
     )
     feet_clearance = RewTerm(
-        func=mdp.feet_clearance,
+        func=mdp.foot_clearance_reward,
         weight=0.0,
         params={
-            "asset_feet_cfg": SceneEntityCfg("robot", body_names=".*_foot"),
-            "asset_base_cfg": SceneEntityCfg("robot"),
-            "target_feet_height": -0.20,  # negative: feet are below base in body frame
+            "std": 0.05,
+            "tanh_mult": 2.0,
+            "target_height": 0.1,
+            "asset_cfg": SceneEntityCfg("robot", body_names=".*ankle_roll.*"),
         },
     )
 
@@ -515,3 +518,4 @@ class LocomotionVelocityRoughEnvCfg(ManagerBasedRLEnvCfg):
                 reward_attr = getattr(self.rewards, attr)
                 if not callable(reward_attr) and hasattr(reward_attr, 'weight') and reward_attr.weight == 0:
                     setattr(self.rewards, attr, None)
+
