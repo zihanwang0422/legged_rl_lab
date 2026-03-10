@@ -1,3 +1,6 @@
+# ========== Gamepad ==========
+gamepad_type: "gamesir"  # Options: f710, gamesir, unitree
+
 # ========== Paths ==========
 policy_path: "./exported_policy/go1/flat"
 xml_path: "../source/legged_rl_lab/legged_rl_lab/data/robots/go1_description/mjcf/scene.xml"

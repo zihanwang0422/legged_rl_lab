@@ -13,10 +13,10 @@ import time
 import numpy as np
 import argparse
 import torch
-import threading
 import sys
 import os
-from joystick import RemoteController, apply_deadzone
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'utils'))
+from joystick import create_gamepad_controller
 import mujoco
 import mujoco.viewer
 from scipy.spatial.transform import Rotation as R
@@ -136,147 +136,6 @@ def build_obs(base_lin_vel, base_ang_vel, projected_gravity, commands, dof_pos_r
     obs.extend(list(last_action))
     
     return np.array(obs, dtype=np.float32)
-
-
-# ========== Gamepad controller ==========
-
-class GamepadController:
-    """Thread-safe gamepad controller (Logitech F710 - Linux native interface)."""
-    def __init__(self, vx_range=(-2.0, 4.0), vy_range=(-1.0, 1.0), vyaw_range=(-1.57, 1.57)):
-        self.vx = 0.0
-        self.vy = 0.0
-        self.vyaw = 0.0
-        self.vx_range = vx_range
-        self.vy_range = vy_range
-        self.vyaw_range = vyaw_range
-        self.lock = threading.Lock()
-        self.running = True
-        self.exit_requested = False
-        self.thread = None
-        
-        # Initialize gamepad (Linux native device)
-        try:
-            self.gamepad = RemoteController()
-            self.gamepad.start()
-            print("✅ Gamepad initialized successfully (Linux native)")
-        except Exception as e:
-            print(f"❌ Failed to initialize gamepad: {e}")
-            self.gamepad = None
-        
-        # Deadzone (normalized)
-        self.deadzone = 0.05  # 5% deadzone
-        
-        # Velocity smoothing parameters (exponential moving average)
-        self.alpha = 0.6  # smoothing: 60% new + 40% old (faster response)
-        self.vx_smooth = 0.0
-        self.vy_smooth = 0.0
-        self.vyaw_smooth = 0.0
-        
-        # Speed step control (D-pad incremental adjustment)
-        self.vx_increment = 0.1  # change per press: 0.1 m/s
-        self.vx_target = 0.0     # target speed step
-        self.dpad_last_state = {'up': False, 'down': False}  # edge detection
-    
-    def get_velocity(self):
-        with self.lock:
-            return self.vx, self.vy, self.vyaw
-    
-    def set_velocity(self, vx, vy, vyaw):
-        with self.lock:
-            self.vx = np.clip(vx, self.vx_range[0], self.vx_range[1])
-            self.vy = np.clip(vy, self.vy_range[0], self.vy_range[1])
-            self.vyaw = np.clip(vyaw, self.vyaw_range[0], self.vyaw_range[1])
-    
-    def gamepad_thread(self):
-        """Gamepad reading thread - synchronized with policy frequency."""
-        if self.gamepad is None:
-            print("Gamepad not available, using zero velocity")
-            return
-        
-        # Sync with policy frequency: 33Hz
-        update_interval = 1.0 / 33.0  # 0.0303s
-        
-        while self.running:
-            try:
-                loop_start = time.time()
-                
-                # Read stick values (normalized to [-1, 1])
-                left_x, left_y = self.gamepad.get_left_stick(normalize=True)
-                right_x, right_y = self.gamepad.get_right_stick(normalize=True)
-                
-                # Apply deadzone
-                left_x = apply_deadzone(left_x, self.deadzone)
-                left_y = apply_deadzone(left_y, self.deadzone)
-                right_x = apply_deadzone(right_x, self.deadzone)
-                
-                # D-pad incremental control (HAT axes: 6=X, 7=Y)
-                with self.gamepad.lock:
-                    dpad_y = self.gamepad.axes[7] if len(self.gamepad.axes) > 7 else 0  # Y axis: -32767=up, +32767=down
-                
-                dpad_up_pressed = (dpad_y < -16000)    # up
-                dpad_down_pressed = (dpad_y > 16000)   # down
-                
-                # Edge detection: trigger on press (not hold)
-                if dpad_up_pressed and not self.dpad_last_state['up']:
-                    self.vx = min(self.vx + self.vx_increment, self.vx_range[1])
-                    print(f"\n[D-pad UP] speed step: {self.vx:.1f} m/s")
-                
-                if dpad_down_pressed and not self.dpad_last_state['down']:
-                    self.vx = max(self.vx - self.vx_increment, 0.0)  # min 0, no backward
-                    print(f"\n[D-pad DOWN] speed step: {self.vx:.1f} m/s")
-                
-                # Update D-pad state
-                self.dpad_last_state['up'] = dpad_up_pressed
-                self.dpad_last_state['down'] = dpad_down_pressed
-                
-                # Map sticks / D-pad to velocities
-                # Priority: D-pad speed step; sticks act as fine control
-                # Left stick Y: -1 (push up) to +1 (push down)
-                if abs(left_y) > 0.1:  # use stick if significant input
-                    if left_y <= 0:  # push up (negative Y)
-                        self.vx = (-left_y) * self.vx_range[1]  # map to [0, max]
-                    else:  # push down
-                        self.vx = 0.0  # backward not supported
-                else:  # stick centered, keep D-pad speed
-                    self.vx = self.vx
-
-                # Left stick X: lateral velocity mapping
-                self.vy = -left_x * (self.vy_range[1])   # -0.3 .. +0.3 m/s
-
-                # Right stick X: yaw rate mapping
-                self.vyaw = -right_x * self.vyaw_range[1]
-                
-                
-                # Update (clamped) velocity values
-                self.set_velocity(self.vx, self.vy, self.vyaw)
-                
-                # Check exit button (Start = button 7)
-                if self.gamepad.is_button_pressed(self.gamepad.BTN_START):
-                    print("\n✅ Start button pressed - exiting")
-                    self.exit_requested = True
-                    break
-                
-                # (Periodic Gamepad print removed; status printed from simulation loop)
-                
-                # Sync with policy frequency: 50Hz (update every 0.02s)
-                elapsed = time.time() - loop_start
-                sleep_time = max(0, update_interval - elapsed)
-                time.sleep(sleep_time)
-                
-            except Exception as e:
-                print(f"\nGamepad error: {e}")
-                time.sleep(0.1)
-    
-    def start(self):
-        self.thread = threading.Thread(target=self.gamepad_thread, daemon=True)
-        self.thread.start()
-    
-    def stop(self):
-        self.running = False
-        if self.gamepad:
-            self.gamepad.stop()
-        if self.thread:
-            self.thread.join(timeout=1.0)
 
 
 # ========== Sim2Sim (MuJoCo) controller ==========
@@ -535,8 +394,10 @@ if __name__ == '__main__':
     # 1. 加载 Config
     config = load_config(args.config)
     
-    # 2. 初始化 Gamepad (使用 config 中的 range)
-    gamepad = GamepadController(
+    # 2. 初始化 Gamepad (根据 YAML 中的 gamepad_type 选择手柄)
+    gamepad_type = getattr(config, 'gamepad_type', 'f710')
+    gamepad = create_gamepad_controller(
+        gamepad_type,
         vx_range=config.vx_range,
         vy_range=config.vy_range,
         vyaw_range=config.vyaw_range
@@ -544,7 +405,7 @@ if __name__ == '__main__':
     gamepad.start()
     
     print("\n" + "="*70)
-    print("🎮 Gamepad Control (Logitech F710)")
+    print(f"🎮 Gamepad Control ({gamepad_type})")
     print("="*70)
     print("  Left Joystick:")
     print("    - Up/Down: Forward/Backward speed (vx)")
