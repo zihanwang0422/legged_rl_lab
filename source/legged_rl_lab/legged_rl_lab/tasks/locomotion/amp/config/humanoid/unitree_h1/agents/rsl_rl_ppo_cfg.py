@@ -12,6 +12,7 @@ class UnitreeH1RoughPPORunnerCfg(RslRlOnPolicyRunnerCfg):
     save_interval = 100
     experiment_name = "unitree_h1_rough"
     policy = RslRlPpoActorCriticCfg(
+        noise_std_type="scalar",
         init_noise_std=1.0,
         actor_obs_normalization=False,
         critic_obs_normalization=False,

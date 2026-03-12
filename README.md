@@ -167,7 +167,7 @@ python scripts/rsl_rl/play.py \
     --task=LeggedRLLab-Isaac-Velocity-Handstand-Unitree-Go1-v0 \
     --num_envs 16
 ```
-
+<!-- 
 ### Navigation
 #### Train
 ```bash
@@ -195,7 +195,17 @@ python scripts/rsl_rl/play.py \
 python scripts/rsl_rl/play.py \
     --task=LeggedRLLab-Isaac-Navigation-Obstacle-Unitree-Go1-Play-v0 \
     --num_envs 16
-```
+``` -->
+
+### AMP
+dataset:
+[Lafan](https://huggingface.co/datasets/lvhaidong/LAFAN1_Retargeting_Dataset)
+[AMASS](https://huggingface.co/datasets/ember-lab-berkeley/AMASS_Retargeted_for_G1)
+#### Train
+
+#### Play
+
+
 
 ### Metamorphology
 #### Train

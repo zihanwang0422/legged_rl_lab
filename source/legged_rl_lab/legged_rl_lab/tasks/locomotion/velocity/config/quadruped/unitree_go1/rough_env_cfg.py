@@ -66,7 +66,15 @@ class UnitreeGo1RoughEnvCfg(LocomotionVelocityRoughEnvCfg):
         #     ),
         # }
 
+        # observations
+        self.observations.policy.history_length = 5
+        self.observations.policy.base_ang_vel.scale = 0.25
+        self.observations.policy.joint_pos.scale = 1.0
+        self.observations.policy.joint_vel.scale = 0.05
+        self.observations.critic.history_length = 5
+
         # action
+        
         self.actions.joint_pos.scale = 0.25
 
         #------------------------------- Event -------------------------------
@@ -104,8 +112,8 @@ class UnitreeGo1RoughEnvCfg(LocomotionVelocityRoughEnvCfg):
         
         self.rewards.feet_air_time.params["sensor_cfg"].body_names = ".*_foot"
         self.rewards.feet_air_time.weight = 0.01
-        # self.rewards.feet_clearance.weight = -0.1
-        # self.rewards.feet_clearance.params["target_feet_height"] = -0.20
+ 
+
         
         
         #------------------------------- Terminations -------------------------------

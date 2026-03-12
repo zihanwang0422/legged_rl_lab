@@ -210,6 +210,8 @@ class GamepadController:
         self.vx_increment = 0.1
         self.dpad_last_state = {'up': False, 'down': False}
         self.walk_requested = False  # RB+A 组合触发，进入 walk policy
+        # 当前激活的策略索引: 0=空闲, 1=walk(RB+A), 2=policy1(RB+B), 3=policy2(RB+X), 4=policy3(RB+Y)
+        self.active_policy = 0
 
     def get_velocity(self):
         with self.lock:
@@ -312,7 +314,7 @@ class F710GamepadController(GamepadController):
                     if left_y <= 0:
                         self.vx = (-left_y) * self.vx_range[1]
                     else:
-                        self.vx = 0.0
+                        self.vx = (-left_y) * abs(self.vx_range[0])
 
                 self.vy = -left_x * self.vy_range[1]
                 self.vyaw = -right_x * self.vyaw_range[1]
@@ -420,7 +422,7 @@ class UnitreeGamepadController(GamepadController):
                     if left_y <= 0:
                         self.vx = (-left_y) * self.vx_range[1]
                     else:
-                        self.vx = 0.0
+                        self.vx = (-left_y) * abs(self.vx_range[0])
 
                 self.vy = -left_x * self.vy_range[1]
                 self.vyaw = -right_x * self.vyaw_range[1]
@@ -482,6 +484,7 @@ class GameSirGamepadController(GamepadController):
             return
 
         update_interval = 1.0 / 33.0
+        _prev_combos = {1: False, 2: False, 3: False, 4: False}
 
         while self.running:
             try:
@@ -513,12 +516,12 @@ class GameSirGamepadController(GamepadController):
                 self.dpad_last_state['down'] = dpad_down
 
                 # 左摇杆: 前后左右速度
-                # Y轴: 向上(-1) -> vx正(前进), 向下(+1) -> vx=0
+                # Y轴: 向上(-1) -> vx正(前进), 向下(+1) -> vx负(后退)
                 if abs(left_y) > 0.1:
                     if left_y <= 0:
                         self.vx = (-left_y) * self.vx_range[1]
                     else:
-                        self.vx = 0.0
+                        self.vx = (-left_y) * abs(self.vx_range[0])
                 # X轴: 向左(-1) -> vy正(左移), 向右(+1) -> vy负(右移)
                 self.vy = -left_x * self.vy_range[1]
 
@@ -527,12 +530,23 @@ class GameSirGamepadController(GamepadController):
 
                 self.set_velocity(self.vx, self.vy, self.vyaw)
 
-                # RB+A 进入 walk policy
-                rb = buttons[PygameJoystickReader.BTN_RB]
-                a  = buttons[PygameJoystickReader.BTN_A]
-                if rb and a and not self.walk_requested:
-                    print("\n✅ [RB+A] Walk policy activated!")
-                    self.walk_requested = True
+                # RB + 面键 组合 → 策略切换 (上升沿触发)
+                rb = bool(buttons[PygameJoystickReader.BTN_RB])
+                combos = {
+                    1: rb and bool(buttons[PygameJoystickReader.BTN_A]),
+                    2: rb and bool(buttons[PygameJoystickReader.BTN_B]),
+                    3: rb and bool(buttons[PygameJoystickReader.BTN_X]),
+                    4: rb and bool(buttons[PygameJoystickReader.BTN_Y]),
+                }
+                combo_names = {1: 'RB+A (Walk)', 2: 'RB+B (Policy1)',
+                               3: 'RB+X (Policy2)', 4: 'RB+Y (Policy3)'}
+                for idx, pressed in combos.items():
+                    if pressed and not _prev_combos[idx]:
+                        self.active_policy = idx
+                        if idx == 1:
+                            self.walk_requested = True
+                        print(f"\n✅ [{combo_names[idx]}] activated!")
+                _prev_combos = dict(combos)
 
                 # START 按钮 (index 11) 退出
                 if buttons[PygameJoystickReader.BTN_START]:

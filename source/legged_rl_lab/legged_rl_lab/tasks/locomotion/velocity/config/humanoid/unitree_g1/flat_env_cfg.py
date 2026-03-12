@@ -122,7 +122,7 @@ class G1RewardsCfg:
         },
     )
     feet_clearance = RewTerm(
-        func=mdp.foot_clearance_reward, 
+        func=mdp.foot_clearance_reward_humanoid, 
         weight=1.0,
         params={
             "std": 0.05,

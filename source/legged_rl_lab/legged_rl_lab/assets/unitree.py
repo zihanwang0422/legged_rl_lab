@@ -92,9 +92,10 @@ Note: Specifications taken from: https://www.trossenrobotics.com/a1-quadruped#sp
 
 
 UNITREE_GO1_CFG = ArticulationCfg(
-    spawn=sim_utils.UsdFileCfg(
-        usd_path=f"{LEGGED_RL_LAB_ROOT_DIR}/data/robots/go1_description/usd/go1.usd",
-        # usd_path=f"{ISAACLAB_NUCLEUS_DIR}/Robots/Unitree/Go1/go1.usd",
+    spawn=sim_utils.UrdfFileCfg(
+        fix_base=False,
+        replace_cylinders_with_capsules=True,
+        asset_path=f"{LEGGED_RL_LAB_ROOT_DIR}/data/robots/go1_description/urdf/go1.urdf",
         activate_contact_sensors=True,
         rigid_props=sim_utils.RigidBodyPropertiesCfg(
             disable_gravity=False,
@@ -106,9 +107,13 @@ UNITREE_GO1_CFG = ArticulationCfg(
             max_depenetration_velocity=1.0,
         ),
         articulation_props=sim_utils.ArticulationRootPropertiesCfg(
-            enabled_self_collisions=False, solver_position_iteration_count=4, solver_velocity_iteration_count=0
+            enabled_self_collisions=True, solver_position_iteration_count=8, solver_velocity_iteration_count=4
+        ),
+        joint_drive=sim_utils.UrdfConverterCfg.JointDriveCfg(
+            gains=sim_utils.UrdfConverterCfg.JointDriveCfg.PDGainsCfg(stiffness=0, damping=0)
         ),
     ),
+    
     init_state=ArticulationCfg.InitialStateCfg(
         pos=(0.0, 0.0, 0.4),
         joint_pos={
@@ -123,7 +128,7 @@ UNITREE_GO1_CFG = ArticulationCfg(
     soft_joint_pos_limit_factor=0.9,
     actuators={
         # 对应 MJCF 中的 abduction class (侧展关节)
-        "hip_joints": IdealPDActuatorCfg(
+        "hip_joints": ImplicitActuatorCfg(
             joint_names_expr=[".*_hip_joint"],
             effort_limit=45.43,      
             velocity_limit=30.0,
@@ -133,7 +138,7 @@ UNITREE_GO1_CFG = ArticulationCfg(
             armature=0.01,          
         ),
         # 对应 MJCF 中的 hip class (大腿关节)
-        "thigh_joints": IdealPDActuatorCfg(
+        "thigh_joints": ImplicitActuatorCfg(
             joint_names_expr=[".*_thigh_joint"],
             effort_limit=45.43,
             velocity_limit=30.0,
@@ -143,7 +148,7 @@ UNITREE_GO1_CFG = ArticulationCfg(
             armature=0.01,          
         ),
         # 对应 MJCF 中的 knee class (小腿关节)
-        "calf_joints": IdealPDActuatorCfg(
+        "calf_joints": ImplicitActuatorCfg(
             joint_names_expr=[".*_calf_joint"],
             effort_limit=35.55,
             velocity_limit=30.0,
@@ -157,9 +162,11 @@ UNITREE_GO1_CFG = ArticulationCfg(
 """Configuration of Unitree Go1 using PD-Motor actuator model."""
 
 
-UNITREE_GO2_CFG = ArticulationCfg(
-    spawn=sim_utils.UsdFileCfg(
-        usd_path=f"{ISAACLAB_NUCLEUS_DIR}/Robots/Unitree/Go2/go2.usd",
+UNITREE_GO2_CFG = UnitreeArticulationCfg(
+    spawn=sim_utils.UrdfFileCfg(
+        fix_base=False,
+        replace_cylinders_with_capsules=True,
+        asset_path=f"{LEGGED_RL_LAB_ROOT_DIR}/data/robots/go2_description/urdf/go2_description.urdf",
         activate_contact_sensors=True,
         rigid_props=sim_utils.RigidBodyPropertiesCfg(
             disable_gravity=False,
@@ -171,35 +178,40 @@ UNITREE_GO2_CFG = ArticulationCfg(
             max_depenetration_velocity=1.0,
         ),
         articulation_props=sim_utils.ArticulationRootPropertiesCfg(
-            enabled_self_collisions=False, solver_position_iteration_count=4, solver_velocity_iteration_count=0
+            enabled_self_collisions=True, solver_position_iteration_count=8, solver_velocity_iteration_count=4
+        ),
+        joint_drive=sim_utils.UrdfConverterCfg.JointDriveCfg(
+            gains=sim_utils.UrdfConverterCfg.JointDriveCfg.PDGainsCfg(stiffness=0, damping=0)
         ),
     ),
     init_state=ArticulationCfg.InitialStateCfg(
         pos=(0.0, 0.0, 0.4),
         joint_pos={
-            ".*L_hip_joint": 0.1,
             ".*R_hip_joint": -0.1,
+            ".*L_hip_joint": 0.1,
             "F[L,R]_thigh_joint": 0.8,
             "R[L,R]_thigh_joint": 1.0,
             ".*_calf_joint": -1.5,
         },
         joint_vel={".*": 0.0},
     ),
-    soft_joint_pos_limit_factor=0.9,
     actuators={
-        "base_legs": DCMotorCfg(
-            joint_names_expr=[".*_hip_joint", ".*_thigh_joint", ".*_calf_joint"],
-            effort_limit=23.5,
-            saturation_effort=23.5,
-            velocity_limit=30.0,
+        "GO2HV": unitree_actuators.UnitreeActuatorCfg_Go2HV(
+            joint_names_expr=[".*"],
             stiffness=25.0,
             damping=0.5,
-            friction=0.0,
+            friction=0.01,
         ),
     },
+    # fmt: off
+    joint_sdk_names=[
+        "FR_hip_joint", "FR_thigh_joint", "FR_calf_joint",
+        "FL_hip_joint", "FL_thigh_joint", "FL_calf_joint",
+        "RR_hip_joint", "RR_thigh_joint", "RR_calf_joint",
+        "RL_hip_joint", "RL_thigh_joint", "RL_calf_joint"
+    ],
+    # fmt: on
 )
-"""Configuration of Unitree Go2 using DC-Motor actuator model."""
-
 
 H1_CFG = ArticulationCfg(
     spawn=sim_utils.UsdFileCfg(

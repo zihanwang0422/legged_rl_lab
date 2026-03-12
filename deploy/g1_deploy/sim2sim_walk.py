@@ -91,7 +91,8 @@ class Sim2SimController:
     
     def __init__(self, config_path, model_name):
         #~/legged_rl_lab/deploy/g1_deploy/
-        _base_dir = os.path.dirname(os.path.abspath(__file__))
+        self._base_dir = _base_dir = os.path.dirname(os.path.abspath(__file__))
+        self._active_policy_idx = 0  # 0=idle, 1=walk, 2/3/4=other policies
         # 1. 直接加载并解析配置
         with open(config_path, 'r') as f:
             raw_cfg = yaml.safe_load(f)
@@ -157,7 +158,49 @@ class Sim2SimController:
         mujoco.mj_step(self.model, self.data)
         
         print("Sim2Sim controller initialized")
-        
+
+    # -------- 策略热切换 --------
+
+    def load_policy(self, config_path, model_name, policy_idx):
+        """Hot-swap config + policy network without restarting MuJoCo."""
+        print(f"[PolicySwitch] Loading policy {policy_idx}: {config_path} / {model_name}")
+        _base_dir = self._base_dir
+
+        with open(config_path, 'r') as f:
+            raw_cfg = yaml.safe_load(f)
+
+        new_cfg = SimpleNamespace(**raw_cfg)
+        for k, v in raw_cfg.items():
+            if isinstance(v, list):
+                if k in ['joint_names_mujoco', 'actuator_names_mujoco', 'sdk_joint_order']:
+                    setattr(new_cfg, k, v)
+                    continue
+                try:
+                    v = np.array(v, dtype=np.int32 if 'map' in k else np.float32)
+                except (ValueError, TypeError):
+                    pass
+            setattr(new_cfg, k, v)
+
+        policy_path = os.path.join(_base_dir, "exported_policy", model_name)
+        if not os.path.exists(policy_path):
+            print(f"[PolicySwitch] ❗ Policy file not found: {policy_path}, skipping.")
+            return False
+
+        self.config = new_cfg
+        c = new_cfg
+        self.policy = torch.jit.load(policy_path, map_location='cpu')
+        self.policy_decimation = int(c.policy_dt / c.sim_dt)
+        self.kp = c.kp_walk
+        self.kd = c.kd_walk
+        self.default_qpos_mj = c.default_qpos_isaac[c.isaac_to_mujoco_map]
+        self.target_qpos_mj = self.default_qpos_mj.copy()
+        # Reset observation buffers
+        self.obs_history = deque([np.zeros(96, dtype=np.float32)] * 5, maxlen=5)
+        self.last_action = np.zeros(self.num_joints, dtype=np.float32)
+        self._active_policy_idx = policy_idx
+        print(f"[PolicySwitch] ✅ Switched to policy {policy_idx}")
+        return True
+
     def pd_controller(self, target_pos_mj, target_vel_mj):
         """Compute torques via PD control and send to MuJoCo actuators.
         tau = kp * (target_q - current_q) - kd * current_v
@@ -165,13 +208,16 @@ class Sim2SimController:
         tau = self.kp * (target_pos_mj - self.data.qpos[self.joint_qpos_addrs]) + self.kd * (target_vel_mj - self.data.qvel[self.joint_qvel_addrs])
         self.data.ctrl[self.actuator_ids] = tau
     
-    def run(self, gamepad):
+    def run(self, gamepad, policy_registry=None):
         """
-        Main simulation loop with Absolute Time Sync and Render Decimation.
+        Main simulation loop with Absolute Time Sync, Camera Follow, and Policy Switching.
+        policy_registry: dict {policy_idx: (config_path, model_name)}
         """
-        motiontime = 0 # simulation step counter 
+        motiontime = 0 # simulation step counter
         c = self.config
-        
+        if policy_registry is None:
+            policy_registry = {}
+
         self.model.opt.timestep = self.sim_dt  # Physics timestep (e.g., 0.005s)
 
         # Launch viewer
@@ -181,17 +227,25 @@ class Sim2SimController:
             viewer.cam.distance = 2.0
             viewer.cam.azimuth = 90
             viewer.cam.elevation = -20
-            
 
             # --- Establish Absolute Time Reference ---
-            # Record start time immediately before entering the loop
-            start_time = time.time() 
-            
+            start_time = time.time()
+
             while viewer.is_running():
                 if gamepad.exit_requested:
                     print("\nExit request detected, ending simulation...")
                     break
-                
+
+                # --- 策略切换检测 ---
+                requested = gamepad.active_policy
+                if requested != 0 and requested != self._active_policy_idx:
+                    if requested in policy_registry:
+                        cfg_path, mdl_name = policy_registry[requested]
+                        self.load_policy(cfg_path, mdl_name, requested)
+                        c = self.config  # refresh local ref
+                    else:
+                        print(f"[PolicySwitch] Policy {requested} not registered, ignoring.")
+
                 # Get MuJoCo internal simulation time
                 sim_time = self.data.time
                 
@@ -253,6 +307,9 @@ class Sim2SimController:
                     self.target_qpos_isaac = action * self.config.action_scale['pos'] + c.default_qpos_isaac
                     self.target_qpos_mj = self.target_qpos_isaac[self.config.isaac_to_mujoco_map]
                 
+                # --- 摄像头跟随机器人 ---
+                viewer.cam.lookat[:] = self.data.qpos[:3]
+
                 viewer.sync() # Sync rendering to the simulation loop (decimated by render_skip)
                     
                  # Rudimentary time keeping, will drift relative to wall clock.
@@ -283,45 +340,63 @@ if __name__ == '__main__':
     parser.add_argument('--model', type=str, default='g1_walk.pt')
     parser.add_argument('--config', type=str, default='g1_walk.yaml')
     args = parser.parse_args()
-    
-    # Adjust config path if it doesn't exist
-    if not os.path.exists(args.config):
-        # Try relative to script directory
-        script_dir = os.path.dirname(os.path.abspath(__file__))
-        args.config = os.path.join(script_dir, 'config', args.config)
-    
-    # 1. 初始化 Controller (内部加载 Config)
-    controller = Sim2SimController(args.config, args.model)
 
-    # 2. 初始化 Gamepad (根据 Config 中的 gamepad_type 选择手柄)
-    config = controller.config
-    gamepad_type = getattr(config, 'gamepad_type', 'gamesir')
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+
+    def resolve_config(name):
+        """Resolve config yaml path relative to script's config/ directory."""
+        if os.path.exists(name):
+            return name
+        return os.path.join(script_dir, 'config', name)
+
+    walk_config = resolve_config(args.config)
+
+    # ---- 策略注册表 ----
+    # key: gamepad combo index (1=RB+A, 2=RB+B, 3=RB+X, 4=RB+Y)
+    # value: (config_yaml_path, policy_model_name)
+    # policy1/policy2/policy3 配置文件尚未创建，切换时会自动跳过
+    policy_registry = {
+        1: (walk_config,                              args.model),      # RB+A → 行走策略
+        2: (resolve_config('policy1.yaml'),           'policy1.pt'),    # RB+B → 策略 1 (占位符)
+        3: (resolve_config('policy2.yaml'),           'policy2.pt'),    # RB+X → 策略 2 (占位符)
+        4: (resolve_config('policy3.yaml'),           'policy3.pt'),    # RB+Y → 策略 3 (占位符)
+    }
+
+    # 1. 初始化 Controller，默认加载行走策略
+    controller = Sim2SimController(walk_config, args.model)
+    controller._active_policy_idx = 1
+
+    # 2. 初始化 Gamepad
+    cfg = controller.config
+    gamepad_type = getattr(cfg, 'gamepad_type', 'gamesir')
     gamepad = create_gamepad_controller(
         gamepad_type,
-        vx_range=config.vx_range,
-        vy_range=config.vy_range,
-        vyaw_range=config.vyaw_range,
-        btn_start=getattr(config, 'gamepad_btn_start', None),
-        btn_rb=getattr(config, 'gamepad_btn_rb', None),
-        btn_a=getattr(config, 'gamepad_btn_a', None),
+        vx_range=cfg.vx_range,
+        vy_range=cfg.vy_range,
+        vyaw_range=cfg.vyaw_range,
+        btn_start=getattr(cfg, 'gamepad_btn_start', None),
+        btn_rb=getattr(cfg, 'gamepad_btn_rb', None),
+        btn_a=getattr(cfg, 'gamepad_btn_a', None),
     )
     gamepad.start()
+    # 初始化时同步活跋索引，避免第一帧就触发切换
+    gamepad.active_policy = 1
 
     print("\n" + "="*70)
-    print(f"🎮 Gamepad Control ({gamepad_type})")
+    print(f"🎮 Gamepad Control ({gamepad_type}) - Multi-Policy Mode")
     print("="*70)
-    print("  Left Joystick:")
-    print("    - Up/Down: Forward/Backward speed (vx)")
-    print("    - Left/Right: Strafe speed (vy)")
-    print("  Right Joystick:")
-    print("    - Left/Right: Turn speed (vyaw)")
-    print("  Start Button: Exit program")
-    print("  Note: Release joystick to stop immediately")
+    print("  Left Joystick Up/Down : vx (forward/back)")
+    print("  Left Joystick L/R     : vy (strafe)")
+    print("  Right Joystick L/R    : vyaw (turn)")
+    print("  RB + A  : Walk policy  (g1_walk)")
+    print("  RB + B  : Policy 1     (policy1 - placeholder)")
+    print("  RB + X  : Policy 2     (policy2 - placeholder)")
+    print("  RB + Y  : Policy 3     (policy3 - placeholder)")
+    print("  Start   : Exit")
     print("="*70 + "\n")
 
     # 3. 运行
-    controller.run(gamepad)
-    
-    # Stop gamepad controller
+    controller.run(gamepad, policy_registry)
+
     gamepad.stop()
     print("\nProgram ended.")

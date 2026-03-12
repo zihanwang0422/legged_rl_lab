@@ -1,17 +1,9 @@
 # ========== Gamepad ==========
 gamepad_type: "gamesir"  # Options: f710, gamesir, unitree
 
-# F710/Unitree 按键索引配置 (gamesir 模式下无效)
-# F710 X-mode (手柄背面拨到 X): BTN_A=0  BTN_RB=5  BTN_START=7
-# F710 D-mode (手柄背面拨到 D): BTN_A=1  BTN_RB=7  BTN_START=9
-# 运行时也会打印实际使用的按键索引
-#gamepad_btn_a: 0
-#gamepad_btn_rb: 5
-#gamepad_btn_start: 7
-
 # ========== Paths ==========
 policy_path: "./exported_policy"
-xml_path: "./assets/scene_29dof.xml"
+xml_path: "./assets/scene_terrain.xml"
 
 # ========== Time parameters ==========
 simulation_duration: 60.0

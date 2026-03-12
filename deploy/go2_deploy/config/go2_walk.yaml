@@ -1,0 +1,109 @@
+# ========== Gamepad ==========
+gamepad_type: "gamesir"  # Options: f710, gamesir, unitree
+
+# ========== Paths ==========
+policy_path: "./exported_policy"
+xml_path: "./assets/scene_terrain.xml"
+
+# ========== Time parameters ==========
+simulation_duration: 60.0
+sim_dt: 0.005          # simulation/control timestep (200Hz)
+policy_dt: 0.02          # policy inference frequency (Hz) - matched with training
+control_decimation: 4 # sim_dt * control_decimation = policy_dt (0.02s = 50Hz)
+
+# ========== Stand / stabilize durations ==========
+standup_duration: 2.0      # standup duration (s)
+stabilize_duration: 0.5    # stabilize duration (s)
+
+
+# ========== PD Gains(MuJoCo Order) ==========
+# FL_hip_joint
+# FL_thigh_joint
+# FL_calf_joint
+# FR_hip_joint
+# FR_thigh_joint
+# FR_calf_joint
+# RL_hip_joint
+# RL_thigh_joint
+# RL_calf_joint
+# RR_hip_joint
+# RR_thigh_joint
+# RR_calf_joint
+# Joint name suffixes (MuJoCo joint name = leg_prefix + joint_suffix)
+kp_walk: [25.0, 25.0, 25.0,   # FL leg
+          25.0, 25.0, 25.0,    # FR leg
+          25.0, 25.0, 25.0,    # RL leg
+          25.0, 25.0, 25.0]    # RR leg
+
+kd_walk: [0.5, 0.5, 0.5,       # FL leg
+          0.5, 0.5, 0.5,        # FR leg
+          0.5, 0.5, 0.5,        # RL leg
+          0.5, 0.5, 0.5]       # RR leg          
+
+# ========== Joint ordering configuration (MuJoCo Order) ==========
+# MuJoCo joint names (in kinematic order from XML: FL, FR, RL, RR)
+joint_names_mujoco: [
+  'FL_hip_joint', 'FL_thigh_joint', 'FL_calf_joint',
+  'FR_hip_joint', 'FR_thigh_joint', 'FR_calf_joint',
+  'RL_hip_joint', 'RL_thigh_joint', 'RL_calf_joint',
+  'RR_hip_joint', 'RR_thigh_joint', 'RR_calf_joint']
+
+# MuJoCo actuator names (motor names in XML, typically matching joint names)
+actuator_names_mujoco: [
+  'FL_hip', 'FL_thigh', 'FL_calf',
+  'FR_hip', 'FR_thigh', 'FR_calf',
+  'RL_hip', 'RL_thigh', 'RL_calf',
+  'RR_hip', 'RR_thigh', 'RR_calf']
+
+# ========== Default Standing Joint Angles (Isaac Order) ==========
+#Isaac joint order
+# [ 0] FL_hip_joint
+# [ 1] FR_hip_joint
+# [ 2] RL_hip_joint
+# [ 3] RR_hip_joint
+# [ 4] FL_thigh_joint
+# [ 5] FR_thigh_joint
+# [ 6] RL_thigh_joint
+# [ 7] RR_thigh_joint
+# [ 8] FL_calf_joint
+# [ 9] FR_calf_joint
+# [10] RL_calf_joint
+# [11] RR_calf_joint
+#                   [FL|   FR|  RL|  RR]
+default_qpos_isaac: [0.1, -0.1, 0.1, -0.1,    #hip  
+                     0.8,  0.8, 1.0, 1.0,     #thigh  
+                    -1.5, -1.5, -1.5, -1.5]   #calf
+isaac_to_mujoco_map: [0, 4, 8, 1, 5, 9, 2, 6, 10, 3, 7, 11]
+mujoco_to_isaac_map: [0, 3, 6, 9, 1, 4, 7, 10, 2, 5, 8, 11]
+
+
+                
+
+# ========== Observation scales (matched with velocity_env_cfg.py) ==========
+obs_scales:
+  base_ang_vel: 0.25     # ang_vel scale from IsaacLab default  
+  joint_pos: 1.0        # dof_pos scale from IsaacLab default
+  joint_vel: 0.05        # dof_vel scale from IsaacLab default  
+
+
+# ========== Action scale (matched with rough_env_cfg.py) ==========
+action_scale: 
+  pos: 0.25  
+
+# ========== Command velocity ranges (matched with rough_env_cfg.py) ==========
+vx_range: [-1.0, 2.0]       # m/s - increased max forward speed to 2.5 m/s
+vy_range: [-0.8, 0.8]       # m/s - increased lateral speed to 0.8 m/s
+vyaw_range: [-1.5, 1.5]     # rad/s - increased yaw speed to 1.5 rad/s
+
+# ========== Sim2Real configuration ==========
+# SDK joint order (Unitree SDK)
+joint_sdk_names: [
+        "FR_hip_joint", "FR_thigh_joint", "FR_calf_joint",
+        "FL_hip_joint", "FL_thigh_joint", "FL_calf_joint",
+        "RR_hip_joint", "RR_thigh_joint", "RR_calf_joint",
+        "RL_hip_joint", "RL_thigh_joint", "RL_calf_joint"
+    ]
+robot_ip: ""
+robot_port: 8007
+local_port: 8080
+

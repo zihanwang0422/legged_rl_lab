@@ -6,27 +6,25 @@ import gymnasium as gym
 from . import agents
 
 ##
-# Register Gym environments.
+# Register Gym environments for AMP.
 ##
 
 gym.register(
-    id="LeggedRLLab-Isaac-Velocity-Flat-Unitree-Go2-v0",
+    id="LeggedRLLab-Isaac-AMP-Flat-Unitree-Go2-v0",
     entry_point="isaaclab.envs:ManagerBasedRLEnv",
     disable_env_checker=True,
     kwargs={
-        "env_cfg_entry_point": f"{__name__}.flat_env_cfg:UnitreeGo2FlatEnvCfg",
-        "rsl_rl_cfg_entry_point": f"{agents.__name__}.rsl_rl_ppo_cfg:UnitreeGo2FlatPPORunnerCfg",
-        "cusrl_cfg_entry_point": f"{agents.__name__}.cusrl_ppo_cfg:UnitreeGo2FlatTrainerCfg",
+        "env_cfg_entry_point": f"{__name__}.amp_rough_env_cfg:UnitreeGo2AMPFlatEnvCfg",
+        "rsl_rl_cfg_entry_point": f"{agents.__name__}.rsl_rl_amp_cfg:UnitreeGo2AMPFlatPPORunnerCfg",
     },
 )
 
 gym.register(
-    id="LeggedRLLab-Isaac-Velocity-Rough-Unitree-Go2-v0",
+    id="LeggedRLLab-Isaac-AMP-Rough-Unitree-Go2-v0",
     entry_point="isaaclab.envs:ManagerBasedRLEnv",
     disable_env_checker=True,
     kwargs={
-        "env_cfg_entry_point": f"{__name__}.rough_env_cfg:UnitreeGo2RoughEnvCfg",
-        "rsl_rl_cfg_entry_point": f"{agents.__name__}.rsl_rl_ppo_cfg:UnitreeGo2RoughPPORunnerCfg",
-        "cusrl_cfg_entry_point": f"{agents.__name__}.cusrl_ppo_cfg:UnitreeGo2RoughTrainerCfg",
+        "env_cfg_entry_point": f"{__name__}.amp_rough_env_cfg:UnitreeGo2AMPRoughEnvCfg",
+        "rsl_rl_cfg_entry_point": f"{agents.__name__}.rsl_rl_amp_cfg:UnitreeGo2AMPRoughPPORunnerCfg",
     },
 )

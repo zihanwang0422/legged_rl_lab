@@ -1,15 +1,8 @@
 # Copyright (c) 2024-2025 zihan wang
 # SPDX-License-Identifier: Apache-2.0
 
-# Copyright (c) 2022-2025, The Isaac Lab Project Developers (https://github.com/isaac-sim/IsaacLab/blob/main/CONTRIBUTORS.md).
-# All rights reserved.
-#
-# SPDX-License-Identifier: BSD-3-Clause
+"""AMP (Adversarial Motion Priors) locomotion environments.
 
-"""Locomotion environments with velocity-tracking commands.
-
-These environments are based on the `legged_gym` environments provided by Rudin et al.
-
-Reference:
-    https://github.com/leggedrobotics/legged_gym
+Extends the velocity-tracking environments with discriminator-based style rewards
+from reference motion data.
 """

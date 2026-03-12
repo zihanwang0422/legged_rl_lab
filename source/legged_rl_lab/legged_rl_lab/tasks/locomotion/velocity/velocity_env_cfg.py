@@ -356,16 +356,16 @@ class RewardsCfg:
             "asset_cfg": SceneEntityCfg("robot", body_names=".*_foot"),
         },
     )
-    feet_clearance = RewTerm(
-        func=mdp.foot_clearance_reward,
-        weight=0.0,
-        params={
-            "std": 0.05,
-            "tanh_mult": 2.0,
-            "target_height": 0.1,
-            "asset_cfg": SceneEntityCfg("robot", body_names=".*ankle_roll.*"),
-        },
-    )
+    # feet_clearance_humanoid = RewTerm(
+    #     func=mdp.foot_clearance_reward_humanoid,
+    #     weight=0.0,
+    #     params={
+    #         "std": 0.05,
+    #         "tanh_mult": 2.0,
+    #         "target_height": 0.1,
+    #         "asset_cfg": SceneEntityCfg("robot", body_names=".*ankle_roll.*"),
+    #     },
+    # )
 
     # ==================== Other/Custom Rewards ====================
     # Standing still
@@ -439,11 +439,6 @@ class RewardsCfg:
         }
     )
     
-    base_ang_vel_x_l2 = RewTerm(
-    func=mdp.reward_base_ang_vel_x_l2,  
-    weight=0.0,
-    params={"asset_cfg": SceneEntityCfg("robot")},
-    )
 
 
 @configclass
