@@ -141,6 +141,7 @@ class ObservationsCfg:
         actions = ObsTerm(func=mdp.last_action)
 
         def __post_init__(self):
+            self.history_length = 5
             self.enable_corruption = True
             self.concatenate_terms = True
 
@@ -165,6 +166,7 @@ class ObservationsCfg:
         )
 
         def __post_init__(self):
+            self.history_length = 5
             self.enable_corruption = False
             self.concatenate_terms = True
 
@@ -200,6 +202,7 @@ class ObservationsCfg:
         )
 
         def __post_init__(self):
+            self.history_length = 2
             self.enable_corruption = False
             self.concatenate_terms = True
 

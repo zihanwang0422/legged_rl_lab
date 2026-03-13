@@ -7,11 +7,14 @@
 
 import argparse
 import sys
+import os
 
 from isaaclab.app import AppLauncher
 
 # add path of scripts/rsl_rl so we can reuse cli_args
-sys.path.insert(0, sys.path[0].replace("/amp", "/rsl_rl"))
+import pathlib
+scripts_dir = str(pathlib.Path(__file__).parent.parent.resolve())
+sys.path.insert(0, os.path.join(scripts_dir, "rsl_rl"))
 import cli_args  # isort: skip
 
 # add argparse arguments
@@ -162,12 +165,18 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
 
     # Load reference motion data and set on algorithm
     motion_path = getattr(env_cfg, "amp_motion_files", "")
+    robot_type = getattr(env_cfg, "robot_type", "g1")
+    amp_history_length = getattr(
+        getattr(getattr(env_cfg, "observations", None), "amp", None),
+        "history_length",
+        2,
+    )
     if motion_path and os.path.exists(motion_path):
         print(f"[INFO] Loading reference motion data from: {motion_path}")
-        motion_loader = MotionLoader(device=agent_cfg.device)
+        motion_loader = MotionLoader(device=agent_cfg.device, robot=robot_type)
         reference_data = motion_loader.load(motion_path)
-        print(f"[INFO] Loaded {motion_loader.num_frames} frames, obs_dim={motion_loader.obs_dim}")
-        runner.alg.set_reference_data(reference_data)
+        print(f"[INFO] Loaded {motion_loader.num_frames} frames, obs_dim={motion_loader.obs_dim}, history_length={amp_history_length}")
+        runner.alg.set_reference_data(reference_data, history_length=amp_history_length)
     else:
         print(f"[WARNING] No reference motion data found at: {motion_path}")
         print("[WARNING] AMP will train without style reward (task reward only).")

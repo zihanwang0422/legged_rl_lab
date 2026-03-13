@@ -17,7 +17,7 @@ OUTPUT_SCENE_PATH = "../unitree_robots/" + ROBOT + "/scene_terrain.xml"
 3. Run:
 ```bash
 cd terrain_tool
-python3 /deploy/utils/terrain_tool/terrain_generator.py
+python3 deploy/utils/terrain_tool/terrain_generator.py
 ```
 The program will output the terrain scene file to `/unitree_robots/go2/scene_terrain.xml`. Then, you can modify the simulator configuration file `simulate/config.yaml` and set the scene to the newly generated `scene_terrain.xml`:
 ```yaml

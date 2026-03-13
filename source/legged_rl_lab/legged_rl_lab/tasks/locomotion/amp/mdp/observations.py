@@ -17,6 +17,8 @@ from isaaclab.managers import SceneEntityCfg
 
 if TYPE_CHECKING:
     from isaaclab.envs import ManagerBasedRLEnv
+    
+from isaaclab.utils.math import quat_rotate_inverse    
 
 
 def amp_joint_pos_rel(env: ManagerBasedRLEnv, asset_cfg: SceneEntityCfg = SceneEntityCfg("robot")) -> torch.Tensor:
@@ -50,54 +52,21 @@ def amp_foot_positions_base(
     env: ManagerBasedRLEnv,
     asset_cfg: SceneEntityCfg = SceneEntityCfg("robot", body_names=".*_foot"),
 ) -> torch.Tensor:
-    """Foot positions in base frame for AMP observations.
-
-    Returns the positions of specified body frames relative to the base frame.
-    """
+    """Computes foot positions relative to the base frame for AMP."""
     asset = env.scene[asset_cfg.name]
 
-    # Resolve body indices
+    # Get foot positions in world frame: (N, num_feet, 3)
     body_ids, _ = asset.find_bodies(asset_cfg.body_names)
+    foot_pos_w = asset.data.body_pos_w[:, body_ids, :]
 
-    # Get body positions in world frame
-    foot_pos_w = asset.data.body_pos_w[:, body_ids, :]  # (num_envs, num_feet, 3)
+    # Compute relative offset in world frame: (N, num_feet, 3)
+    rel_pos_w = foot_pos_w - asset.data.root_pos_w.unsqueeze(1)
 
-    # Get base position and orientation
-    base_pos_w = asset.data.root_pos_w  # (num_envs, 3)
-    base_quat_w = asset.data.root_quat_w  # (num_envs, 4)
+    # Transform to base frame using broadcasting: (N, 1, 4) rotates (N, num_feet, 3)
+    base_quat_w = asset.data.root_quat_w.unsqueeze(1)
+    foot_pos_b = quat_rotate_inverse(base_quat_w, rel_pos_w)
 
-    # Transform to base frame
-    # Compute relative position
-    rel_pos = foot_pos_w - base_pos_w.unsqueeze(1)  # (num_envs, num_feet, 3)
-
-    # Rotate to base frame using quaternion inverse
-    # q_inv = [w, -x, -y, -z]
-    quat_inv = base_quat_w.clone()
-    quat_inv[:, 1:] *= -1.0
-
-    # Apply rotation to each foot
-    num_feet = foot_pos_w.shape[1]
-    foot_pos_b = torch.zeros_like(rel_pos)
-    for i in range(num_feet):
-        foot_pos_b[:, i, :] = _quat_rotate(quat_inv, rel_pos[:, i, :])
-
-    # Flatten: (num_envs, num_feet * 3)
+    # Flatten output to (N, num_feet * 3)
     return foot_pos_b.reshape(foot_pos_b.shape[0], -1)
 
 
-def _quat_rotate(q: torch.Tensor, v: torch.Tensor) -> torch.Tensor:
-    """Rotate vector v by quaternion q (wxyz format).
-
-    Args:
-        q: Quaternion (num_envs, 4) in wxyz format.
-        v: Vector (num_envs, 3).
-
-    Returns:
-        Rotated vector (num_envs, 3).
-    """
-    q_w = q[:, 0:1]
-    q_vec = q[:, 1:4]
-    # t = 2 * cross(q_vec, v)
-    t = 2.0 * torch.cross(q_vec, v, dim=-1)
-    # result = v + q_w * t + cross(q_vec, t)
-    return v + q_w * t + torch.cross(q_vec, t, dim=-1)

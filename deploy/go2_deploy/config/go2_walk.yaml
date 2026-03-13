@@ -91,7 +91,7 @@ action_scale:
   pos: 0.25  
 
 # ========== Command velocity ranges (matched with rough_env_cfg.py) ==========
-vx_range: [-1.0, 2.0]       # m/s - increased max forward speed to 2.5 m/s
+vx_range: [-1.0, 1.0]       # m/s - increased max forward speed to 2.5 m/s
 vy_range: [-0.8, 0.8]       # m/s - increased lateral speed to 0.8 m/s
 vyaw_range: [-1.5, 1.5]     # rad/s - increased yaw speed to 1.5 rad/s
 

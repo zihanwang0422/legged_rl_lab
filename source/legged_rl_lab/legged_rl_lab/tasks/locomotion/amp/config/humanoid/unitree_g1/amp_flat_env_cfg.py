@@ -33,7 +33,10 @@ class UnitreeG1AMPRoughEnvCfg(LocomotionAMPRoughEnvCfg):
         # ----------------------------- Scene -----------------------------
         self.scene.robot = UNITREE_G1_29DOF_CFG.replace(prim_path="{ENV_REGEX_NS}/Robot")
         self.scene.height_scanner.prim_path = "{ENV_REGEX_NS}/Robot/" + self.base_link_name
-
+        self.scene.terrain.terrain_type = "plane"
+        self.scene.terrain.terrain_generator = None
+        self.scene.height_scanner = None
+        
         # ----------------------------- Observations -----------------------------
         self.observations.policy.base_ang_vel.scale = 0.25
         self.observations.policy.joint_pos.scale = 1.0
@@ -49,7 +52,7 @@ class UnitreeG1AMPRoughEnvCfg(LocomotionAMPRoughEnvCfg):
 
         # ----------------------------- Actions -----------------------------
         self.actions.joint_pos.scale = 0.25
-        self.actions.joint_pos.clip = {".*": (-100.0, 100.0)}
+        # self.actions.joint_pos.clip = {".*": (-100.0, 100.0)}
 
         # ----------------------------- Events -----------------------------
         self.events.add_base_mass.params["asset_cfg"].body_names = [self.base_link_name]
@@ -115,8 +118,9 @@ class UnitreeG1AMPRoughEnvCfg(LocomotionAMPRoughEnvCfg):
         self.commands.base_velocity.ranges.ang_vel_z = (-1.0, 1.0)
 
         # ----------------------------- AMP Motion Data -----------------------------
+        self.robot_type = "g1"
         self.amp_motion_files = os.path.join(
-            LEGGED_RL_LAB_ROOT_DIR, "data", "motions", "g1"
+            LEGGED_RL_LAB_ROOT_DIR, "data", "motion", "AMASS_Retargeted_for_G1", "g1"
         )
 
 
@@ -147,13 +151,9 @@ class UnitreeG1AMPRoughEnvCfg_PLAY(UnitreeG1AMPRoughEnvCfg):
         # Smaller scene
         self.scene.num_envs = 50
         self.scene.env_spacing = 2.5
-        self.scene.terrain.max_init_terrain_level = None
-        if self.scene.terrain.terrain_generator is not None:
-            self.scene.terrain.terrain_generator.num_rows = 5
-            self.scene.terrain.terrain_generator.num_cols = 5
-            self.scene.terrain.terrain_generator.curriculum = False
 
         # Disable randomization
         self.observations.policy.enable_corruption = False
         self.events.base_external_force_torque = None
         self.events.push_robot = None
+        self.curriculum.lin_vel_cmd_levels = None

@@ -80,3 +80,16 @@ tests/
 # Hugging Face Assets (managed separately)
 source/legged_rl_lab/legged_rl_lab/data/*
 !source/legged_rl_lab/legged_rl_lab/data/.gitkeep
+
+# Robot Meshes and Assets
+**/*.stl
+**/*.STL
+**/*.obj
+**/*.OBJ
+**/*.dae
+**/*.DAE
+**/*.zip
+
+# ONNX Policies
+**/*.onnx
+

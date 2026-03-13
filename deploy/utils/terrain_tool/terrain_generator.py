@@ -132,7 +132,7 @@ class TerrainGenerator:
                          init_pos=[1.0, 0.0, 0.0],
                          yaw=0.0,
                          width=0.4,
-                         height=0.12,
+                         height=0.15,
                          length=1.5,
                          stair_nums=10,
                          top_width=0.8):
@@ -304,12 +304,12 @@ class TerrainGenerator:
 if __name__ == "__main__":
     tg = TerrainGenerator()
 
-    # Box obstacle
-    tg.AddBox(position=[1.5, 0.0, 0.1], euler=[0, 0, 0.0], size=[1, 1.5, 0.2])
+    # # Box obstacle
+    # tg.AddBox(position=[1.5, 0.0, 0.1], euler=[0, 0, 0.0], size=[1, 1.5, 0.2])
     
-    # Geometry obstacle
-    # geo_type supports "plane", "sphere", "capsule", "ellipsoid", "cylinder", "box"
-    tg.AddGeometry(position=[1.5, 0.0, 0.25], euler=[0, 0, 0.0], size=[1.0,0.5,0.5],geo_type="cylinder")
+    # # Geometry obstacle
+    # # geo_type supports "plane", "sphere", "capsule", "ellipsoid", "cylinder", "box"
+    # tg.AddGeometry(position=[1.5, 0.0, 0.25], euler=[0, 0, 0.0], size=[1.0,0.5,0.5],geo_type="cylinder")
 
     # Slope
     tg.AddBox(position=[2.0, 2.0, 0.31],
@@ -317,7 +317,7 @@ if __name__ == "__main__":
               size=[3, 1.5, 0.1])
 
     # Stairs
-    tg.AddStairsWithDown(init_pos=[1.0, 4.0, 0.0], yaw=0.0)
+    tg.AddStairsWithDown(init_pos=[1.5, 0.0, 0.0], yaw=0.0)
 
     # Suspend stairs
     tg.AddSuspendStairs(init_pos=[1.0, 6.0, 0.0], yaw=0.0)
