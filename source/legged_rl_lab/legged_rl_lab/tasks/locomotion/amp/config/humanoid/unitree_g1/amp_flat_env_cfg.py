@@ -18,10 +18,9 @@ import legged_rl_lab.tasks.locomotion.amp.mdp as mdp
 ##
 from legged_rl_lab.assets.unitree import UNITREE_G1_29DOF_CFG  # isort: skip
 
-
 @configclass
-class UnitreeG1AMPRoughEnvCfg(LocomotionAMPRoughEnvCfg):
-    """Unitree G1 humanoid AMP environment on rough terrain."""
+class UnitreeG1AMPFlatEnvCfg(LocomotionAMPRoughEnvCfg):
+    """Unitree G1 humanoid AMP environment on flat terrain."""
 
     base_link_name = "torso_link"
     foot_link_name = ".*_ankle_roll_link"
@@ -32,17 +31,22 @@ class UnitreeG1AMPRoughEnvCfg(LocomotionAMPRoughEnvCfg):
 
         # ----------------------------- Scene -----------------------------
         self.scene.robot = UNITREE_G1_29DOF_CFG.replace(prim_path="{ENV_REGEX_NS}/Robot")
-        self.scene.height_scanner.prim_path = "{ENV_REGEX_NS}/Robot/" + self.base_link_name
+        
+        # Flat terrain
         self.scene.terrain.terrain_type = "plane"
         self.scene.terrain.terrain_generator = None
-        self.scene.height_scanner = None
         
+        # No height scanner
+        self.scene.height_scanner = None
+        self.observations.critic.height_scan = None
+        
+        # No terrain curriculum
+        self.curriculum.terrain_levels = None
+
         # ----------------------------- Observations -----------------------------
         self.observations.policy.base_ang_vel.scale = 0.25
         self.observations.policy.joint_pos.scale = 1.0
         self.observations.policy.joint_vel.scale = 0.05
-        self.observations.policy.height_scan = None
-        self.observations.critic.height_scan = None
 
         # AMP: override foot_positions to use G1's ankle links
         self.observations.amp.foot_positions = ObsTerm(
@@ -52,7 +56,6 @@ class UnitreeG1AMPRoughEnvCfg(LocomotionAMPRoughEnvCfg):
 
         # ----------------------------- Actions -----------------------------
         self.actions.joint_pos.scale = 0.25
-        # self.actions.joint_pos.clip = {".*": (-100.0, 100.0)}
 
         # ----------------------------- Events -----------------------------
         self.events.add_base_mass.params["asset_cfg"].body_names = [self.base_link_name]
@@ -109,9 +112,6 @@ class UnitreeG1AMPRoughEnvCfg(LocomotionAMPRoughEnvCfg):
             "contact_forces", body_names=[self.base_link_name]
         )
 
-        # ----------------------------- Curriculum -----------------------------
-        self.curriculum.terrain_levels = None
-
         # ----------------------------- Commands -----------------------------
         self.commands.base_velocity.ranges.lin_vel_x = (-1.0, 1.0)
         self.commands.base_velocity.ranges.lin_vel_y = (-0.5, 0.5)
@@ -123,26 +123,8 @@ class UnitreeG1AMPRoughEnvCfg(LocomotionAMPRoughEnvCfg):
             LEGGED_RL_LAB_ROOT_DIR, "data", "motion", "AMASS_Retargeted_for_G1", "g1"
         )
 
-
 @configclass
-class UnitreeG1AMPFlatEnvCfg(UnitreeG1AMPRoughEnvCfg):
-    """Unitree G1 humanoid AMP environment on flat terrain."""
-
-    def __post_init__(self):
-        super().__post_init__()
-
-        # Flat terrain
-        self.scene.terrain.terrain_type = "plane"
-        self.scene.terrain.terrain_generator = None
-        # No height scanner
-        self.scene.height_scanner = None
-        self.observations.critic.height_scan = None
-        # No terrain curriculum
-        self.curriculum.terrain_levels = None
-
-
-@configclass
-class UnitreeG1AMPRoughEnvCfg_PLAY(UnitreeG1AMPRoughEnvCfg):
+class UnitreeG1AMPFlatEnvCfg_PLAY(UnitreeG1AMPFlatEnvCfg):
     """Unitree G1 AMP environment for visualisation / play."""
 
     def __post_init__(self):

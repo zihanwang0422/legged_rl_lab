@@ -85,32 +85,18 @@ python scripts/list_envs.py
 
 ## 🚀Train
 
-### Clone USD model
-```bash
-git clone https://huggingface.co/zihan0422/legged_rl_lab
-```
+### Go2
 
-Then
+<details>
+<summary><b>Walk (Flat)</b></summary>
 
-### Convert URDF to USD (recommend)
-
-```bash
-cd ~/legged_rl_lab
-
-python scripts/tools/convert_urdf.py   source/legged_rl_lab/legged_rl_lab/data/robots/go1_description/urdf/go1.urdf   source/legged_rl_lab/legged_rl_lab/data/robots/go1_description/usd/go1.usd   --merge-joints   --joint-stiffness 100.0   --joint-damping 0.5   --joint-target-type position
-```
-
-Then modify the `unitree.py` motor configration to align with the USD parameters.
-
-
-
-### Walk (Flat)
+#### Walk (Flat)
 
 [<img src="media/walkflat_isaac.gif" width="300px">](gifs/isaac.gif)
 
-#### Train
 
-```bash
+```bash 
+#Train
 python scripts/rsl_rl/train.py \
   --task=LeggedRLLab-Isaac-Velocity-Flat-Unitree-Go1-v0 \
   --num_envs 4096 \
@@ -120,32 +106,43 @@ python scripts/rsl_rl/train.py \
   --checkpoint model_xx.pt  
 ```
 
-#### Play
-
 ```bash
+#Play
 python scripts/rsl_rl/play.py \
     --task=LeggedRLLab-Isaac-Velocity-Flat-Unitree-Go1-v0 \
     --num_envs 16
 ```
 
-### Walk(rough)
+
+</details>
+
+<details>
+<summary><b>Walk (Rough)</b></summary>
+
+#### Walk(rough)
 
 [<img src="media/walkrough_isaac.gif" width="300px">](gifs/walkrough.gif)
 
-#### Train
 ```bash
+#Train
 python scripts/rsl_rl/train.py \
   --task=LeggedRLLab-Isaac-Velocity-Rough-Unitree-Go1-v0 \
   --num_envs 4096 \
   --headless
 ```
 
-#### Play
 ```bash
+#Play
 python scripts/rsl_rl/play.py \
     --task=LeggedRLLab-Isaac-Velocity-Rough-Unitree-Go1-v0 \
     --num_envs 16
 ```
+
+
+</details>
+
+<details>
+<summary><b>Handstand</b></summary>
 
 ### Handstand
 
@@ -167,45 +164,56 @@ python scripts/rsl_rl/play.py \
     --task=LeggedRLLab-Isaac-Velocity-Handstand-Unitree-Go1-v0 \
     --num_envs 16
 ```
-<!-- 
-### Navigation
-#### Train
-```bash
-# Flat terrain navigation
-python scripts/rsl_rl/train.py --task LeggedRLLab-Isaac-Navigation-Flat-Unitree-Go1-v0 --num_envs 4096 --headless --resume --load_run 2026-02-11_18-18-04 --checkpoint model_2700.pt
 
-# Obstacle terrain navigation (with cylinders)
-python scripts/rsl_rl/train.py \
-  --task LeggedRLLab-Isaac-Navigation-Obstacle-Unitree-Go1-v0 \
-  --num_envs 4096 \
-  --headless \
-  --resume \
-  --load_run 2026-02-13_14-44-01 \
-  --checkpoint model_1700.pt
+
+</details>
+
+## Humanoid
+
+### AMP Datasets
+
+The Adversarial Motion Priors (AMP) tasks allow imitating reference datasets (like walking, running, crouching) dynamically.
+
+The G1 LAFAN dataset is officially structured as follows:
+```text
+LAFAN1_Retargeting_Dataset/
+├── g1_walk/
+│   ├── walk1_subject1.csv
+│   └── ...
+├── g1_run/
+│   ├── run1_subject2.csv
+│   └── ...
+├── g1_dance/
+├── g1_jump/
+├── g1_fall/
+└── g1_fight/
 ```
 
-#### Play
-```bash
-# Flat terrain navigation
-python scripts/rsl_rl/play.py \
-    --task=LeggedRLLab-Isaac-Navigation-Flat-Unitree-Go1-Play-v0 \
-    --num_envs 16
-
-# Obstacle terrain navigation
-python scripts/rsl_rl/play.py \
-    --task=LeggedRLLab-Isaac-Navigation-Obstacle-Unitree-Go1-Play-v0 \
-    --num_envs 16
-``` -->
-
-### AMP
-dataset:
-[Lafan](https://huggingface.co/datasets/lvhaidong/LAFAN1_Retargeting_Dataset)
-[AMASS](https://huggingface.co/datasets/ember-lab-berkeley/AMASS_Retargeted_for_G1)
 #### Train
 
+To specify a dataset folder or a specific motion file, use the `--motion_file` argument.
+For example, to train Unitree G1 to reproduce Lafan walking traits:
+```bash
+python scripts/amp/train.py \
+    --task LeggedRLLab-Isaac-AMP-Flat-Unitree-G1-v0 \
+    --motion_file source/legged_rl_lab/legged_rl_lab/data/motion/LAFAN1_Retargeting_Dataset/g1_walk \
+    --headless --num_envs=4096
+```
+
+**Recommended Hyperparameters:**
+- **num_envs**: 4096 (for efficient parallel training)
+- **amp_task_reward_lerp**: ~0.4 (balance between imitating style and following the joystick)
+- **amp_disc_gradient_penalty_coef**: 5.0 (increase if discriminator learns too fast)
+
 #### Play
 
-
+To visualize a trained AMP model naturally recreating movements smoothly:
+```bash
+python scripts/amp/play.py \
+    --task LeggedRLLab-Isaac-AMP-Flat-Unitree-G1-Play-v0 \
+    --motion_file source/legged_rl_lab/legged_rl_lab/data/motion/LAFAN1_Retargeting_Dataset/g1_walk \
+    --num_envs=32
+```
 
 ### Metamorphology
 #### Train

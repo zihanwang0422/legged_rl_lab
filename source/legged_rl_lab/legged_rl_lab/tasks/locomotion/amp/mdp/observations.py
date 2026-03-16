@@ -18,7 +18,7 @@ from isaaclab.managers import SceneEntityCfg
 if TYPE_CHECKING:
     from isaaclab.envs import ManagerBasedRLEnv
     
-from isaaclab.utils.math import quat_rotate_inverse    
+from isaaclab.utils.math import quat_apply_inverse
 
 
 def amp_joint_pos_rel(env: ManagerBasedRLEnv, asset_cfg: SceneEntityCfg = SceneEntityCfg("robot")) -> torch.Tensor:
@@ -63,8 +63,9 @@ def amp_foot_positions_base(
     rel_pos_w = foot_pos_w - asset.data.root_pos_w.unsqueeze(1)
 
     # Transform to base frame using broadcasting: (N, 1, 4) rotates (N, num_feet, 3)
-    base_quat_w = asset.data.root_quat_w.unsqueeze(1)
-    foot_pos_b = quat_rotate_inverse(base_quat_w, rel_pos_w)
+    # Note: quat_apply_inverse flattens tensors internally, so we must expand the quat first.
+    base_quat_w = asset.data.root_quat_w.unsqueeze(1).expand(-1, len(body_ids), -1)
+    foot_pos_b = quat_apply_inverse(base_quat_w, rel_pos_w)
 
     # Flatten output to (N, num_feet * 3)
     return foot_pos_b.reshape(foot_pos_b.shape[0], -1)

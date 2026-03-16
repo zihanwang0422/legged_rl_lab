@@ -2,6 +2,8 @@
 # SPDX-License-Identifier: Apache-2.0
 
 """Script to play/visualise a trained AMP-PPO policy."""
+import uuid
+uuid_value = uuid.uuid4()
 
 """Launch Isaac Sim Simulator first."""
 
@@ -10,8 +12,15 @@ import sys
 
 from isaaclab.app import AppLauncher
 
-# reuse cli_args from scripts/rsl_rl
-sys.path.insert(0, sys.path[0].replace("/amp", "/rsl_rl"))
+# add path of scripts/rsl_rl so we can reuse cli_args
+import os
+import pathlib
+scripts_dir = str(pathlib.Path(__file__).parent.parent.resolve())
+sys.path.insert(0, os.path.join(scripts_dir, "rsl_rl"))
+
+# Add custom rsl_rl to sys.path to override the pip-installed version
+custom_rsl_rl_dir = os.path.abspath(os.path.join(scripts_dir, "../source/legged_rl_lab/legged_rl_lab/rsl_rl"))
+sys.path.insert(0, custom_rsl_rl_dir)
 import cli_args  # isort: skip
 
 # add argparse arguments
@@ -23,6 +32,7 @@ parser.add_argument(
 )
 parser.add_argument("--num_envs", type=int, default=None, help="Number of environments to simulate.")
 parser.add_argument("--task", type=str, default=None, help="Name of the task.")
+parser.add_argument("--motion_file", type=str, default=None, help="Path to motion file or directory.")
 parser.add_argument(
     "--agent", type=str, default="rsl_rl_cfg_entry_point", help="RL agent configuration entry point key."
 )
@@ -100,6 +110,9 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
     env_cfg.log_dir = log_dir
 
     # create isaac environment
+    if hasattr(args_cli, "motion_file") and args_cli.motion_file is not None:
+        env_cfg.amp_motion_files = args_cli.motion_file
+
     env = gym.make(args_cli.task, cfg=env_cfg, render_mode="rgb_array" if args_cli.video else None)
 
     # convert to single-agent instance if required by the RL algorithm
@@ -122,7 +135,30 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
     env = AmpRslRlVecEnvWrapper(env, clip_actions=agent_cfg.clip_actions)
 
     print(f"[INFO]: Loading model checkpoint from: {resume_path}")
-    runner = OnPolicyRunner(env, agent_cfg.to_dict(), log_dir=None, device=agent_cfg.device)
+    agent_dict = agent_cfg.to_dict()
+    
+    if "policy" in agent_dict:
+        policy_cfg = agent_dict.pop("policy")
+        agent_dict["actor"] = {
+            "class_name": "MLPModel",
+            "hidden_dims": policy_cfg.get("actor_hidden_dims", [512, 256, 128]),
+            "activation": policy_cfg.get("activation", "elu"),
+            "obs_normalization": policy_cfg.get("actor_obs_normalization", False),
+            "distribution_cfg": {
+                "class_name": "GaussianDistribution",
+                "std_type": policy_cfg.get("noise_std_type", "scalar"),
+                "init_std": policy_cfg.get("init_noise_std", 1.0),
+            },
+        }
+        agent_dict["critic"] = {
+            "class_name": "MLPModel",
+            "hidden_dims": policy_cfg.get("critic_hidden_dims", [512, 256, 128]),
+            "activation": policy_cfg.get("activation", "elu"),
+            "obs_normalization": policy_cfg.get("critic_obs_normalization", False),
+        }
+
+    runner = OnPolicyRunner(env, agent_dict, log_dir=None, device=agent_cfg.device)
+
     runner.load(resume_path)
 
     # obtain the trained policy for inference
@@ -132,15 +168,15 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
     try:
         policy_nn = runner.alg.policy
     except AttributeError:
-        policy_nn = runner.alg.actor_critic
+        policy_nn = runner.alg.actor
 
     # export policy to jit / onnx for deployment
     normalizer = None
     if hasattr(policy_nn, "actor_obs_normalizer"):
         normalizer = policy_nn.actor_obs_normalizer
     export_model_dir = os.path.join(os.path.dirname(resume_path), "exported")
-    export_policy_as_jit(policy_nn, normalizer=normalizer, path=export_model_dir, filename="policy.pt")
-    export_policy_as_onnx(policy_nn, normalizer=normalizer, path=export_model_dir, filename="policy.onnx")
+    print("Skipped JIT export for custom AMP model.")
+    print("Skipped ONNX export for custom AMP model.")
 
     dt = env.unwrapped.step_dt
 

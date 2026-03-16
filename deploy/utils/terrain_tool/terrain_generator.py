@@ -132,7 +132,7 @@ class TerrainGenerator:
                          init_pos=[1.0, 0.0, 0.0],
                          yaw=0.0,
                          width=0.4,
-                         height=0.15,
+                         height=0.14,
                          length=1.5,
                          stair_nums=10,
                          top_width=0.8):

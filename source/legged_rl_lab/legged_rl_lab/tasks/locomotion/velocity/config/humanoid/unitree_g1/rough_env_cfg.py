@@ -68,41 +68,43 @@ class G1ObservationsCfg:
 
 
 @configclass
-class G1RewardsCfg:
+class G1RewardsCfg(RewardsCfg):
     """Reward terms for the MDP."""
 
     # termination_penalty = RewTerm(func=mdp.is_terminated, weight=-200.0)
-    alive = RewTerm(func=mdp.is_alive, weight=0.15)
 
     # -- task
     track_lin_vel_xy_exp = RewTerm(
         func=mdp.track_lin_vel_xy_yaw_frame_exp,
-        weight=1.5,
+        weight=2.0,
         params={"command_name": "base_velocity", "std": 0.5},
     )
     track_ang_vel_z_exp = RewTerm(
-        func=mdp.track_ang_vel_z_world_exp,
-        weight=0.75,
-        params={"command_name": "base_velocity", "std": 0.5},
+        func=mdp.track_ang_vel_z_world_exp, weight=2.0, params={"command_name": "base_velocity", "std": 0.5}
     )
 
     # -- base
-    # flat_orientation_l2 = RewTerm(func=mdp.flat_orientation_l2, weight=-2.0)
-    lin_vel_z_l2 = RewTerm(func=mdp.lin_vel_z_l2, weight=-2.0)
+    flat_orientation_l2 = RewTerm(func=mdp.flat_orientation_l2, weight=-1.0)
+    lin_vel_z_l2 = RewTerm(func=mdp.lin_vel_z_l2, weight=0.0)
     ang_vel_xy_l2 = RewTerm(func=mdp.ang_vel_xy_l2, weight=-0.05)
-
+       
     # -- joints
     joint_torques_l2 = RewTerm(
         func=mdp.joint_torques_l2,
         weight=-2.0e-6,
-        params={"asset_cfg": SceneEntityCfg("robot", joint_names=[".*_hip_.*", ".*_knee_joint"])},
+        params={"asset_cfg": SceneEntityCfg("robot", joint_names=[".*_hip_.*", ".*_knee_joint", ".*_ankle_.*"])},
     )
-    joint_vel = RewTerm(func=mdp.joint_vel_l2, weight=-0.001)
-    joint_acc = RewTerm(func=mdp.joint_acc_l2, weight=-2.5e-7)
-    action_rate_l2 = RewTerm(func=mdp.action_rate_l2, weight=-0.05)
+    joint_vel_l2 = RewTerm(func=mdp.joint_vel_l2, weight=-0.001)
+    joint_acc_l2 = RewTerm(
+        func=mdp.joint_acc_l2, 
+        weight=-2.5e-7,
+        params={"asset_cfg": SceneEntityCfg("robot", joint_names=[".*_hip_.*", ".*_knee_joint", ".*_ankle_.*"])},
+        )
+    action_rate_l2 = RewTerm(func=mdp.action_rate_l2, weight=-0.005)
     dof_pos_limits = RewTerm(
         func=mdp.joint_pos_limits,
-        weight=-5.0,
+        weight=-1.0,
+        params={"asset_cfg": SceneEntityCfg("robot", joint_names=[".*_ankle_pitch_joint", ".*_ankle_roll_joint"])},
     )
 
     # -- feet
@@ -117,7 +119,7 @@ class G1RewardsCfg:
     )
     feet_slide = RewTerm(
         func=mdp.feet_slide,
-        weight=-0.2,
+        weight=-0.1,
         params={
             "sensor_cfg": SceneEntityCfg("contact_forces", body_names=".*_ankle_roll_link"),
             "asset_cfg": SceneEntityCfg("robot", body_names=".*_ankle_roll_link"),
@@ -125,19 +127,32 @@ class G1RewardsCfg:
     )
     feet_clearance = RewTerm(
         func=mdp.foot_clearance_reward_humanoid, 
-        weight=1.0,
+        weight=1.5,
         params={
             "std": 0.05,
             "tanh_mult": 2.0,
-            "target_height": 0.1,
+            "target_height": 0.13,
             "asset_cfg": SceneEntityCfg("robot", body_names=".*ankle_roll.*"),
         },
-    )
+    )#
+
+    
+    gait = RewTerm(
+        func=mdp.feet_gait,
+        weight=0.5,
+        params={
+            "period": 0.8,
+            "offset": [0.0, 0.5],
+            "threshold": 0.55,
+            "command_name": "base_velocity",
+            "sensor_cfg": SceneEntityCfg("contact_forces", body_names=".*_ankle_roll_link"),
+        },
+    )#
 
     # -- posture
     joint_deviation_legs = RewTerm(
         func=mdp.joint_deviation_l1,
-        weight=-1.0,
+        weight=-0.1,
         params={"asset_cfg": SceneEntityCfg("robot", joint_names=[".*_hip_yaw_joint", ".*_hip_roll_joint"])},
     )
     joint_deviation_arms = RewTerm(
@@ -156,52 +171,10 @@ class G1RewardsCfg:
     )
     joint_deviation_waist = RewTerm(
         func=mdp.joint_deviation_l1,
-        weight=-1,
+        weight=-0.1,
         params={"asset_cfg": SceneEntityCfg("robot", joint_names="waist_.*_joint")},
     )
     
-    stand_still_joint_deviation_l1 = RewTerm(
-        func=mdp.stand_still_joint_deviation_l1,
-        weight=-0.5,
-        params={
-            "command_name": "base_velocity",
-            "command_threshold": 0.06,
-            "asset_cfg": SceneEntityCfg("robot", joint_names=".*_joint"),
-        },
-    )
-
-    flat_orientation_l2 = RewTerm(func=mdp.flat_orientation_l2, weight=-5.0)
-    base_height = RewTerm(
-        func=mdp.base_height_l2,
-        weight=-10.0,
-        params={
-            "target_height": 0.78,
-            "asset_cfg": SceneEntityCfg("robot"),
-            "sensor_cfg": SceneEntityCfg("height_scanner"),
-        },
-    )
-    gait = RewTerm(
-        func=mdp.feet_gait,
-        weight=0.5,
-        params={
-            "period": 0.8,
-            "offset": [0.0, 0.5],
-            "threshold": 0.55,
-            "command_name": "base_velocity",
-            "sensor_cfg": SceneEntityCfg("contact_forces", body_names=".*_ankle_roll_link"),
-        },
-    )
-    
-    # -- other
-    # undesired_contacts = RewTerm(
-    #     func=mdp.undesired_contacts,
-    #     weight=-1,
-    #     params={
-    #         "threshold": 1,
-    #         "sensor_cfg": SceneEntityCfg("contact_forces", body_names=["(?!.*ankle.*).*"]),
-    #     },
-    # )
-
 
     
 @configclass
@@ -209,6 +182,7 @@ class G1TerminationsCfg:
     """Termination terms for the MDP."""
 
     time_out = DoneTerm(func=mdp.time_out, time_out=True)
+    base_height = DoneTerm(func=mdp.root_height_below_minimum, params={"minimum_height": 0.2})
     illegal_contact = DoneTerm(
         func=mdp.illegal_contact,
         params={"sensor_cfg": SceneEntityCfg("contact_forces", body_names="torso_link"), "threshold": 1.0},
@@ -231,15 +205,15 @@ class UnitreeG1RoughEnvCfg(LocomotionVelocityRoughEnvCfg):
         # ------------------------------ Scene ------------------------------
         self.scene.robot = UNITREE_G1_29DOF_CFG.replace(prim_path="{ENV_REGEX_NS}/Robot")
         self.scene.height_scanner.prim_path = "{ENV_REGEX_NS}/Robot/torso_link"
+        
         # scale down the terrains because the robot is small
         self.scene.terrain.terrain_generator.sub_terrains["boxes"].grid_height_range = (0.025, 0.1)
         self.scene.terrain.terrain_generator.sub_terrains["random_rough"].noise_range = (0.01, 0.06)
         self.scene.terrain.terrain_generator.sub_terrains["random_rough"].noise_step = 0.01
         
         # ------------------------------ Events ------------------------------
-        self.events.add_base_mass = None
         self.events.push_robot = None
-        self.events.base_com.params["asset_cfg"].body_names = base_link_name
+        self.events.add_base_mass = None
         self.events.base_external_force_torque.params["asset_cfg"].body_names = base_link_name
         self.events.reset_base.params = {
             "pose_range": {"x": (-0.5, 0.5), "y": (-0.5, 0.5), "yaw": (-3.14, 3.14)},
@@ -257,7 +231,10 @@ class UnitreeG1RoughEnvCfg(LocomotionVelocityRoughEnvCfg):
 
         # ------------------------------ Actions ------------------------------
         self.actions.joint_pos.scale = 0.25
+        # self.actions.joint_pos.clip = {".*": (-1.0, 1.0)}
 
+        # ------------------------------ Rewards ------------------------------
+        self.rewards.undesired_contacts = None
         # ------------------------------ Curriculum ------------------------------
 
         

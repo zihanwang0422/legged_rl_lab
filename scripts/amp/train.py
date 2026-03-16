@@ -15,6 +15,11 @@ from isaaclab.app import AppLauncher
 import pathlib
 scripts_dir = str(pathlib.Path(__file__).parent.parent.resolve())
 sys.path.insert(0, os.path.join(scripts_dir, "rsl_rl"))
+
+# Add custom rsl_rl to sys.path to override the pip-installed version
+custom_rsl_rl_dir = os.path.abspath(os.path.join(scripts_dir, "../source/legged_rl_lab/legged_rl_lab/rsl_rl"))
+sys.path.insert(0, custom_rsl_rl_dir)
+
 import cli_args  # isort: skip
 
 # add argparse arguments
@@ -60,6 +65,11 @@ torch.backends.cuda.preferred_linalg_library("cusolver")
 from datetime import datetime
 
 from rsl_rl.runners import OnPolicyRunner
+import rsl_rl.runners.on_policy_runner
+
+# Inject AMPPPO into RSL-RL namespace so eval() finds it
+from rsl_rl.algorithms.amp_ppo import AMPPPO
+rsl_rl.runners.on_policy_runner.AMPPPO = AMPPPO
 
 from isaaclab.envs import (
     DirectMARLEnv,
@@ -159,8 +169,30 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
     # Use AMP-specific wrapper instead of standard RslRlVecEnvWrapper
     env = AmpRslRlVecEnvWrapper(env, clip_actions=agent_cfg.clip_actions, amp_obs_group="amp")
 
+    # Map policy config to actor/critic configs for custom RSL-RL
+    agent_dict = agent_cfg.to_dict()
+    if "policy" in agent_dict:
+        policy_cfg = agent_dict.pop("policy")
+        agent_dict["actor"] = {
+            "class_name": "MLPModel",
+            "hidden_dims": policy_cfg.get("actor_hidden_dims", [512, 256, 128]),
+            "activation": policy_cfg.get("activation", "elu"),
+            "obs_normalization": policy_cfg.get("actor_obs_normalization", False),
+            "distribution_cfg": {
+                "class_name": "GaussianDistribution",
+                "std_type": policy_cfg.get("noise_std_type", "scalar"),
+                "init_std": policy_cfg.get("init_noise_std", 1.0),
+            },
+        }
+        agent_dict["critic"] = {
+            "class_name": "MLPModel",
+            "hidden_dims": policy_cfg.get("critic_hidden_dims", [512, 256, 128]),
+            "activation": policy_cfg.get("activation", "elu"),
+            "obs_normalization": policy_cfg.get("critic_obs_normalization", False),
+        }
+
     # Create runner
-    runner = OnPolicyRunner(env, agent_cfg.to_dict(), log_dir=log_dir, device=agent_cfg.device)
+    runner = OnPolicyRunner(env, agent_dict, log_dir=log_dir, device=agent_cfg.device)
     runner.add_git_repo_to_log(__file__)
 
     # Load reference motion data and set on algorithm

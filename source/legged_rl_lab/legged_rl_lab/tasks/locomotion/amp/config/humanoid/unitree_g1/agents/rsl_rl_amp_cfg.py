@@ -13,13 +13,13 @@ from legged_rl_lab.tasks.locomotion.amp.config.quadruped.unitree_go2.agents.rsl_
 
 
 @configclass
-class UnitreeG1AMPRoughPPORunnerCfg(RslRlOnPolicyRunnerCfg):
-    """AMP-PPO runner config for G1 humanoid rough terrain."""
+class UnitreeG1AMPFlatPPORunnerCfg(RslRlOnPolicyRunnerCfg):
+    """AMP-PPO runner config for G1 humanoid flat terrain."""
 
     num_steps_per_env = 24
     max_iterations = 20000
-    save_interval = 100
-    experiment_name = "unitree_g1_amp_rough"
+    save_interval = 200
+    experiment_name = "unitree_g1_amp_flat"
 
     policy = RslRlPpoActorCriticCfg(
         noise_std_type="scalar",
@@ -48,7 +48,7 @@ class UnitreeG1AMPRoughPPORunnerCfg(RslRlOnPolicyRunnerCfg):
         amp_cfg={
             "amp_discriminator_hidden_dims": [1024, 512],
             "amp_discriminator_activation": "relu",
-            "amp_learning_rate": 1e-5,
+            "amp_learning_rate": 1e-4,
             "amp_replay_buffer_size": 1000000,
             # Humanoid requires more emphasis on style to achieve natural gait
             "amp_task_reward_lerp": 0.4,
@@ -57,13 +57,3 @@ class UnitreeG1AMPRoughPPORunnerCfg(RslRlOnPolicyRunnerCfg):
             "amp_disc_weight_decay": 0.0001,
         },
     )
-
-
-@configclass
-class UnitreeG1AMPFlatPPORunnerCfg(UnitreeG1AMPRoughPPORunnerCfg):
-    """AMP-PPO runner config for G1 humanoid flat terrain."""
-
-    def __post_init__(self):
-        super().__post_init__()
-        self.max_iterations = 15000
-        self.experiment_name = "unitree_g1_amp_flat"

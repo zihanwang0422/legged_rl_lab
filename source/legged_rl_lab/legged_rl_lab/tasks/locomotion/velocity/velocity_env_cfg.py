@@ -356,16 +356,6 @@ class RewardsCfg:
             "asset_cfg": SceneEntityCfg("robot", body_names=".*_foot"),
         },
     )
-    # feet_clearance_humanoid = RewTerm(
-    #     func=mdp.foot_clearance_reward_humanoid,
-    #     weight=0.0,
-    #     params={
-    #         "std": 0.05,
-    #         "tanh_mult": 2.0,
-    #         "target_height": 0.1,
-    #         "asset_cfg": SceneEntityCfg("robot", body_names=".*ankle_roll.*"),
-    #     },
-    # )
 
     # ==================== Other/Custom Rewards ====================
     # Standing still
