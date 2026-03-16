@@ -81,6 +81,10 @@ tests/
 source/legged_rl_lab/legged_rl_lab/data/*
 !source/legged_rl_lab/legged_rl_lab/data/.gitkeep
 
+# Local development copy of rsl_rl: keep in workspace but don't track
+/# Note: this prevents committing local edits to the forked `rsl_rl` bundled here
+source/legged_rl_lab/legged_rl_lab/rsl_rl/
+
 # Robot Meshes and Assets
 **/*.stl
 **/*.STL
