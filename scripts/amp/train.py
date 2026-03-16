@@ -1,13 +1,24 @@
 # Copyright (c) 2024-2025 zihan wang
 # SPDX-License-Identifier: Apache-2.0
 
-"""Script to train RL agent with AMP (Adversarial Motion Priors) using RSL-RL."""
+"""Script to train RL agent with AMP (Adversarial Motion Priors) using RSL-RL.
+
+This script implements the AMP training loop directly, because the standard
+``OnPolicyRunner.learn()`` does not call AMP-specific methods (style reward,
+replay buffer, discriminator). The custom loop adds:
+
+1. Record AMP observations before ``env.step``
+2. Compute style reward via the discriminator after ``env.step``
+3. Blend task and style rewards
+4. Store (amp_obs, next_amp_obs) pairs in the replay buffer
+"""
 
 """Launch Isaac Sim Simulator first."""
 
 import argparse
 import sys
 import os
+import time
 
 from isaaclab.app import AppLauncher
 
@@ -71,6 +82,8 @@ import rsl_rl.runners.on_policy_runner
 from rsl_rl.algorithms.amp_ppo import AMPPPO
 rsl_rl.runners.on_policy_runner.AMPPPO = AMPPPO
 
+from rsl_rl.utils import check_nan
+
 from isaaclab.envs import (
     DirectMARLEnv,
     DirectMARLEnvCfg,
@@ -88,8 +101,8 @@ import legged_rl_lab  # noqa: F401 - Register custom environments
 from isaaclab_tasks.utils import get_checkpoint_path
 from isaaclab_tasks.utils.hydra import hydra_task_config
 
-from legged_rl_lab.tasks.locomotion.amp.amp_env_wrapper import AmpRslRlVecEnvWrapper
-from legged_rl_lab.tasks.locomotion.amp.motion_loader import MotionLoader
+from legged_rl_lab.envs import AmpRslRlVecEnvWrapper
+from legged_rl_lab.managers import MotionLoader
 
 logger = logging.getLogger(__name__)
 
@@ -97,6 +110,163 @@ torch.backends.cuda.matmul.allow_tf32 = True
 torch.backends.cudnn.allow_tf32 = True
 torch.backends.cudnn.deterministic = False
 torch.backends.cudnn.benchmark = False
+
+
+def amp_learn(runner: OnPolicyRunner, num_learning_iterations: int, init_at_random_ep_len: bool = False):
+    """AMP-aware training loop.
+
+    This replaces ``runner.learn()`` with a loop that integrates AMP discriminator
+    style rewards and replay buffer management into the standard on-policy rollout.
+    """
+    env = runner.env
+    alg = runner.alg
+    cfg = runner.cfg
+    device = runner.device
+
+    # Randomize initial episode lengths
+    if init_at_random_ep_len:
+        env.episode_length_buf = torch.randint_like(
+            env.episode_length_buf, high=int(env.max_episode_length)
+        )
+
+    obs = env.get_observations().to(device)
+    alg.train_mode()
+
+    # Sync parameters for distributed training
+    if runner.is_distributed:
+        print(f"Synchronizing parameters for rank {runner.gpu_global_rank}...")
+        alg.broadcast_parameters()
+
+    runner.logger.init_logging_writer()
+
+    num_steps_per_env = cfg["num_steps_per_env"]
+    check_for_nan = cfg.get("check_for_nan", True)
+    has_amp = alg.discriminator is not None
+
+    start_it = runner.current_learning_iteration
+    total_it = start_it + num_learning_iterations
+
+    for it in range(start_it, total_it):
+        start = time.time()
+
+        # -- Rollout phase --
+        with torch.inference_mode():
+            # Get initial AMP obs
+            if has_amp and "amp" in obs.keys():
+                amp_obs = obs["amp"].clone()
+            else:
+                amp_obs = None
+
+            ep_task_rewards = torch.zeros(env.num_envs, device=device)
+            ep_style_rewards = torch.zeros(env.num_envs, device=device)
+
+            for _ in range(num_steps_per_env):
+                # 1. Sample actions from policy
+                actions = alg.act(obs)
+
+                # 2. Record AMP obs before stepping (for replay buffer pairing)
+                if has_amp and amp_obs is not None:
+                    alg.record_amp_obs(amp_obs)
+
+                # 3. Step the environment
+                obs, rewards, dones, extras = env.step(actions.to(env.device))
+
+                if check_for_nan:
+                    check_nan(obs, rewards, dones)
+
+                obs, rewards, dones = (
+                    obs.to(device),
+                    rewards.to(device),
+                    dones.to(device),
+                )
+
+                # 4. Get next AMP obs and compute style reward
+                if has_amp:
+                    # Use pre-reset AMP obs from extras (computed before env reset)
+                    if "amp_obs" in extras and extras["amp_obs"] is not None:
+                        next_amp_obs = extras["amp_obs"].to(device)
+                    elif "amp" in obs.keys():
+                        next_amp_obs = obs["amp"].clone()
+                    else:
+                        next_amp_obs = None
+
+                    if amp_obs is not None and next_amp_obs is not None:
+                        # 5. Compute style reward
+                        style_rewards = alg.compute_style_reward(amp_obs, next_amp_obs)
+
+                        # 6. Blend task and style rewards
+                        blended_rewards = alg.blend_rewards(rewards, style_rewards)
+
+                        # Track for logging
+                        ep_task_rewards += rewards
+                        ep_style_rewards += style_rewards.view(-1)
+
+                        # 7. Store in replay buffer
+                        alg.process_amp_transition(next_amp_obs)
+
+                        # 8. Process env step with blended rewards
+                        alg.process_env_step(obs, blended_rewards, dones, extras)
+
+                        # Update amp_obs for next step
+                        if "amp" in obs.keys():
+                            amp_obs = obs["amp"].clone()
+                        else:
+                            amp_obs = next_amp_obs
+                    else:
+                        # No AMP obs available, use task reward only
+                        alg.process_env_step(obs, rewards, dones, extras)
+                        if "amp" in obs.keys():
+                            amp_obs = obs["amp"].clone()
+                else:
+                    # No AMP, standard PPO
+                    alg.process_env_step(obs, rewards, dones, extras)
+
+                # Logging
+                intrinsic_rewards = alg.intrinsic_rewards if cfg["algorithm"]["rnd_cfg"] else None
+                runner.logger.process_env_step(rewards, dones, extras, intrinsic_rewards)
+
+            stop = time.time()
+            collect_time = stop - start
+            start = stop
+
+            # Compute returns (GAE)
+            alg.compute_returns(obs)
+
+        # -- Update phase --
+        loss_dict = alg.update()
+
+        stop = time.time()
+        learn_time = stop - start
+        runner.current_learning_iteration = it
+
+        # -- Logging --
+        runner.logger.log(
+            it=it,
+            start_it=start_it,
+            total_it=total_it,
+            collect_time=collect_time,
+            learn_time=learn_time,
+            loss_dict=loss_dict,
+            learning_rate=alg.learning_rate,
+            action_std=alg.get_policy().output_std,
+            rnd_weight=alg.rnd.weight if cfg["algorithm"]["rnd_cfg"] else None,
+        )
+
+        # Print AMP-specific metrics
+        if has_amp and it % 10 == 0:
+            amp_keys = ["amp_loss", "grad_pen_loss", "disc_accuracy_policy", "disc_accuracy_expert"]
+            amp_info = {k: f"{loss_dict[k]:.4f}" for k in amp_keys if k in loss_dict}
+            if amp_info:
+                print(f"  [AMP] {amp_info}")
+
+        # Save model
+        if runner.logger.writer is not None and it % cfg["save_interval"] == 0:
+            runner.save(os.path.join(runner.logger.log_dir, f"model_{it}.pt"))
+
+    # Save final model
+    if runner.logger.writer is not None:
+        runner.save(os.path.join(runner.logger.log_dir, f"model_{runner.current_learning_iteration}.pt"))
+        runner.logger.stop_logging_writer()
 
 
 @hydra_task_config(args_cli.task, args_cli.agent)
@@ -143,7 +313,7 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
 
     # Print joint order
     print("\n" + "=" * 70)
-    print("ROBOT JOINT ORDER (for deployment reference)")
+    print("ROBOT JOINT ORDER (IsaacLab BFS order)")
     print("=" * 70)
     robot = env.unwrapped.scene["robot"]
     print(f"Total joints: {robot.num_joints}")
@@ -212,8 +382,6 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
     else:
         print(f"[WARNING] No reference motion data found at: {motion_path}")
         print("[WARNING] AMP will train without style reward (task reward only).")
-        print("[WARNING] To generate reference motion data, record rollouts from a trained policy")
-        print("[WARNING] or provide motion capture data in .npy/.pt format.")
 
     # Load checkpoint
     if agent_cfg.resume:
@@ -224,8 +392,8 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
     dump_yaml(os.path.join(log_dir, "params", "env.yaml"), env_cfg)
     dump_yaml(os.path.join(log_dir, "params", "agent.yaml"), agent_cfg)
 
-    # Run training
-    runner.learn(num_learning_iterations=agent_cfg.max_iterations, init_at_random_ep_len=True)
+    # Run AMP-aware training loop
+    amp_learn(runner, num_learning_iterations=agent_cfg.max_iterations, init_at_random_ep_len=True)
 
     # Close
     env.close()

@@ -48,11 +48,11 @@ class UnitreeG1AMPFlatPPORunnerCfg(RslRlOnPolicyRunnerCfg):
         amp_cfg={
             "amp_discriminator_hidden_dims": [1024, 512],
             "amp_discriminator_activation": "relu",
-            "amp_learning_rate": 1e-4,
+            "amp_learning_rate": 5e-5,
             "amp_replay_buffer_size": 1000000,
             # Humanoid requires more emphasis on style to achieve natural gait
             "amp_task_reward_lerp": 0.4,
-            "amp_disc_gradient_penalty_coef": 5.0,
+            "amp_disc_gradient_penalty_coef": 10.0,
             "amp_disc_logit_reg_coef": 0.05,
             "amp_disc_weight_decay": 0.0001,
         },

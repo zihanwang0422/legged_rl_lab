@@ -140,7 +140,7 @@ python scripts/rsl_rl/play.py \
 <details>
 <summary><b>Handstand</b></summary>
 
-### Handstand
+### Footstand
 
 [<img src="media/footstand_isaac.gif" width="300px">](gifs/isaac.gif)
 
@@ -148,7 +148,7 @@ python scripts/rsl_rl/play.py \
 
 ```bash
 python scripts/rsl_rl/train.py \
-  --task=LeggedRLLab-Isaac-Velocity-Handstand-Unitree-Go1-v0 \
+  --task=LeggedRLLab-Isaac-Velocity-Footstand-Unitree-Go2-v0 \
   --num_envs 4096 \
   --headless
 ```
@@ -157,7 +157,7 @@ python scripts/rsl_rl/train.py \
 
 ```bash
 python scripts/rsl_rl/play.py \
-    --task=LeggedRLLab-Isaac-Velocity-Handstand-Unitree-Go1-v0 \
+    --task=LeggedRLLab-Isaac-Velocity-Handstand-Unitree-Go2-v0 \
     --num_envs 16
 ```
 
@@ -166,50 +166,70 @@ python scripts/rsl_rl/play.py \
 
 ### 🤖️Humanoid
 
-#### AMP Datasets
+#### AMP (Adversarial Motion Priors)
 
-The Adversarial Motion Priors (AMP) tasks allow imitating reference datasets (like walking, running, crouching) dynamically.
+**Architecture:**
+- `AMPManagerBasedRLEnv`: Custom env that captures AMP observations before environment reset
+- `AMPPPO`: PPO extended with discriminator, replay buffer, and style reward computation
+- `MotionLoader`: Loads LAFAN1 CSV or AMASS NPZ motion data with automatic joint reordering (AMASS DFS -> IsaacLab BFS)
 
-The G1 LAFAN dataset is officially structured as follows:
+**Supported datasets:**
 ```text
 LAFAN1_Retargeting_Dataset/
-├── g1_walk/
-│   ├── walk1_subject1.csv
-│   └── ...
+├── g1_walk/          # 12 CSV files, 86k frames at 30 FPS
 ├── g1_run/
-│   ├── run1_subject2.csv
-│   └── ...
 ├── g1_dance/
 ├── g1_jump/
 ├── g1_fall/
 └── g1_fight/
+
+AMASS_Retargeted_for_G1/
+└── g1/               # NPZ files from multiple motion capture databases
 ```
 
-#### Train
+**Registered environments:**
+| Environment ID | Dataset | Description |
+|---|---|---|
+| `LeggedRLLab-Isaac-AMP-Flat-Unitree-G1-v0` | AMASS | General AMP on flat terrain |
+| `LeggedRLLab-Isaac-AMP-Walk-Flat-Unitree-G1-v0` | LAFAN1 walk | Walk-specific AMP on flat terrain |
 
-To specify a dataset folder or a specific motion file, use the `--motion_file` argument.
-For example, to train Unitree G1 to reproduce Lafan walking traits:
+##### Train (LAFAN1 Walk)
+
+```bash
+python scripts/amp/train.py \
+    --task LeggedRLLab-Isaac-AMP-Walk-Flat-Unitree-G1-v0 \
+    --num_envs 4096 \
+    --headless
+```
+
+You can also override the motion data path:
 ```bash
 python scripts/amp/train.py \
     --task LeggedRLLab-Isaac-AMP-Flat-Unitree-G1-v0 \
     --motion_file source/legged_rl_lab/legged_rl_lab/data/motion/LAFAN1_Retargeting_Dataset/g1_walk \
-    --headless --num_envs=4096
+    --headless --num_envs 4096
 ```
 
-**Recommended Hyperparameters:**
-- **num_envs**: 4096 (for efficient parallel training)
-- **amp_task_reward_lerp**: ~0.4 (balance between imitating style and following the joystick)
-- **amp_disc_gradient_penalty_coef**: 5.0 (increase if discriminator learns too fast)
+##### Play
 
-#### Play
-
-To visualize a trained AMP model naturally recreating movements smoothly:
 ```bash
 python scripts/amp/play.py \
-    --task LeggedRLLab-Isaac-AMP-Flat-Unitree-G1-Play-v0 \
-    --motion_file source/legged_rl_lab/legged_rl_lab/data/motion/LAFAN1_Retargeting_Dataset/g1_walk \
-    --num_envs=32
+    --task LeggedRLLab-Isaac-AMP-Walk-Flat-Unitree-G1-Play-v0 \
+    --num_envs 32
 ```
+
+##### Verify Joint Order
+
+To verify that the LAFAN1/AMASS joint order is correctly aligned with IsaacLab:
+```bash
+python scripts/amp/verify_joint_order.py
+```
+
+**Key hyperparameters** (in `rsl_rl_amp_cfg.py`):
+- `amp_task_reward_lerp`: 0.4 (40% task, 60% style -- increase for better command tracking)
+- `amp_disc_gradient_penalty_coef`: 5.0 (increase if discriminator overfits)
+- `amp_discriminator_hidden_dims`: [1024, 512]
+- `amp_replay_buffer_size`: 1,000,000
 
 ### Metamorphology
 #### Train

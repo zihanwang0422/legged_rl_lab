@@ -85,8 +85,8 @@ class UnitreeG1AMPFlatEnvCfg(LocomotionAMPRoughEnvCfg):
         self.rewards.track_ang_vel_z_exp.func = mdp.track_ang_vel_z_world_exp
 
         # Root penalties
-        self.rewards.lin_vel_z_l2.weight = -2.0
-        self.rewards.ang_vel_xy_l2.weight = -0.05
+        self.rewards.lin_vel_z_l2.weight = 0.0
+        self.rewards.ang_vel_xy_l2.weight = -0.01
         self.rewards.flat_orientation_l2.weight = 0.0
 
         # Joint penalties
@@ -97,7 +97,7 @@ class UnitreeG1AMPFlatEnvCfg(LocomotionAMPRoughEnvCfg):
         self.rewards.joint_acc_l2.weight = -1.25e-7
 
         # Action penalties
-        self.rewards.action_rate_l2.weight = -0.005
+        self.rewards.action_rate_l2.weight = -0.001
 
         # Contact rewards
         self.rewards.feet_air_time.weight = 0.25

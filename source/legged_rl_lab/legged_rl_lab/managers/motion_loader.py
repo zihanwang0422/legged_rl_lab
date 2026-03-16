@@ -83,15 +83,22 @@ _ROBOT_PROFILES: dict[str, dict] = {
              0.0,  # [28] right_wrist_yaw_joint
         ], dtype=np.float32),
         "csv_quat_format": "xyzw",
-        # MuJoCo/AMASS joint order → IsaacLab BFS order
-        # AMASS order: left_hip_pitch, left_hip_roll, left_hip_yaw, left_knee, ...
-        # IsaacLab BFS: left_hip_pitch, right_hip_pitch, waist_yaw, left_hip_roll, ...
+        # MuJoCo/AMASS joint order → IsaacLab BFS order (gather map).
+        # Given data in AMASS order, result[i] = data[gather_map[i]] produces BFS order.
+        # AMASS order: left_hip_pitch(0), left_hip_roll(1), left_hip_yaw(2), left_knee(3), ...
+        # IsaacLab BFS: left_hip_pitch(0), right_hip_pitch(6), waist_yaw(12), left_hip_roll(1), ...
         "joint_reorder_map": np.array([
-            0, 3, 6, 9, 13, 17,  # left leg: hip_p/r/y, knee, ankle_p/r
-            1, 4, 7, 10, 14, 18,  # right leg
-            2, 5, 8,              # waist: yaw, roll, pitch
-            11, 15, 19, 21, 23, 25, 27,  # left arm
-            12, 16, 20, 22, 24, 26, 28,  # right arm
+            0, 6, 12, 1, 7, 13, 2, 8, 14,    # hips + waist (p/r/y interleaved)
+            3, 9,                              # knees
+            15, 22,                            # shoulder_pitch
+            4, 10,                             # ankle_pitch
+            16, 23,                            # shoulder_roll
+            5, 11,                             # ankle_roll
+            17, 24,                            # shoulder_yaw
+            18, 25,                            # elbow
+            19, 26,                            # wrist_roll
+            20, 27,                            # wrist_pitch
+            21, 28,                            # wrist_yaw
         ], dtype=np.int32),
     },
     "go2": {
@@ -349,7 +356,13 @@ class MotionLoader:
             root_quat = quat_csv  # already [w,x,y,z]
 
         num_dof = self._profile.get("num_dof", data_np.shape[1] - 7)
-        joint_pos = data_np[:, 7: 7 + num_dof]  # (N, J)
+        joint_pos = data_np[:, 7: 7 + num_dof]  # (N, J) in AMASS/DFS order
+
+        # Reorder joints from AMASS/DFS order to IsaacLab BFS order
+        reorder_map = self._profile.get("joint_reorder_map", None)
+        if reorder_map is not None:
+            joint_pos = joint_pos[:, reorder_map]
+            logger.debug("CSV: Reordered joints from AMASS to IsaacLab BFS order")
 
         # joint_pos_rel
         if self._default_jpos is not None:

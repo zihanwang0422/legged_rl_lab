@@ -13,16 +13,16 @@ import legged_rl_lab.tasks.locomotion.velocity.mdp as mdp
 ##
 # Pre-defined configs
 ##
-from legged_rl_lab.assets.unitree import UNITREE_GO1_CFG  # isort: skip
+from legged_rl_lab.assets.unitree import UNITREE_GO2_CFG  # isort: skip
 
 
 @configclass
-class UnitreeGo1FootstandEnvCfg(LocomotionVelocityRoughEnvCfg):
+class UnitreeGo2FootstandEnvCfg(LocomotionVelocityRoughEnvCfg):
     def __post_init__(self):
         # post init of parent
         super().__post_init__()
 
-        self.scene.robot = UNITREE_GO1_CFG.replace(prim_path="{ENV_REGEX_NS}/Robot")
+        self.scene.robot = UNITREE_GO2_CFG.replace(prim_path="{ENV_REGEX_NS}/Robot")
         self.scene.height_scanner.prim_path = "{ENV_REGEX_NS}/Robot/base"
         
         # ====Terrain Cfg====
@@ -40,35 +40,29 @@ class UnitreeGo1FootstandEnvCfg(LocomotionVelocityRoughEnvCfg):
         # action
         self.actions.joint_pos.scale = 0.25
 
-        # event
-        self.events.randomize_rigid_body_mass_base.params["asset_cfg"].body_names = "base"
-        # apply to all rigid bodies except the base
-        self.events.randomize_rigid_body_mass_others.params["asset_cfg"].body_names = [r"^(?!.*base).*"]
-        self.events.randomize_com_positions.params["asset_cfg"].body_names = "base"
-        self.events.randomize_apply_external_force_torque.params["asset_cfg"].body_names = "base"
-        self.events.randomize_rigid_body_mass_base = None
-        self.events.randomize_rigid_body_mass_others = None
-        self.events.randomize_com_positions = None
-        self.events.randomize_apply_external_force_torque = None
+       #------------------------------- Event -------------------------------
+        self.events.push_robot = None
+        self.events.add_base_mass = None
+        self.events.base_external_force_torque = None
+        self.events.base_com = None
         
         # ==================== Rewards Configuration ====================
         
         # ===== General Rewards =====
-        self.rewards.is_terminated.weight = 0.0
         
         # ===== Base Rewards =====
         # Tracking 
         self.rewards.lin_vel_z_l2.weight = 0.0
         self.rewards.ang_vel_xy_l2.weight = 0.0
-        self.rewards.track_lin_vel_xy_exp.weight = 3.0
-        self.rewards.track_ang_vel_z_exp.weight = 1.5
+        self.rewards.track_lin_vel_xy_exp.weight = 2.0 #
+        self.rewards.track_ang_vel_z_exp.weight = 0.5 #
         
         # Base penalties
         self.rewards.flat_orientation_l2.weight = 0.0
         self.rewards.base_height_l2.weight = 0.0
         self.rewards.base_height_l2.params["target_height"] = 0.35
         self.rewards.base_height_l2.params["asset_cfg"].body_names = "base"
-        self.rewards.base_height_l2.params.pop("sensor_cfg", None)  # flat环境无height_scanner
+        self.rewards.base_height_l2.params.pop("sensor_cfg", None) 
         self.rewards.body_lin_acc_l2.weight = 0.0
         self.rewards.body_lin_acc_l2.params["asset_cfg"].body_names = "base"
 
@@ -103,12 +97,12 @@ class UnitreeGo1FootstandEnvCfg(LocomotionVelocityRoughEnvCfg):
         hand_stand_type = "rear" # which leg on the ground "rear" or "front" or "hip" or "left" or "right"
         if hand_stand_type == "rear":
             air_leg_name = "F.*_foot"  
-            feet_height_weight = 10.0
+            feet_height_weight = 15.0
             feet_height = 0.6
             feet_on_air_weight = 10.0
             feet_air_time_weight = 5.0
             target_gravity_weight = -2.5
-            target_gravity = [-1.0, 0.0, 0.0] # 重心投影在机身坐标系
+            target_gravity = [-1.0, 0.0, 0.0] #重心投影在机身坐标系
         
         elif hand_stand_type == "front":
             self.rewards.handstand_feet_height_exp.params["asset_cfg"].body_names = "R.*_foot"
@@ -155,7 +149,7 @@ class UnitreeGo1FootstandEnvCfg(LocomotionVelocityRoughEnvCfg):
 
 
 @configclass
-class UnitreeGo1FootstandEnvCfg_PLAY(UnitreeGo1FootstandEnvCfg):
+class UnitreeGo2FootstandEnvCfg_PLAY(UnitreeGo2FootstandEnvCfg):
     def __post_init__(self):
         # post init of parent
         super().__post_init__()

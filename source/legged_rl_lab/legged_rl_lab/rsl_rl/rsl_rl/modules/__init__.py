@@ -13,6 +13,7 @@ from .normalization import EmpiricalDiscountedVariationNormalization, EmpiricalN
 from .rnn import RNN, HiddenState
 
 __all__ = [
+    "AMPDiscriminator",
     "CNN",
     "MLP",
     "RNN",
