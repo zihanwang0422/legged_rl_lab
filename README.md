@@ -8,7 +8,9 @@
 
 ## Overview
 
-<table>
+<div style="margin: auto; width: fit-content;">
+
+<table border="1">
   <tr>
     <th>Robot</th>
     <th>Task</th>
@@ -38,12 +40,6 @@
     <td></td>
   </tr>
 </table>
-
-<div align="center">
-
-| <div align="center"> Isaac Lab </div> | <div align="center">  Mujoco </div> |  <div align="center"> Physical </div> |
-|--- | --- | --- |
-| [<img src="media/walkflat_isaac.gif" width="200px">](gifs/isaac.gif) | [<img src="media/mujoco.gif" width="160px">](gifs/mujoco.gif) | [<img src="media/real.gif" width="150px">](gifs/real.gif) |
 
 </div>
 
@@ -85,7 +81,7 @@ python scripts/list_envs.py
 
 ## 🚀Train
 
-### Go2
+### 🐕️Go2
 
 <details>
 <summary><b>Walk (Flat)</b></summary>
@@ -168,9 +164,9 @@ python scripts/rsl_rl/play.py \
 
 </details>
 
-## Humanoid
+### 🤖️Humanoid
 
-### AMP Datasets
+#### AMP Datasets
 
 The Adversarial Motion Priors (AMP) tasks allow imitating reference datasets (like walking, running, crouching) dynamically.
 
