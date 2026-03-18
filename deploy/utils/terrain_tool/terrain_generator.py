@@ -4,10 +4,10 @@ import numpy as np
 import cv2
 import noise
 
-ROBOT = "go2"
+ROBOT = "g1"
 _SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 INPUT_SCENE_PATH = os.path.join(_SCRIPT_DIR, "scene.xml")
-OUTPUT_SCENE_PATH = os.path.join(_SCRIPT_DIR, "../../go2_deploy/assets/scene_terrain.xml")
+OUTPUT_SCENE_PATH = os.path.join(_SCRIPT_DIR, "../../g1_deploy/assets/scene_terrain.xml")
 
 
 # zyx euler angle to quaternion
@@ -131,7 +131,7 @@ class TerrainGenerator:
     def AddStairsWithDown(self,
                          init_pos=[1.0, 0.0, 0.0],
                          yaw=0.0,
-                         width=0.4,
+                         width=0.8,
                          height=0.14,
                          length=1.5,
                          stair_nums=10,
@@ -240,7 +240,7 @@ class TerrainGenerator:
                                             lacunarity=perlin_lacunarity)
                 terrain_image[y, x] = int((noise_value + 1) / 2 * 255)
 
-        _assets_dir = os.path.join(_SCRIPT_DIR, "../../go2_deploy/assets/meshes")
+        _assets_dir = os.path.join(_SCRIPT_DIR, "../../g1_deploy/assets/meshes")
         cv2.imwrite(os.path.join(_assets_dir, output_hfield_image),
                     terrain_image)
 

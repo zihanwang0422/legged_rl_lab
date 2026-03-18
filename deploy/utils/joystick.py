@@ -365,7 +365,7 @@ class UnitreeGamepadController(GamepadController):
     AXIS_RIGHT_Y = 4
     AXIS_DPAD_X = 6
     AXIS_DPAD_Y = 7
-    BTN_A = 0
+    BTN_A = 8
     BTN_RB = 5
     BTN_START = 7
 
@@ -567,6 +567,211 @@ class GameSirGamepadController(GamepadController):
 
 
 # ============================================================================
+#  Unitree 官方手柄 pygame 控制器 (USB 连接, 用于 sim2sim)
+# ============================================================================
+
+class UnitreePygameGamepadController(GamepadController):
+    """
+    Unitree 官方手柄通过 USB + pygame 读取 (用于 sim2sim)。
+    按键映射与 UnitreeSDKGamepadController 完全一致，命令逻辑相同。
+
+    pygame 轴/按键映射 (Unitree 官方手柄, 与 LogicJoystick 相同协议):
+      axes[0]=lx, axes[1]=-ly, axes[3]=rx, axes[4]=-ry
+      buttons: A=0, B=1, X=2, Y=3, LB=4, RB=5, back=6, start=7
+      hat: up/down/left/right
+    """
+
+    AXIS_LX = 0
+    AXIS_LY = 1   # pygame Y轴向下为正，需取反
+    AXIS_RX = 3
+    AXIS_RY = 4
+
+    BTN_A = 0
+    BTN_B = 1
+    BTN_X = 2
+    BTN_Y = 3
+    BTN_LB = 4
+    BTN_RB = 5
+    BTN_BACK = 6
+    BTN_START = 7
+
+    def __init__(self, vx_range=(-1.0, 1.0), vy_range=(-0.5, 0.5), vyaw_range=(-1.0, 1.0)):
+        super().__init__(vx_range, vy_range, vyaw_range)
+        try:
+            import pygame
+            self.pygame = pygame
+            pygame.init()
+            pygame.joystick.init()
+            if pygame.joystick.get_count() == 0:
+                raise RuntimeError("未检测到手柄")
+            self.js = pygame.joystick.Joystick(0)
+            self.js.init()
+            print(f"✅ Unitree pygame gamepad: {self.js.get_name()}")
+        except Exception as e:
+            print(f"❌ UnitreePygame init failed: {e}")
+            self.js = None
+        self._prev_combos = {1: False, 2: False, 3: False, 4: False}
+
+    def _control_thread(self):
+        if self.js is None:
+            return
+        update_interval = 1.0 / 50.0
+        while self.running:
+            try:
+                loop_start = time.time()
+                for event in self.pygame.event.get():
+                    pass  # pump events
+
+                lx = apply_deadzone(self.js.get_axis(self.AXIS_LX), self.deadzone)
+                ly = apply_deadzone(-self.js.get_axis(self.AXIS_LY), self.deadzone)  # 取反: 前推为正
+                rx = apply_deadzone(self.js.get_axis(self.AXIS_RX), self.deadzone)
+
+                vx = ly * self.vx_range[1] if ly >= 0 else ly * abs(self.vx_range[0])
+                vy = -lx * self.vy_range[1]
+                vyaw = -rx * self.vyaw_range[1]
+                self.set_velocity(vx, vy, vyaw)
+
+                rb = bool(self.js.get_button(self.BTN_RB))
+                combos = {
+                    1: rb and bool(self.js.get_button(self.BTN_A)),
+                    2: rb and bool(self.js.get_button(self.BTN_B)),
+                    3: rb and bool(self.js.get_button(self.BTN_X)),
+                    4: rb and bool(self.js.get_button(self.BTN_Y)),
+                }
+                combo_names = {1: 'RB+A (Walk)', 2: 'RB+B (Policy1)',
+                               3: 'RB+X (Policy2)', 4: 'RB+Y (Policy3)'}
+                for idx, pressed in combos.items():
+                    if pressed and not self._prev_combos[idx]:
+                        self.active_policy = idx
+                        if idx == 1:
+                            self.walk_requested = True
+                        print(f"\n✅ [{combo_names[idx]}] activated!")
+                self._prev_combos = dict(combos)
+
+                if self.js.get_button(self.BTN_START):
+                    print("\n✅ Start button pressed - exiting")
+                    self.exit_requested = True
+                    break
+
+                elapsed = time.time() - loop_start
+                time.sleep(max(0, update_interval - elapsed))
+            except Exception as e:
+                print(f"\nGamepad error: {e}")
+                time.sleep(0.1)
+
+    def _stop_backend(self):
+        if self.js:
+            self.pygame.quit()
+
+
+# ============================================================================
+#  Unitree SDK 官方手柄控制器 (从 LowState.wireless_remote 解析)
+# ============================================================================
+
+class UnitreeSDKGamepadController(GamepadController):
+    """
+    Unitree 官方手柄，通过 LowState.wireless_remote (40字节) 解析。
+    不需要独立线程，由外部在每个控制循环中调用 update(wireless_remote)。
+
+    按键布局 (wireless_remote 字节协议):
+      Byte 2: [0,0, LT, RT, back, start, LB, RB]
+      Byte 3: [left, down, right, up, Y, X, B, A]
+      Bytes 4-7:   lx (float32 LE)
+      Bytes 8-11:  rx (float32 LE)
+      Bytes 12-15: ry (float32 LE)
+      Bytes 20-23: ly (float32 LE)
+
+    速度映射:
+      左摇杆 ly (前后) -> vx,  lx (左右) -> vy
+      右摇杆 rx (左右) -> vyaw
+      RB+A  -> active_policy=1 (walk)
+      RB+B  -> active_policy=2
+      RB+X  -> active_policy=3
+      RB+Y  -> active_policy=4
+      start -> exit_requested
+    """
+
+    def __init__(self, vx_range=(-1.0, 1.0), vy_range=(-0.5, 0.5), vyaw_range=(-1.0, 1.0)):
+        super().__init__(vx_range, vy_range, vyaw_range)
+        self._prev_combos = {1: False, 2: False, 3: False, 4: False}
+        self._prev_start = False
+        print("✅ UnitreeSDK Gamepad initialized (reads from LowState.wireless_remote)")
+
+    def update(self, wireless_remote):
+        """
+        解析 40 字节 wireless_remote，更新速度和按键状态。
+        在每个控制循环中调用。
+        """
+        if wireless_remote is None or len(wireless_remote) < 24:
+            return
+
+        b2 = int(wireless_remote[2])
+        b3 = int(wireless_remote[3])
+
+        rb    = bool((b2 >> 0) & 1)
+        lb    = bool((b2 >> 1) & 1)
+        start = bool((b2 >> 2) & 1)
+
+        btn_a = bool((b3 >> 0) & 1)
+        btn_b = bool((b3 >> 1) & 1)
+        btn_x = bool((b3 >> 2) & 1)
+        btn_y = bool((b3 >> 3) & 1)
+
+        import struct
+        lx = struct.unpack('f', bytes(wireless_remote[4:8]))[0]
+        rx = struct.unpack('f', bytes(wireless_remote[8:12]))[0]
+        ry = struct.unpack('f', bytes(wireless_remote[12:16]))[0]
+        ly = struct.unpack('f', bytes(wireless_remote[20:24]))[0]
+
+        lx = apply_deadzone(lx, self.deadzone)
+        ly = apply_deadzone(ly, self.deadzone)
+        rx = apply_deadzone(rx, self.deadzone)
+
+        # ly: 向前推为正 -> vx正; lx: 向右推为正 -> vy负
+        vx = ly * self.vx_range[1] if ly >= 0 else ly * abs(self.vx_range[0])
+        vy = -lx * self.vy_range[1]
+        vyaw = -rx * self.vyaw_range[1]
+        self.set_velocity(vx, vy, vyaw)
+
+        # RB + 面键 组合 -> 策略切换 (上升沿)
+        combos = {
+            1: rb and btn_a,
+            2: rb and btn_b,
+            3: rb and btn_x,
+            4: rb and btn_y,
+        }
+        combo_names = {1: 'RB+A (Walk)', 2: 'RB+B (Policy1)',
+                       3: 'RB+X (Policy2)', 4: 'RB+Y (Policy3)'}
+        for idx, pressed in combos.items():
+            if pressed and not self._prev_combos[idx]:
+                self.active_policy = idx
+                if idx == 1:
+                    self.walk_requested = True
+                print(f"\n✅ [{combo_names[idx]}] activated!")
+        self._prev_combos = dict(combos)
+
+        # start 退出
+        if start and not self._prev_start:
+            print("\n✅ Start button pressed - exiting")
+            self.exit_requested = True
+        self._prev_start = start
+
+    def _control_thread(self):
+        # 不使用独立线程，由外部 update() 驱动
+        pass
+
+    def _stop_backend(self):
+        pass
+
+    def start(self):
+        # 无需启动线程
+        pass
+
+    def stop(self):
+        pass
+
+
+# ============================================================================
 #  工厂函数: 根据类型创建手柄控制器
 # ============================================================================
 
@@ -575,6 +780,8 @@ GAMEPAD_TYPES = {
     'f710': F710GamepadController,
     'logitech': F710GamepadController,
     'unitree': UnitreeGamepadController,
+    'unitree_pygame': UnitreePygameGamepadController,
+    'unitree_sdk': UnitreeSDKGamepadController,
     'gamesir': GameSirGamepadController,
 }
 
@@ -586,7 +793,7 @@ def create_gamepad_controller(gamepad_type, vx_range=(-2.0, 4.0), vy_range=(-1.0
     根据手柄类型创建对应的控制器
 
     Args:
-        gamepad_type: 手柄类型 ('f710', 'logitech', 'unitree', 'gamesir')
+        gamepad_type: 手柄类型 ('f710', 'logitech', 'unitree', 'unitree_sdk', 'gamesir')
         vx_range: 前后速度范围 (m/s)
         vy_range: 左右速度范围 (m/s)
         vyaw_range: 旋转速度范围 (rad/s)
@@ -602,7 +809,11 @@ def create_gamepad_controller(gamepad_type, vx_range=(-2.0, 4.0), vy_range=(-1.0
 
     cls = GAMEPAD_TYPES[gamepad_type]
 
-    if cls in (F710GamepadController, UnitreeGamepadController):
+    if cls is UnitreeSDKGamepadController:
+        return cls(vx_range=vx_range, vy_range=vy_range, vyaw_range=vyaw_range)
+    elif cls is UnitreePygameGamepadController:
+        return cls(vx_range=vx_range, vy_range=vy_range, vyaw_range=vyaw_range)
+    elif cls in (F710GamepadController, UnitreeGamepadController):
         return cls(vx_range=vx_range, vy_range=vy_range, vyaw_range=vyaw_range,
                    device_path=device_path, btn_start=btn_start, btn_rb=btn_rb, btn_a=btn_a)
     else:

@@ -17,7 +17,7 @@ from typing import TYPE_CHECKING
 from isaaclab.assets import Articulation
 from isaaclab.envs import mdp
 from isaaclab.managers import SceneEntityCfg
-from isaaclab.sensors import ContactSensor
+from isaaclab.sensors import ContactSensor, RayCaster
 from isaaclab.utils.math import quat_apply_inverse,  yaw_quat
 
 if TYPE_CHECKING:
@@ -85,14 +85,50 @@ def feet_slide(env, sensor_cfg: SceneEntityCfg, asset_cfg: SceneEntityCfg = Scen
     return reward
 
 def foot_clearance_reward_humanoid(
-    env: ManagerBasedRLEnv, asset_cfg: SceneEntityCfg, target_height: float, std: float, tanh_mult: float
+    env: ManagerBasedRLEnv,
+    asset_cfg: SceneEntityCfg,
+    target_height: float,
+    std: float,
+    tanh_mult: float,
+    foot_scanner_cfgs: list[SceneEntityCfg] | None = None,
 ) -> torch.Tensor:
-    """Reward the swinging feet for clearing a specified height off the ground"""
-    asset: RigidObject = env.scene[asset_cfg.name]
-    foot_z_target_error = torch.square(asset.data.body_pos_w[:, asset_cfg.body_ids, 2] - target_height)
-    foot_velocity_tanh = torch.tanh(tanh_mult * torch.norm(asset.data.body_lin_vel_w[:, asset_cfg.body_ids, :2], dim=2))
-    reward = foot_z_target_error * foot_velocity_tanh
-    return torch.exp(-torch.sum(reward, dim=1) / std)
+    """奖励摆动腿达到相对于脚下地形的目标高度，同时不惩罚支撑腿。
+
+    Args:
+        foot_scanner_cfgs: 每只脚一个 RayCaster sensor 的配置列表，顺序须与
+            asset_cfg.body_ids 一致。若为 None，则退化为用 env_origins Z 作为
+            地形参考高度（精度较低，不适合台阶地形）。
+    """
+    asset: Articulation = env.scene[asset_cfg.name]
+
+    # 1. 获取脚部在世界坐标系下的位置 (N, num_feet, 3)
+    foot_pos_w = asset.data.body_pos_w[:, asset_cfg.body_ids, :]
+    num_feet = foot_pos_w.shape[1]
+
+    # 2. 获取脚正下方的地形高度 (N, num_feet)
+    if foot_scanner_cfgs is not None:
+        # 推荐方式：每只脚一个向下单射线 RayCaster，ray_hits_w shape (N, 1, 3)
+        terrain_h = torch.stack(
+            [env.scene.sensors[sc.name].data.ray_hits_w[:, 0, 2] for sc in foot_scanner_cfgs],
+            dim=1,
+        )  # (N, num_feet)
+    else:
+        # 降级方案：用 env 地形块原点 Z 作为参考（仅对平坦地形近似准确）
+        terrain_h = env.scene.terrain.env_origins[:, 2].unsqueeze(1).expand(-1, num_feet)
+
+    # 3. 计算脚离地面的相对高度 (N, num_feet)
+    current_relative_h = foot_pos_w[:, :, 2] - terrain_h
+
+    # 4. 只有在摆动时（水平速度大）才计算高度奖励
+    # 避免惩罚停在地面的支撑脚，防止机器人踮脚或屈膝
+    foot_vel_xy = torch.norm(asset.data.body_lin_vel_w[:, asset_cfg.body_ids, :2], dim=2)
+    swing_mask = torch.tanh(tanh_mult * foot_vel_xy)
+
+    # 5. 使用平方误差（target_height 建议 0.08–0.12 m）
+    h_error = torch.square(current_relative_h - target_height)
+
+    # 6. exp 核映射回 [0, 1]，只在摆动腿上累计误差
+    return torch.exp(-torch.sum(h_error * swing_mask, dim=1) / std)
 
 
 """

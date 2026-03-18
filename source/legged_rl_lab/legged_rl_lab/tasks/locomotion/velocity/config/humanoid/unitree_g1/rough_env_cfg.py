@@ -9,6 +9,7 @@ from isaaclab.managers import ObservationGroupCfg as ObsGroup
 from isaaclab.managers import ObservationTermCfg as ObsTerm
 from isaaclab.managers import SceneEntityCfg
 from isaaclab.managers import TerminationTermCfg as DoneTerm
+from isaaclab.sensors import RayCasterCfg, patterns
 from isaaclab.utils import configclass
 
 from legged_rl_lab.tasks.locomotion.velocity.velocity_env_cfg import LocomotionVelocityRoughEnvCfg, RewardsCfg
@@ -84,7 +85,7 @@ class G1RewardsCfg(RewardsCfg):
     )
 
     # -- base
-    flat_orientation_l2 = RewTerm(func=mdp.flat_orientation_l2, weight=-1.0)
+    flat_orientation_l2 = RewTerm(func=mdp.flat_orientation_l2, weight=-3.0) #
     lin_vel_z_l2 = RewTerm(func=mdp.lin_vel_z_l2, weight=0.0)
     ang_vel_xy_l2 = RewTerm(func=mdp.ang_vel_xy_l2, weight=-0.05)
        
@@ -103,9 +104,9 @@ class G1RewardsCfg(RewardsCfg):
     action_rate_l2 = RewTerm(func=mdp.action_rate_l2, weight=-0.005)
     dof_pos_limits = RewTerm(
         func=mdp.joint_pos_limits,
-        weight=-1.0,
+        weight=-2.0,
         params={"asset_cfg": SceneEntityCfg("robot", joint_names=[".*_ankle_pitch_joint", ".*_ankle_roll_joint"])},
-    )
+    )#
 
     # -- feet
     feet_air_time = RewTerm(
@@ -114,7 +115,7 @@ class G1RewardsCfg(RewardsCfg):
         params={
             "command_name": "base_velocity",
             "sensor_cfg": SceneEntityCfg("contact_forces", body_names=".*_ankle_roll_link"),
-            "threshold": 0.4,
+            "threshold": 0.5,
         },
     )
     feet_slide = RewTerm(
@@ -126,35 +127,40 @@ class G1RewardsCfg(RewardsCfg):
         },
     )
     feet_clearance = RewTerm(
-        func=mdp.foot_clearance_reward_humanoid, 
-        weight=1.5,
+        func=mdp.foot_clearance_reward_humanoid,
+        weight=2.0,
         params={
             "std": 0.05,
             "tanh_mult": 2.0,
-            "target_height": 0.13,
-            "asset_cfg": SceneEntityCfg("robot", body_names=".*ankle_roll.*"),
+            "target_height": 0.12,
+            "asset_cfg": SceneEntityCfg("robot", body_names=".*ankle_roll_link"),
+            # 顺序须与 body_names 解析顺序一致（IsaacLab 按字母序：left < right）
+            "foot_scanner_cfgs": [
+                SceneEntityCfg("foot_scanner_l"),
+                SceneEntityCfg("foot_scanner_r"),
+            ],
         },
     )#
 
     
-    gait = RewTerm(
-        func=mdp.feet_gait,
-        weight=0.5,
-        params={
-            "period": 0.8,
-            "offset": [0.0, 0.5],
-            "threshold": 0.55,
-            "command_name": "base_velocity",
-            "sensor_cfg": SceneEntityCfg("contact_forces", body_names=".*_ankle_roll_link"),
-        },
-    )#
+    # gait = RewTerm(
+    #     func=mdp.feet_gait,
+    #     weight=0.5,
+    #     params={
+    #         "period": 0.8,
+    #         "offset": [0.0, 0.5],
+    #         "threshold": 0.55,
+    #         "command_name": "base_velocity",
+    #         "sensor_cfg": SceneEntityCfg("contact_forces", body_names=".*_ankle_roll_link"),
+    #     },
+    # )
 
     # -- posture
     joint_deviation_legs = RewTerm(
         func=mdp.joint_deviation_l1,
-        weight=-0.1,
-        params={"asset_cfg": SceneEntityCfg("robot", joint_names=[".*_hip_yaw_joint", ".*_hip_roll_joint"])},
-    )
+        weight=-0.5,
+        params={"asset_cfg": SceneEntityCfg("robot", joint_names=[".*_hip_yaw_joint", ".*_hip_roll_joint", ".*_knee_joint"])},
+    )#
     joint_deviation_arms = RewTerm(
         func=mdp.joint_deviation_l1,
         weight=-0.1,
@@ -171,9 +177,9 @@ class G1RewardsCfg(RewardsCfg):
     )
     joint_deviation_waist = RewTerm(
         func=mdp.joint_deviation_l1,
-        weight=-0.1,
+        weight=-1.0,
         params={"asset_cfg": SceneEntityCfg("robot", joint_names="waist_.*_joint")},
-    )
+    )#
     
 
     
@@ -205,6 +211,24 @@ class UnitreeG1RoughEnvCfg(LocomotionVelocityRoughEnvCfg):
         # ------------------------------ Scene ------------------------------
         self.scene.robot = UNITREE_G1_29DOF_CFG.replace(prim_path="{ENV_REGEX_NS}/Robot")
         self.scene.height_scanner.prim_path = "{ENV_REGEX_NS}/Robot/torso_link"
+
+        # 每只脚一个向下单射线 RayCaster，用于奖励函数中获取脚下地形高度
+        # offset.pos Z=0.5 保证射线从脚踝以上发出，不会因脚踝本身几何体而提前终止
+        _foot_scanner_cfg = RayCasterCfg(
+            offset=RayCasterCfg.OffsetCfg(pos=(0.0, 0.0, 0.5)),
+            ray_alignment="world",
+            pattern_cfg=patterns.GridPatternCfg(resolution=0.1, size=[0.0, 0.0]),
+            debug_vis=False,
+            mesh_prim_paths=["/World/ground"],
+        )
+        self.scene.foot_scanner_l = _foot_scanner_cfg.replace(
+            prim_path="{ENV_REGEX_NS}/Robot/left_ankle_roll_link"
+        )
+        self.scene.foot_scanner_r = _foot_scanner_cfg.replace(
+            prim_path="{ENV_REGEX_NS}/Robot/right_ankle_roll_link"
+        )
+        self.scene.foot_scanner_l.update_period = self.decimation * self.sim.dt
+        self.scene.foot_scanner_r.update_period = self.decimation * self.sim.dt
         
         # scale down the terrains because the robot is small
         self.scene.terrain.terrain_generator.sub_terrains["boxes"].grid_height_range = (0.025, 0.1)

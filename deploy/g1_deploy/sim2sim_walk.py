@@ -368,7 +368,7 @@ if __name__ == '__main__':
 
     # 2. 初始化 Gamepad
     cfg = controller.config
-    gamepad_type = getattr(cfg, 'gamepad_type', 'gamesir')
+    gamepad_type = getattr(cfg, 'gamepad_type_sim2sim', getattr(cfg, 'gamepad_type', 'unitree_pygame'))
     gamepad = create_gamepad_controller(
         gamepad_type,
         vx_range=cfg.vx_range,

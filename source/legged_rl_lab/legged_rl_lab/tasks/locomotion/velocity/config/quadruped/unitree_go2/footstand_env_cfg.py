@@ -38,7 +38,7 @@ class UnitreeGo2FootstandEnvCfg(LocomotionVelocityRoughEnvCfg):
         self.curriculum.terrain_levels = None
 
         # action
-        self.actions.joint_pos.scale = 0.25
+        self.actions.joint_pos.scale = 0.5
 
        #------------------------------- Event -------------------------------
         self.events.push_robot = None
@@ -97,24 +97,15 @@ class UnitreeGo2FootstandEnvCfg(LocomotionVelocityRoughEnvCfg):
         hand_stand_type = "rear" # which leg on the ground "rear" or "front" or "hip" or "left" or "right"
         if hand_stand_type == "rear":
             air_leg_name = "F.*_foot"  
-            feet_height_weight = 15.0
+            feet_height_weight = 15.0 #
             feet_height = 0.6
             feet_on_air_weight = 10.0
             feet_air_time_weight = 5.0
-            target_gravity_weight = -2.5
+            target_gravity_weight = -10.0
             target_gravity = [-1.0, 0.0, 0.0] #重心投影在机身坐标系
         
         elif hand_stand_type == "front":
             self.rewards.handstand_feet_height_exp.params["asset_cfg"].body_names = "R.*_foot"
-        
-        elif hand_stand_type == "hip":   
-            air_leg_name = "F.*_foot"  
-            feet_height_weight = 10.0
-            feet_height = 0.6
-            feet_on_air_weight = 10.0
-            feet_air_time_weight = 5.0
-            target_gravity_weight = -2.0
-            target_gravity = [-1.0, 0.0, 0.0]
         
         elif hand_stand_type == "left":         
             self.rewards.handstand_feet_height_exp.params["asset_cfg"].body_names = "L.*_foot" 
@@ -140,12 +131,21 @@ class UnitreeGo2FootstandEnvCfg(LocomotionVelocityRoughEnvCfg):
         self.rewards.handstand_orientation_l2.weight = target_gravity_weight
         self.rewards.handstand_orientation_l2.params["target_gravity"] = target_gravity
         
+        self.rewards.undesired_contacts.weight = -15.0 # 从 -1.0 大幅调高
+        self.rewards.undesired_contacts.params["sensor_cfg"].body_names = [".*_thigh", ".*_calf"]
+        
         # terminations
-        # terminate on contact for any body except feet
-        self.terminations.illegal_contact.params["sensor_cfg"].body_names = ["(?!.*_foot).*"]
+        # # terminate on contact for any body except feet
+        # self.terminations.illegal_contact.params["sensor_cfg"].body_names = ["(?!.*_foot).*"]
+        self.terminations.illegal_contact.params["sensor_cfg"].body_names = ["base", ".*_thigh", ".*_calf"]
         
         # Disable all rewards with zero weight
         self.disable_zero_weight_rewards() 
+        
+        # commands - 扩大速度范围以支持高速运动
+        self.commands.base_velocity.ranges.lin_vel_x = (0.0, 0.0)  
+        self.commands.base_velocity.ranges.lin_vel_y = (0.0, 0.0) 
+        self.commands.base_velocity.ranges.ang_vel_z = (0.0, 0.0) 
 
 
 @configclass

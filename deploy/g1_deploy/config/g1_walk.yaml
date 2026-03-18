@@ -1,5 +1,15 @@
+# ========== Robot model and message type ==========
+robot_model: "g1"
+robot_msg_type: "unitree_hg"  # G1 uses HG (Humanoid) message types
+dds_domain_id: 0
+
+
 # ========== Gamepad ==========
-gamepad_type: "gamesir"  # Options: f710, gamesir, unitree
+# sim2real: "unitree_sdk"    - reads from LowState.wireless_remote (no extra hardware)
+# sim2sim:  "unitree_pygame" - Unitree gamepad via USB/pygame
+# other options: "gamesir", "f710", "unitree" (Linux /dev/input/jsX)
+gamepad_type_sim2real: "unitree_sdk"
+gamepad_type_sim2sim: "gamesir"
 
 # ========== Paths ==========
 policy_path: "./exported_policy"
@@ -95,6 +105,7 @@ obs_scales:
   joint_pos: 1.0         # joint_pos scale from IsaacLab default
   joint_vel: 0.05        # dof_vel scale from IsaacLab default  
 
+history_length: 5  # number of past observations to include in the policy input (matched with training configuration)
 
 # ========== Action scale (matched with rough_env_cfg.py) ==========
 action_scale: 
@@ -109,6 +120,10 @@ vyaw_range: [-1.0, 1.0]     # rad/s
 
 
 # ========== Sim2Real configuration ==========
+
+# Lowstate/Lowcmd (Unitree SDK2)
+dds_lowstate_topic: "rt/lowstate"
+dds_lowcmd_topic: "rt/lowcmd"
 
 # SDK joint order (Unitree SDK G1 29DOF)
 sdk_joint_order: [

@@ -1,5 +1,8 @@
 # ========== Gamepad ==========
-gamepad_type: "gamesir"  # Options: f710, gamesir, unitree
+# sim2real: "unitree_sdk" - reads from LowState.wirelessRemote (no extra hardware)
+# sim2sim:  "unitree_pygame" / "gamesir" / "f710"
+gamepad_type_sim2real: "unitree_sdk"
+gamepad_type_sim2sim: "unitree_pygame"
 
 # ========== Paths ==========
 policy_path: "./exported_policy"
@@ -96,11 +99,18 @@ vy_range: [-0.8, 0.8]       # m/s - increased lateral speed to 0.8 m/s
 vyaw_range: [-1.5, 1.5]     # rad/s - increased yaw speed to 1.5 rad/s
 
 # ========== Sim2Real configuration ==========
-# SDK joint order (Unitree SDK)
+# SDK joint order (Unitree SDK Go1): FR(0-2), FL(3-5), RR(6-8), RL(9-11)
 sdk_joint_order: ['FR_0', 'FR_1', 'FR_2',
                   'FL_0', 'FL_1', 'FL_2',
                   'RR_0', 'RR_1', 'RR_2',
                   'RL_0', 'RL_1', 'RL_2']
+
+# sdk_to_isaac_map[sdk_idx] = isaac_idx
+# SDK:   FR_hip(0) FR_thigh(1) FR_calf(2) FL_hip(3) FL_thigh(4) FL_calf(5) RR_hip(6) RR_thigh(7) RR_calf(8) RL_hip(9) RL_thigh(10) RL_calf(11)
+# Isaac: FL_hip(0) FR_hip(1)   RL_hip(2)  RR_hip(3) FL_thigh(4) FR_thigh(5) RL_thigh(6) RR_thigh(7) FL_calf(8) FR_calf(9) RL_calf(10) RR_calf(11)
+sdk_to_isaac_map: [1, 5, 9, 0, 4, 8, 3, 7, 11, 2, 6, 10]
+isaac_to_sdk_map: [3, 0, 9, 6, 4, 1, 10, 7, 5, 2, 11, 8]
+
 robot_ip: "192.168.123.10"
 robot_port: 8007
 local_port: 8080
