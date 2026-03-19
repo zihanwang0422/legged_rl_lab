@@ -107,11 +107,11 @@ python deploy.py --net enp108s0 --config_path configs/g1.yaml
 python sim2real_walk.py --model g1_walk.pt --config g1_walk.yaml --iface enp108s0
 ```
 
-或干跑模式（仅运行策略推理，不发送 lowcmd，用于调试）：
+<!-- 或干跑模式（仅运行策略推理，不发送 lowcmd，用于调试）：
 
 ```bash
 python sim2real_walk.py --dry-run --iface enp108s0
-```
+``` -->
 
 ##### 4.1 零力矩状态
 
