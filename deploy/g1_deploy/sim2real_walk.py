@@ -7,7 +7,6 @@
 # Modifications are licensed under BSD-3-Clause.
 #
 # This file contains code derived from unitree_rl_gym Project (BSD-3-Clause license)
-# with modifications by Legged Lab Project (BSD-3-Clause license).
 
 import sys
 import time
