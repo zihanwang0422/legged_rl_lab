@@ -262,8 +262,26 @@ class Controller:
                 (self.current_obs_history[1:], self.current_obs.reshape(1, -1)), axis=0
             )
 
-        obs = self.current_obs_history.reshape(1, -1).astype(np.float32)
-        self.action = self.policy(torch.from_numpy(obs).clip(-100, 100)).clip(-100, 100).detach().numpy().squeeze()
+        # Group-major reorganization
+        # [omega×5, gravity×5, cmd×5, pos×5, vel×5, action×5]
+        obs_arr = self.current_obs_history  # (5, 96)
+        n = self.config.num_actions  # 29
+        obs_input = np.concatenate([
+            obs_arr[:, 0:3].reshape(-1),          # omega × 5 frames
+            obs_arr[:, 3:6].reshape(-1),          # gravity × 5 frames
+            obs_arr[:, 6:9].reshape(-1),          # cmd × 5 frames
+            obs_arr[:, 9:9+n].reshape(-1),        # joint pos × 5 frames
+            obs_arr[:, 9+n:9+2*n].reshape(-1),    # joint vel × 5 frames
+            obs_arr[:, 9+2*n:9+3*n].reshape(-1),  # last action × 5 frames
+        ])
+        obs_batch = obs_input[np.newaxis, :].astype(np.float32)
+
+        with torch.no_grad():
+            obs_tensor = torch.from_numpy(obs_batch)
+            action_tensor = self.policy(obs_tensor)
+            if isinstance(action_tensor, tuple):
+                action_tensor = action_tensor[0]
+            self.action = action_tensor.cpu().numpy().flatten().astype(np.float32)
 
         target_dof_pos = self.config.default_joint_pos + self.action * self.config.action_scale
         with self.cmd_lock:
@@ -276,7 +294,7 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
     parser.add_argument("--net", type=str, default="enp108s0", help="network interface")
-    parser.add_argument("--config_path", type=str, default="config/g1.yaml", help="configuration file path")
+    parser.add_argument("--config_path", type=str, default="config/g1_walk.yaml", help="configuration file path")
     args = parser.parse_args()
 
     config = Config(args.config_path)
