@@ -61,7 +61,7 @@ def build_obs(base_ang_vel, projected_gravity, commands, dof_pos_rel, dof_vel, l
     obs = []
     
     # 1-3: Base angular velocity (scaled)
-    base_ang_vel_scaled = base_ang_vel * config.obs_scales['base_ang_vel']
+    base_ang_vel_scaled = base_ang_vel * config.ang_vel_scale
     obs.extend(list(base_ang_vel_scaled))
     
     # 7-9: Projected gravity
@@ -71,11 +71,11 @@ def build_obs(base_ang_vel, projected_gravity, commands, dof_pos_rel, dof_vel, l
     obs.extend(list(commands))
     
     # 13-24: joint position relative to default
-    dof_pos_rel_scaled = dof_pos_rel * config.obs_scales['joint_pos']
+    dof_pos_rel_scaled = dof_pos_rel * config.dof_pos_scale
     obs.extend(list(dof_pos_rel_scaled))
     
     # 25-36: joint velocities (scaled)
-    dof_vel_scaled = dof_vel * config.obs_scales['joint_vel']
+    dof_vel_scaled = dof_vel * config.dof_vel_scale
     obs.extend(list(dof_vel_scaled))
     
     # 37-48: Last action
@@ -128,7 +128,7 @@ class Sim2SimController:
         print(f"Loading MuJoCo model: {self.xml_path}")
         self.model = mujoco.MjModel.from_xml_path(self.xml_path)
         self.data = mujoco.MjData(self.model)
-        self.policy_decimation = int(c.policy_dt / c.sim_dt)
+        self.policy_decimation = int(c.control_dt / c.sim_dt)
         self.sim_dt = c.sim_dt
         
         # 5. 映射关节与执行器索引 (MuJoCo 顺序)
@@ -144,13 +144,13 @@ class Sim2SimController:
         
         # 7. 初始化缓冲区与增益 (直接从 config 读取)
         self.obs_history = deque([np.zeros(96, dtype=np.float32)] * 5, maxlen=5)
-        self.kp = c.kp_walk
-        self.kd = c.kd_walk
+        self.kp = c.kps
+        self.kd = c.kds
         self.last_action = np.zeros(self.num_joints, dtype=np.float32)
         
         # 8. 初始姿态对齐 (Isaac -> MuJoCo)
         # 使用你配置里的 map 数组进行重排
-        self.default_qpos_mj = c.default_qpos_isaac[c.isaac_to_mujoco_map]
+        self.default_qpos_mj = c.default_joint_pos[c.isaac_to_mujoco_map]
         self.target_qpos_mj = self.default_qpos_mj.copy()
         
         self.data.qpos[self.joint_qpos_addrs] = self.default_qpos_mj
@@ -189,10 +189,10 @@ class Sim2SimController:
         self.config = new_cfg
         c = new_cfg
         self.policy = torch.jit.load(policy_path, map_location='cpu')
-        self.policy_decimation = int(c.policy_dt / c.sim_dt)
-        self.kp = c.kp_walk
-        self.kd = c.kd_walk
-        self.default_qpos_mj = c.default_qpos_isaac[c.isaac_to_mujoco_map]
+        self.policy_decimation = int(c.control_dt / c.sim_dt)
+        self.kp = c.kps
+        self.kd = c.kds
+        self.default_qpos_mj = c.default_joint_pos[c.isaac_to_mujoco_map]
         self.target_qpos_mj = self.default_qpos_mj.copy()
         # Reset observation buffers
         self.obs_history = deque([np.zeros(96, dtype=np.float32)] * 5, maxlen=5)
@@ -266,7 +266,7 @@ class Sim2SimController:
                     curr_qpos_mj = self.data.qpos[self.joint_qpos_addrs]
                     curr_qvel_mj = self.data.qvel[self.joint_qvel_addrs]
                     
-                    curr_qpos_rel_isaac = curr_qpos_mj[c.mujoco_to_isaac_map] - c.default_qpos_isaac
+                    curr_qpos_rel_isaac = curr_qpos_mj[c.mujoco_to_isaac_map] - c.default_joint_pos
                     curr_qvel_isaac = curr_qvel_mj[c.mujoco_to_isaac_map]
                     # Get user input from gamepad
                     cmd_vx, cmd_vy, cmd_vyaw = gamepad.get_velocity()
@@ -304,7 +304,7 @@ class Sim2SimController:
                         
                     # Position action: 29 dims (relative to default), scale
                     # Isaac→MuJoCo: result[mujoco_i] = isaac_arr[isaac_to_mujoco_map[mujoco_i]]
-                    self.target_qpos_isaac = action * self.config.action_scale['pos'] + c.default_qpos_isaac
+                    self.target_qpos_isaac = action * self.config.action_scale + c.default_joint_pos
                     self.target_qpos_mj = self.target_qpos_isaac[self.config.isaac_to_mujoco_map]
                 
                 # --- 摄像头跟随机器人 ---
@@ -371,9 +371,9 @@ if __name__ == '__main__':
     gamepad_type = getattr(cfg, 'gamepad_type_sim2sim', getattr(cfg, 'gamepad_type', 'unitree_pygame'))
     gamepad = create_gamepad_controller(
         gamepad_type,
-        vx_range=cfg.vx_range,
-        vy_range=cfg.vy_range,
-        vyaw_range=cfg.vyaw_range,
+        vx_range=cfg.command_range['lin_vel_x'],
+        vy_range=cfg.command_range['lin_vel_y'],
+        vyaw_range=cfg.command_range['ang_vel_z'],
         btn_start=getattr(cfg, 'gamepad_btn_start', None),
         btn_rb=getattr(cfg, 'gamepad_btn_rb', None),
         btn_a=getattr(cfg, 'gamepad_btn_a', None),

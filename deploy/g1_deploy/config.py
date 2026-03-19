@@ -32,7 +32,7 @@ class Config:
 
             self.policy_path = config["policy_path"]
 
-            self.joint2motor_idx = config["joint2motor_idx"]
+            self.sdk2isaac_idx = config["sdk2isaac_idx"]
             self.kps = config["kps"]
             self.kds = config["kds"]
             self.default_joint_pos = np.array(config["default_joint_pos"], dtype=np.float32)

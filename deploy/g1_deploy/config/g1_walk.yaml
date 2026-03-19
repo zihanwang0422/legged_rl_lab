@@ -1,28 +1,14 @@
-# ========== Robot model and message type ==========
-robot_model: "g1"
-robot_msg_type: "unitree_hg"  # G1 uses HG (Humanoid) message types
-dds_domain_id: 0
-
-
-# ========== Gamepad ==========
-# sim2real: "unitree_sdk"    - reads from LowState.wireless_remote (no extra hardware)
-# sim2sim:  "unitree_pygame" - Unitree gamepad via USB/pygame
-# other options: "gamesir", "f710", "unitree" (Linux /dev/input/jsX)
-gamepad_type_sim2real: "unitree_sdk"
 gamepad_type_sim2sim: "gamesir"
-
-# ========== Paths ==========
-policy_path: "./exported_policy"
 xml_path: "./assets/scene_terrain.xml"
 
-# ========== Time parameters ==========
-simulation_duration: 60.0
-sim_dt: 0.005          # simulation/control timestep (200Hz)
-control_decimation: 4 # sim_dt * control_decimation = policy_dt (0.02s = 50Hz)
-policy_dt: 0.02          # policy inference frequency (Hz) - matched with training
+control_dt: 0.02
+sim_dt: 0.005
+control_decimation: 4
 
+policy_path: "exported_policy/g1_walk.pt"
+history_length: 5
 
-# ========== PD gains (MuJoCo Order) ==========
+# ========== PD gains (Isaac Order used by policy) ==========
 # MuJoCo joint order (29 DOF):
 #  [ 0] left_hip_pitch       [ 1] left_hip_roll        [ 2] left_hip_yaw
 #  [ 3] left_knee            [ 4] left_ankle_pitch     [ 5] left_ankle_roll
@@ -35,17 +21,17 @@ policy_dt: 0.02          # policy inference frequency (Hz) - matched with traini
 #  [24] right_shoulder_yaw   [25] right_elbow          [26] right_wrist_roll
 #  [27] right_wrist_pitch    [28] right_wrist_yaw
 
-kp_walk: [100.0, 100.0, 100.0, 150.0, 40.0, 40.0,   # left leg
-          100.0, 100.0, 100.0, 150.0, 40.0, 40.0,    # right leg
-          200.0, 40.0, 40.0,                          # waist
-          40.0, 40.0, 40.0, 40.0, 40.0, 40.0, 40.0,  # left arm
-          40.0, 40.0, 40.0, 40.0, 40.0, 40.0, 40.0]  # right arm
+kps: [100.0, 100.0, 100.0, 150.0, 40.0, 40.0,   # left leg
+  100.0, 100.0, 100.0, 150.0, 40.0, 40.0,    # right leg
+  200.0, 40.0, 40.0,                          # waist
+  40.0, 40.0, 40.0, 40.0, 40.0, 40.0, 40.0,  # left arm
+  40.0, 40.0, 40.0, 40.0, 40.0, 40.0, 40.0]  # right arm
 
-kd_walk: [2.0, 2.0, 2.0, 4.0, 2.0, 2.0,             # left leg
-          2.0, 2.0, 2.0, 4.0, 2.0, 2.0,              # right leg
-          5.0, 5.0, 5.0,                              # waist
-          1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0,         # left arm
-          1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]         # right arm
+kds: [2.0, 2.0, 2.0, 4.0, 2.0, 2.0,             # left leg
+  2.0, 2.0, 2.0, 4.0, 2.0, 2.0,              # right leg
+  5.0, 5.0, 5.0,                              # waist
+  1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0,         # left arm
+  1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]         # right arm
 
 # ========== Joint ordering configuration(MuJoCo Order) ==========
 # MuJoCo joint names (in actuator order from XML)
@@ -89,41 +75,46 @@ isaac_to_mujoco_map: [0, 3, 6, 9, 13, 17, 1, 4, 7, 10, 14, 18, 2, 5, 8, 11, 15, 
 #  [21] left_elbow       [22] right_elbow       [23] left_wrist_roll
 #  [24] right_wrist_roll [25] left_wrist_pitch  [26] right_wrist_pitch
 #  [27] left_wrist_yaw   [28] right_wrist_yaw
-default_qpos_isaac: [-0.1, -0.1,  0.0,          # hip_pitch(L,R), waist_yaw
-                      0.0,  0.0,  0.0,          # hip_roll(L,R), waist_roll
-                      0.0,  0.0,  0.0,          # hip_yaw(L,R), waist_pitch
-                      0.3,  0.3,  0.3,   0.3,   # knee(L,R), shoulder_pitch(L,R)
-                     -0.2, -0.2,  0.25, -0.25,  # ankle_pitch(L,R), shoulder_roll(L,R)
-                      0.0,  0.0,  0.0,   0.0,   # ankle_roll(L,R), shoulder_yaw(L,R)
-                      0.97, 0.97, 0.15, -0.15,  # elbow(L,R), wrist_roll(L,R)
-                      0.0,  0.0,  0.0,   0.0]   # wrist_pitch(L,R), wrist_yaw(L,R)
+default_joint_pos: [-0.1, -0.1,  0.0,          # hip_pitch(L,R), waist_yaw
+                    0.0,  0.0,  0.0,          # hip_roll(L,R), waist_roll
+                    0.0,  0.0,  0.0,          # hip_yaw(L,R), waist_pitch
+                    0.3,  0.3,  0.3,   0.3,   # knee(L,R), shoulder_pitch(L,R)
+                   -0.2, -0.2,  0.25, -0.25,  # ankle_pitch(L,R), shoulder_roll(L,R)
+                    0.0,  0.0,  0.0,   0.0,   # ankle_roll(L,R), shoulder_yaw(L,R)
+                    0.97, 0.97, 0.15, -0.15,  # elbow(L,R), wrist_roll(L,R)
+                    0.0,  0.0,  0.0,   0.0]   # wrist_pitch(L,R), wrist_yaw(L,R)
                 
+num_actions: 29
+num_obs: 96
 
-# ========== Observation scales (matched with velocity_env_cfg.py) ==========
-obs_scales:
-  base_ang_vel: 0.2     # ang_vel scale from IsaacLab default  
-  joint_pos: 1.0         # joint_pos scale from IsaacLab default
-  joint_vel: 0.05        # dof_vel scale from IsaacLab default  
+# ========== Observation scales ==========
+ang_vel_scale: 0.2      # base_ang_vel
+dof_pos_scale: 1.0      # joint_pos
+dof_vel_scale: 0.05     # joint_vel
 
-history_length: 5  # number of past observations to include in the policy input (matched with training configuration)
-
-# ========== Action scale (matched with rough_env_cfg.py) ==========
-action_scale: 
-  pos: 0.25  
-
-# ========== Command velocity ranges (matched with flat_env_cfg.py) ==========
-vx_range: [-1.0, 1.0]        # m/s
-vy_range: [-0.5, 0.5]       # m/s
-vyaw_range: [-1.0, 1.0]     # rad/s
+# ========== Action scale ==========
+action_scale: 0.25
 
 
+# Gamepad command multiply scale
+command_scale: [1.0, 1.0, 1.0]
+
+# ========== Command velocity ranges ==========
+command_range:
+  lin_vel_x: [-1.0, 1.0]     # m/s
+  lin_vel_y: [-0.5, 0.5]     # m/s
+  ang_vel_z: [-1.0, 1.0]     # rad/s
 
 
 # ========== Sim2Real configuration ==========
+msg_type: "hg"              # "hg" or "go"
+imu_type: "pelvis"          # "torso" or "pelvis"
+torso_idx: 12                # needed when imu_type="torso"
 
-# Lowstate/Lowcmd (Unitree SDK2)
-dds_lowstate_topic: "rt/lowstate"
-dds_lowcmd_topic: "rt/lowcmd"
+lowcmd_topic: "rt/lowcmd"
+lowstate_topic: "rt/lowstate"
+
+sdk2isaac_idx: [0, 6, 12, 1, 7, 13, 2, 8, 14, 3, 9, 15, 22, 4, 10, 16, 23, 5, 11, 17, 24, 18, 25, 19, 26, 20, 27, 21, 28]
 
 # SDK joint order (Unitree SDK G1 29DOF)
 sdk_joint_order: [
@@ -137,8 +128,5 @@ sdk_joint_order: [
   'right_shoulder_pitch_joint', 'right_shoulder_roll_joint', 'right_shoulder_yaw_joint',
   'right_elbow_joint', 'right_wrist_roll_joint', 'right_wrist_pitch_joint', 'right_wrist_yaw_joint']
 
-# robot connection parameters
-robot_ip: "192.168.123.10"
-robot_port: 8007
-local_port: 8080
+
 
