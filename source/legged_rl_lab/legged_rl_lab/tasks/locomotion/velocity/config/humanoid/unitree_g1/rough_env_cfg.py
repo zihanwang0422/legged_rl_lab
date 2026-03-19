@@ -266,6 +266,7 @@ class UnitreeG1RoughEnvCfg(LocomotionVelocityRoughEnvCfg):
         self.commands.base_velocity.ranges.lin_vel_x = (0.0, 1.0)
         self.commands.base_velocity.ranges.lin_vel_y = (-0.5, 0.5)
         self.commands.base_velocity.ranges.ang_vel_z = (-1.0, 1.0)
+        # self.commands.base_velocity.debug_vis = False
 
         # If the weight of rewards is 0, set rewards to None
         if self.__class__.__name__ == "UnitreeG1RoughEnvCfg":
