@@ -368,7 +368,7 @@ if __name__ == '__main__':
 
     # 2. 初始化 Gamepad
     cfg = controller.config
-    gamepad_type = getattr(cfg, 'gamepad_type_sim2sim', getattr(cfg, 'gamepad_type', 'unitree_pygame'))
+    gamepad_type = getattr(cfg, 'gamepad_type_sim2sim', getattr(cfg, 'gamepad_type', 'gamesir'))
     gamepad = create_gamepad_controller(
         gamepad_type,
         vx_range=cfg.command_range['lin_vel_x'],
@@ -382,9 +382,7 @@ if __name__ == '__main__':
     # 初始化时同步活跋索引，避免第一帧就触发切换
     gamepad.active_policy = 1
 
-    print("\n" + "="*70)
-    print(f"🎮 Gamepad Control ({gamepad_type}) - Multi-Policy Mode")
-    print("="*70)
+    print("\n" + "="*70)logs/rsl_rl/unitree_g1_flat/2026-03-20_10-27-19/exported/policy.pt
     print("  Left Joystick Up/Down : vx (forward/back)")
     print("  Left Joystick L/R     : vy (strafe)")
     print("  Right Joystick L/R    : vyaw (turn)")

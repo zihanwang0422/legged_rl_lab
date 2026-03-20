@@ -1,8 +1,8 @@
 # ========== Gamepad ==========
 # sim2real: "unitree_sdk" - reads from LowState.wirelessRemote (no extra hardware)
-# sim2sim:  "unitree_pygame" / "gamesir" / "f710"
+# sim2sim:  "gamesir"
 gamepad_type_sim2real: "unitree_sdk"
-gamepad_type_sim2sim: "unitree_pygame"
+gamepad_type_sim2sim: "gamesir"
 
 # ========== Paths ==========
 policy_path: "./exported_policy"

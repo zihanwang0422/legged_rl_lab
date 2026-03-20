@@ -6,7 +6,7 @@ sim_dt: 0.005
 control_decimation: 4
 
 policy_path: "exported_policy/g1_walk.pt"
-history_length: 5
+history_length: 1
 
 # ========== PD gains (Isaac Order used by policy) ==========
 # MuJoCo joint order (29 DOF):

@@ -1,5 +1,5 @@
 # ========== Gamepad ==========
-gamepad_type: "gamesir"  # Options: f710, gamesir, unitree
+gamepad_type: "gamesir"  # Options: gamesir
 
 # ========== Paths ==========
 policy_path: "./exported_policy"

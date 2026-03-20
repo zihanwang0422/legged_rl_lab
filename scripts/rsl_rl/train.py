@@ -102,12 +102,6 @@ import legged_rl_lab  # noqa: F401 - Register custom environments
 from isaaclab_tasks.utils import get_checkpoint_path
 from isaaclab_tasks.utils.hydra import hydra_task_config
 
-import os
-# import wandb
-# os.environ['HTTP PROXY'] = 'http://127.0.0.1:7890'
-# os.environ['HTTPS PROXY'] = 'http://127.0.0.1:7890'
-# wandb.init(settings=wandb.Settings(init_timeout=120))
-
 # import logger
 logger = logging.getLogger(__name__)
 
@@ -117,6 +111,45 @@ torch.backends.cuda.matmul.allow_tf32 = True
 torch.backends.cudnn.allow_tf32 = True
 torch.backends.cudnn.deterministic = False
 torch.backends.cudnn.benchmark = False
+
+
+# def _append_no_proxy_hosts(hosts: list[str]) -> None:
+#     """Append hosts to NO_PROXY/no_proxy without overriding existing values."""
+#     for key in ("NO_PROXY", "no_proxy"):
+#         current = os.environ.get(key, "")
+#         items = [item.strip() for item in current.split(",") if item.strip()]
+#         for host in hosts:
+#             if host not in items:
+#                 items.append(host)
+#         os.environ[key] = ",".join(items)
+
+
+# def _prepare_wandb_network() -> None:
+#     """Configure network vars to avoid wandb init timeout when global proxy is enabled.
+
+#     Default behavior: keep proxy for IsaacSim startup/resources, then prefer direct
+#     connection for wandb endpoints by extending NO_PROXY.
+#     Set LEGGRL_WANDB_PROXY_MODE=proxy to keep proxy for wandb as well.
+#     Set LEGGRL_WANDB_PROXY_MODE=off to clear proxy vars before wandb init.
+#     """
+#     mode = os.environ.get("LEGGRL_WANDB_PROXY_MODE", "direct").lower()
+#     # Give wandb more time on unstable networks.
+#     os.environ.setdefault("WANDB_INIT_TIMEOUT", "300")
+#     os.environ.setdefault("WANDB_HTTP_TIMEOUT", "120")
+
+#     if mode == "off":
+#         for key in ("http_proxy", "https_proxy", "HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "all_proxy"):
+#             os.environ.pop(key, None)
+#         return
+
+#     if mode == "direct":
+#         _append_no_proxy_hosts([
+#             "api.wandb.ai",
+#             "files.wandb.ai",
+#             "storage.googleapis.com",
+#             "localhost",
+#             "127.0.0.1",
+#         ])
 
 
 @hydra_task_config(args_cli.task, args_cli.agent)
@@ -233,7 +266,9 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
     dump_yaml(os.path.join(log_dir, "params", "env.yaml"), env_cfg)
     dump_yaml(os.path.join(log_dir, "params", "agent.yaml"), agent_cfg)
 
-    # run training
+    # # run training
+    # if getattr(agent_cfg, "logger", None) == "wandb":
+    #     _prepare_wandb_network()
     runner.learn(num_learning_iterations=agent_cfg.max_iterations, init_at_random_ep_len=True)
 
     # close the simulator
