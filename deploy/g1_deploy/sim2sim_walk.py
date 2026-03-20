@@ -143,7 +143,7 @@ class Sim2SimController:
         self.policy = torch.jit.load(self.policy_path, map_location='cpu')
         
         # 7. 初始化缓冲区与增益 (直接从 config 读取)
-        self.obs_history = deque([np.zeros(96, dtype=np.float32)] * 5, maxlen=5)
+        self.obs_history = deque([np.zeros(96, dtype=np.float32)] * c.history_length, maxlen=c.history_length)
         self.kp = c.kps
         self.kd = c.kds
         self.last_action = np.zeros(self.num_joints, dtype=np.float32)
@@ -195,7 +195,7 @@ class Sim2SimController:
         self.default_qpos_mj = c.default_joint_pos[c.isaac_to_mujoco_map]
         self.target_qpos_mj = self.default_qpos_mj.copy()
         # Reset observation buffers
-        self.obs_history = deque([np.zeros(96, dtype=np.float32)] * 5, maxlen=5)
+        self.obs_history = deque([np.zeros(96, dtype=np.float32)] * self.c.history_length, maxlen=self.c.history_length)
         self.last_action = np.zeros(self.num_joints, dtype=np.float32)
         self._active_policy_idx = policy_idx
         print(f"[PolicySwitch] ✅ Switched to policy {policy_idx}")
@@ -280,15 +280,28 @@ class Sim2SimController:
                     # Group-major reorganization (matches training format):
                     # [omega×5, gravity×5, cmd×5, pos×5, vel×5, action×5]
                     obs_arr = np.array(list(self.obs_history))  # (5, 96)
-                    n = self.num_joints  # 29
+                    # --- Dynamic Observation Stacking (Compatible with H=1 to N) ---
+                    n = self.num_joints
+                    history_len = len(self.obs_history)
+                    obs_arr = np.array(list(self.obs_history))  # Shape: (History, 96)
+
+                    # Define feature slices [start, end]
+                    feature_indices = [
+                        (0, 3),         # Angular velocity
+                        (3, 6),         # Projected gravity
+                        (6, 9),         # Commands
+                        (9, 9 + n),     # Joint positions
+                        (9 + n, 9 + 2 * n),   # Joint velocities
+                        (9 + 2 * n, 9 + 3 * n) # Last actions
+                    ]
+
+                    # Extract each feature across all history frames and flatten
+                    # Result format: [Feature1_t0...tN, Feature2_t0...tN, ...]
                     obs_input = np.concatenate([
-                        obs_arr[:, 0:3].reshape(-1),          # omega × 5 frames
-                        obs_arr[:, 3:6].reshape(-1),          # gravity × 5 frames
-                        obs_arr[:, 6:9].reshape(-1),          # cmd × 5 frames
-                        obs_arr[:, 9:9+n].reshape(-1),        # joint pos × 5 frames
-                        obs_arr[:, 9+n:9+2*n].reshape(-1),    # joint vel × 5 frames
-                        obs_arr[:, 9+2*n:9+3*n].reshape(-1),  # last action × 5 frames
+                        obs_arr[:, start:end].ravel() for start, end in feature_indices
                     ])
+
+                    # Final batch preparation for policy inference
                     obs_batch = obs_input[np.newaxis, :].astype(np.float32)
                         
                     # Isaac Order: Forward pass through the neural network
@@ -382,7 +395,7 @@ if __name__ == '__main__':
     # 初始化时同步活跋索引，避免第一帧就触发切换
     gamepad.active_policy = 1
 
-    print("\n" + "="*70)logs/rsl_rl/unitree_g1_flat/2026-03-20_10-27-19/exported/policy.pt
+    print("\n" + "="*70)
     print("  Left Joystick Up/Down : vx (forward/back)")
     print("  Left Joystick L/R     : vy (strafe)")
     print("  Right Joystick L/R    : vyaw (turn)")

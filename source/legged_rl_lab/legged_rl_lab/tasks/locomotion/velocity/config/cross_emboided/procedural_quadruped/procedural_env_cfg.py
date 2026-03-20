@@ -311,7 +311,7 @@ class ProceduralQuadrupedRoughEnvCfg(LocomotionVelocityRoughEnvCfg):
         self.rewards.joint_torques_l2.weight = -2.5e-5
         self.rewards.joint_vel_l1 = None
         self.rewards.joint_vel_l2.weight = -0.01
-        self.rewards.joint_acc_l2.weight = -2.0e-7/
+        self.rewards.joint_acc_l2.weight = -2.0e-7
         self.rewards.joint_deviation_l1 = None
         self.rewards.joint_pos_limits.weight = -1.0
         self.rewards.joint_vel_limits = None

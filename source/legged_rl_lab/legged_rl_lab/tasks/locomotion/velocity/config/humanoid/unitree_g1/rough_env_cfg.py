@@ -35,7 +35,7 @@ class G1ObservationsCfg:
         # gait_phase = ObsTerm(func=mdp.gait_phase, params={"period": 0.8})
 
         def __post_init__(self):
-            self.history_length = 5
+            self.history_length = 1
             self.enable_corruption = True
             self.concatenate_terms = True
 
@@ -59,7 +59,7 @@ class G1ObservationsCfg:
         )
 
         def __post_init__(self):
-            self.history_length = 5
+            self.history_length = 1
             self.enable_corruption = False
             self.concatenate_terms = True
             
@@ -134,7 +134,6 @@ class G1RewardsCfg(RewardsCfg):
             "tanh_mult": 2.0,
             "target_height": 0.12,
             "asset_cfg": SceneEntityCfg("robot", body_names=".*ankle_roll_link"),
-            # 顺序须与 body_names 解析顺序一致（IsaacLab 按字母序：left < right）
             "foot_scanner_cfgs": [
                 SceneEntityCfg("foot_scanner_l"),
                 SceneEntityCfg("foot_scanner_r"),
