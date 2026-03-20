@@ -89,7 +89,7 @@ class G1RewardsCfg:
     joint_acc = RewTerm(func=mdp.joint_acc_l2, weight=-2.5e-7)
     action_rate = RewTerm(func=mdp.action_rate_l2, weight=-0.05)
     dof_pos_limits = RewTerm(func=mdp.joint_pos_limits, weight=-5.0)
-    energy = RewTerm(func=mdp.energy, weight=-2e-5)
+    # energy = RewTerm(func=mdp.energy, weight=-2e-5)
 
     joint_deviation_arms = RewTerm(
         func=mdp.joint_deviation_l1,
@@ -107,7 +107,7 @@ class G1RewardsCfg:
     )
     joint_deviation_waists = RewTerm(
         func=mdp.joint_deviation_l1,
-        weight=-1,
+        weight=-1.0,
         params={
             "asset_cfg": SceneEntityCfg(
                 "robot",
@@ -148,7 +148,7 @@ class G1RewardsCfg:
         },
     )
     feet_clearance = RewTerm(
-        func=mdp.foot_clearance_reward,
+        func=mdp.foot_clearance_reward_humanoid,
         weight=1.0,
         params={
             "std": 0.05,
@@ -157,6 +157,16 @@ class G1RewardsCfg:
             "asset_cfg": SceneEntityCfg("robot", body_names=".*ankle_roll.*"),
         },
     )
+    stand_still_joint_deviation_l1 = RewTerm(
+        func=mdp.stand_still_joint_deviation_l1,
+        weight=-0.5,
+        params={
+            "command_name": "base_velocity",
+            "command_threshold": 0.06,
+            "asset_cfg": SceneEntityCfg("robot", joint_names=".*_joint"),
+        },
+    )
+
 
     # -- other
     undesired_contacts = RewTerm(
@@ -195,19 +205,22 @@ class UnitreeG1FlatEnvCfg(LocomotionVelocityRoughEnvCfg):
         # ------------------------------ Scene ------------------------------
         self.scene.robot = UNITREE_G1_29DOF_CFG.replace(prim_path="{ENV_REGEX_NS}/Robot")
         self.scene.height_scanner.prim_path = "{ENV_REGEX_NS}/Robot/torso_link"
+        # ====Terrain Cfg===
+        # change terrain to flat
         self.scene.terrain.terrain_type = "plane"
         self.scene.terrain.terrain_generator = None
+        # no height scan
         self.scene.height_scanner = None
+        self.observations.policy.height_scan = None
+        self.observations.critic.height_scan = None
+        self.observations.critic.height_scan = None
 
         # ------------------------------ Events ------------------------------
         
         # startup
-        self.events.add_base_mass.params = {
-            "body_name": base_link_name,
-            "mass_distribution_params": (-1.0, 3.0),
-        }
+        self.events.add_base_mass.params["asset_cfg"].body_names = [base_link_name]
+        self.events.add_base_mass.params["mass_distribution_params"] = (-1.0, 3.0)
         self.events.base_com = None
-        self.events.base_com.params["asset_cfg"].body_names = base_link_name
         
         # reset
         self.events.base_external_force_torque.params["asset_cfg"].body_names = base_link_name
@@ -231,20 +244,28 @@ class UnitreeG1FlatEnvCfg(LocomotionVelocityRoughEnvCfg):
         self.events.push_robot.interval_range_s = (5.0, 5.0)
        
 
-
-
-
         # ------------------------------ Actions ------------------------------
         self.actions.joint_pos.scale = 0.25
 
         # ------------------------------ Curriculum ------------------------------
         self.curriculum.terrain_levels = None
+        lin_vel_cmd_levels = CurrTerm(mdp.lin_vel_cmd_levels)
         
         # ------------------------------- Commands ------------------------------
-        self.commands.base_velocity.ranges.lin_vel_x = (-1.0, 1.0)
-        self.commands.base_velocity.ranges.lin_vel_y = (-0.5, 0.5)
-        self.commands.base_velocity.ranges.ang_vel_z = (-1.0, 1.0)
-        # self.commands.base_velocity.debug_vis = False
+        base_velocity = mdp.UniformLevelVelocityCommandCfg(
+            asset_name="robot",
+            resampling_time_range=(10.0, 10.0),
+            rel_standing_envs=0.02,
+            rel_heading_envs=1.0,
+            heading_command=False,
+            debug_vis=True,
+            ranges=mdp.UniformLevelVelocityCommandCfg.Ranges(
+                lin_vel_x=(-0.1, 0.1), lin_vel_y=(-0.1, 0.1), ang_vel_z=(-0.1, 0.1)
+            ),
+            limit_ranges=mdp.UniformLevelVelocityCommandCfg.Ranges(
+                lin_vel_x=(-0.5, 1.0), lin_vel_y=(-0.3, 0.3), ang_vel_z=(-0.2, 0.2)
+            ),
+        )
 
         # If the weight of rewards is 0, set rewards to None
         if self.__class__.__name__ == "UnitreeG1FlatEnvCfg":

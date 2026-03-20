@@ -8,6 +8,8 @@ from collections.abc import Sequence
 from typing import TYPE_CHECKING
 
 from isaaclab.managers import CommandTerm, CommandTermCfg
+from isaaclab.envs.mdp import UniformVelocityCommandCfg
+from dataclasses import MISSING
 from isaaclab.utils import configclass
 
 import legged_rl_lab.tasks.locomotion.velocity.mdp as mdp
@@ -182,3 +184,7 @@ class DiscreteCommandControllerCfg(CommandTermCfg):
     List of available discrete commands, where each element is an integer.
     Example: [10, 20, 30, 40, 50]
     """
+
+@configclass
+class UniformLevelVelocityCommandCfg(UniformVelocityCommandCfg):
+    limit_ranges: UniformVelocityCommandCfg.Ranges = MISSING

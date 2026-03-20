@@ -103,10 +103,10 @@ from isaaclab_tasks.utils import get_checkpoint_path
 from isaaclab_tasks.utils.hydra import hydra_task_config
 
 import os
-import wandb
-os.environ['HTTP PROXY'] = 'http://127.0.0.1:7890'
-os.environ['HTTPS PROXY'] = 'http://127.0.0.1:7890'
-wandb.init(settings=wandb.Settings(init_timeout=120))
+# import wandb
+# os.environ['HTTP PROXY'] = 'http://127.0.0.1:7890'
+# os.environ['HTTPS PROXY'] = 'http://127.0.0.1:7890'
+# wandb.init(settings=wandb.Settings(init_timeout=120))
 
 # import logger
 logger = logging.getLogger(__name__)
