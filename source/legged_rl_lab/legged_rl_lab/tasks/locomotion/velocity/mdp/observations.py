@@ -56,4 +56,5 @@ def morphology_params(env: ManagerBasedRLEnv) -> torch.Tensor:
         return env.morphology_params_tensor
     else:
         # Fallback: return zeros if not available (e.g., homogeneous training)
-        return torch.zeros(env.num_envs, 7, device=env.device)
+        morph_dim = getattr(env, "morphology_params_dim", 7)
+        return torch.zeros(env.num_envs, morph_dim, device=env.device)

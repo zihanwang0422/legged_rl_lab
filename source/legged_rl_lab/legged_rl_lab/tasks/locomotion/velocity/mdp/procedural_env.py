@@ -143,6 +143,7 @@ class ProceduralRobotEnv(ManagerBasedRLEnv):
                         device=self.device
                     )
                     self.morphology_params_tensor = (params_tensor - normalization) / scale
+                    self.morphology_params_dim = self.morphology_params_tensor.shape[-1]
                     
                     print(f"[INFO] Set morphology parameters for {len(builder.params)} robots")
                     print(f"       Shape: {self.morphology_params_tensor.shape}")
@@ -152,9 +153,59 @@ class ProceduralRobotEnv(ManagerBasedRLEnv):
                 pass
         except ImportError:
             pass
+
+        # Try BipedBuilder (procedural humanoid)
+        try:
+            from metamorphosis.builder import BipedBuilder
+
+            try:
+                builder = BipedBuilder.get_instance()
+                if builder is not None and len(builder.params) > 0:
+                    # Extract key morphology parameters for humanoid adaptation.
+                    # [torso_len, torso_width, torso_height, pelvis_height, hip_spacing,
+                    #  hip_pitch_len, hip_roll_len, thigh_len, shin_len, foot_len]
+                    params_list = []
+                    for param in builder.params:
+                        params_list.append([
+                            param.torso_link_length,
+                            param.torso_link_width,
+                            param.torso_link_height,
+                            param.pelvis_height,
+                            param.hip_spacing,
+                            param.hip_pitch_link_length,
+                            param.hip_roll_link_length,
+                            param.hip_yaw_link_length,
+                            param.knee_link_length,
+                            param.ankle_roll_link_length,
+                        ])
+
+                    params_tensor = torch.tensor(params_list, device=self.device, dtype=torch.float32)
+
+                    # Approximate normalization from ProceduralBipedCfg default ranges.
+                    normalization = torch.tensor(
+                        [[0.13, 0.22, 0.11, 0.065, 0.20, 0.045, 0.045, 0.30, 0.31, 0.215]],
+                        device=self.device,
+                    )
+                    scale = torch.tensor(
+                        [[0.03, 0.04, 0.03, 0.015, 0.04, 0.015, 0.015, 0.08, 0.09, 0.035]],
+                        device=self.device,
+                    )
+
+                    self.morphology_params_tensor = (params_tensor - normalization) / scale
+                    self.morphology_params_dim = self.morphology_params_tensor.shape[-1]
+
+                    print(f"[INFO] Set morphology parameters for {len(builder.params)} humanoids")
+                    print(f"       Shape: {self.morphology_params_tensor.shape}")
+                    print(f"       Example env0: {self.morphology_params_tensor[0].cpu().numpy()}")
+                    return
+            except (RuntimeError, KeyError):
+                pass
+        except ImportError:
+            pass
         
         # Fallback: set zeros if no builder found
-        self.morphology_params_tensor = torch.zeros(self.num_envs, 7, device=self.device)
+        self.morphology_params_dim = 7
+        self.morphology_params_tensor = torch.zeros(self.num_envs, self.morphology_params_dim, device=self.device)
 
     
 
