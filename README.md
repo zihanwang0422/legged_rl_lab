@@ -241,6 +241,81 @@ python scripts/rsl_rl/train.py     --task LeggedRLLab-Isaac-Velocity-Flat-Proced
 python scripts/rsl_rl/play.py     --task LeggedRLLab-Isaac-Velocity-Flat-Procedural-Quadruped-v0     --num_envs 32
 ```
 
+### Cross-Embodied (G1 + Go2)
+
+Three training modes are available depending on your hardware:
+
+---
+
+#### Mode 1 — Dual GPU, independent networks → policy bank （两张 GPU）
+
+Launch G1 on GPU0 and Go2 on GPU1 in parallel, then save a merged policy bank file:
+
+```bash
+python scripts/rsl_rl/train_cross_embodied_dual.py \
+  --g1-gpu 0 \
+  --go2-gpu 1 \
+  --g1-task LeggedRLLab-Isaac-Velocity-Flat-Unitree-G1-v0 \
+  --go2-task LeggedRLLab-Isaac-Velocity-Flat-Unitree-Go2-v0 \
+  --g1-num-envs 2048 \
+  --go2-num-envs 2048 \
+  --g1-max-iterations 15000 \
+  --go2-max-iterations 15000 \
+  --headless
+```
+
+The script writes one combined `.pt` file under `logs/rsl_rl/policy_bank/`.
+Each robot retains its own network; the bank routes by robot type at deployment.
+
+---
+
+#### Mode 2 — Single GPU, shared network, mixed scene （一张 GPU）
+
+Both G1 (29 DOF) and Go2 (12 DOF) are spawned in the **same** Isaac Lab scene.
+A single PPO network (98-dim actor obs, 29-dim actions) trains on both embodiments simultaneously via a 2-dim robot-ID one-hot.
+
+```bash
+# Default: 512 envs (256 G1 + 256 Go2)
+python scripts/rsl_rl/train_cross_embodied_shared.py --headless
+
+# Custom size / device
+python scripts/rsl_rl/train_cross_embodied_shared.py \
+  --num_envs 1024 \
+  --device cuda:0 \
+  --max_iterations 20000 \
+  --headless
+```
+
+Or use the standard `train.py` directly with the registered task:
+
+```bash
+python scripts/rsl_rl/train.py \
+  --task LeggedRLLab-Isaac-Velocity-Flat-G1Go2-Mixed-v0 \
+  --num_envs 512 \
+  --headless
+```
+
+Checkpoints are saved to `logs/rsl_rl/cross_embodied_g1go2_flat/`.
+
+---
+
+#### Play — load a robot from a policy bank
+
+```bash
+# Play G1 policy extracted from bank
+python scripts/rsl_rl/play_cross_embodied_dual.py \
+  --bank logs/rsl_rl/policy_bank/cross_embodied_g1_go2_<timestamp>.pt \
+  --robot g1 \
+  --num_envs 4
+
+# Play Go2 policy and export JIT / ONNX
+python scripts/rsl_rl/play_cross_embodied_dual.py \
+  --bank logs/rsl_rl/policy_bank/cross_embodied_g1_go2_<timestamp>.pt \
+  --robot go2 \
+  --num_envs 4 \
+  --export
+```
+
 ## Sim2Sim
 
 Define own task:
