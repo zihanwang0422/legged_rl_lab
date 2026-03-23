@@ -20,6 +20,7 @@ a boolean tensor of shape ``(num_envs,)`` that encodes which robot is active.
 from __future__ import annotations
 
 import math
+import re as _re
 from typing import TYPE_CHECKING
 
 import torch
@@ -453,3 +454,45 @@ class CrossEmbodiedJointPosActionCfg(ActionTermCfg):
 
     scale_go2: float = 0.25
     """Action scale applied to Go2 envs."""
+
+
+# ---------------------------------------------------------------------------
+# G1-only joint deviation reward
+# ---------------------------------------------------------------------------
+
+
+def joint_deviation_g1_l1_cross(
+    env: ManagerBasedRLEnv,
+    joint_names: list[str],
+) -> torch.Tensor:
+    """Joint deviation L1 for specified G1 joints only; Go2 envs return 0.
+
+    Applies L1 penalty on the deviation of G1's specified joints from their
+    default positions.  Go2 envs receive zero reward for this term, so the
+    penalty is effectively G1-specific without needing separate reward configs.
+
+    Args:
+        joint_names: List of joint name regex patterns (fullmatch) for robot_g1.
+                     Example: ``["waist.*", ".*_hip_roll_joint"]``.
+    """
+    # Lazy-cache resolved joint index tensor per unique joint_names tuple.
+    cache_key = f"_g1_dev_ids_{hash(tuple(joint_names))}"
+    if not hasattr(env, cache_key):
+        g1 = env.scene["robot_g1"]
+        all_names = g1.data.joint_names
+        ids = [
+            i for i, name in enumerate(all_names)
+            if any(_re.fullmatch(pat, name) for pat in joint_names)
+        ]
+        setattr(env, cache_key, torch.tensor(ids, device=env.device, dtype=torch.long))
+
+    joint_ids = getattr(env, cache_key)
+    if len(joint_ids) == 0:
+        return torch.zeros(env.num_envs, device=env.device)
+
+    g1 = env.scene["robot_g1"]
+    pos = g1.data.joint_pos[:, joint_ids]
+    default = g1.data.default_joint_pos[:, joint_ids]
+    deviation = torch.sum(torch.abs(pos - default), dim=-1)  # (N,)
+    # Zero out for Go2 envs so the penalty only affects G1 training.
+    return deviation * env.is_g1_env.float()

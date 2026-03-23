@@ -366,6 +366,30 @@ class CrossEmbodiedRewardsCfg:
     action_rate = RewTerm(func=cross_mdp.action_rate_l2_cross, weight=-0.05)
     dof_pos_limits = RewTerm(func=cross_mdp.joint_pos_limits_cross, weight=-5.0)
 
+    # --- G1-only joint deviation penalties (zero for Go2 envs) ---
+    # Prevent G1's arms, waist, and hip roll/yaw from drifting far from default.
+    joint_deviation_g1_arms = RewTerm(
+        func=cross_mdp.joint_deviation_g1_l1_cross,
+        weight=-0.1,
+        params={
+            "joint_names": [
+                ".*_shoulder_.*_joint",
+                ".*_elbow_joint",
+                ".*_wrist_.*",
+            ]
+        },
+    )
+    joint_deviation_g1_waist = RewTerm(
+        func=cross_mdp.joint_deviation_g1_l1_cross,
+        weight=-1.0,
+        params={"joint_names": ["waist.*"]},
+    )
+    joint_deviation_g1_legs = RewTerm(
+        func=cross_mdp.joint_deviation_g1_l1_cross,
+        weight=-1.0,
+        params={"joint_names": [".*_hip_roll_joint", ".*_hip_yaw_joint"]},
+    )
+
 
 ##############################################################################
 # Terminations
@@ -381,10 +405,10 @@ class CrossEmbodiedTerminationsCfg:
         func=cross_mdp.base_below_threshold_cross,
         params={"min_height": 0.25},
     )
-    bad_orientation = DoneTerm(
-        func=cross_mdp.bad_orientation_cross,
-        params={"limit_angle": 0.8},
-    )
+    # bad_orientation = DoneTerm(
+    #     func=cross_mdp.bad_orientation_cross,
+    #     params={"limit_angle": 0.8},
+    # )
 
 
 ##############################################################################
@@ -520,6 +544,21 @@ class CrossEmbodiedG1Go2Env(ManagerBasedRLEnv):
             torch.zeros_like(robot.data.default_joint_pos[env_ids]),
             env_ids=env_ids,
         )
+
+    # ------------------------------------------------------------------
+    # Per-step re-parking – prevents parked robots from gravity drift
+    # ------------------------------------------------------------------
+
+    def step(self, action: torch.Tensor):
+        """Re-park inactive robots before each env step to prevent gravity drift."""
+        all_ids = torch.arange(self.num_envs, device=self.device)
+        g1_ids = all_ids[self.is_g1_env]
+        go2_ids = all_ids[~self.is_g1_env]
+        if len(g1_ids) > 0:
+            self._park_robot("robot_go2", g1_ids)
+        if len(go2_ids) > 0:
+            self._park_robot("robot_g1", go2_ids)
+        return super().step(action)
 
     # ------------------------------------------------------------------
     # Reset override – re-park inactive robots after standard reset

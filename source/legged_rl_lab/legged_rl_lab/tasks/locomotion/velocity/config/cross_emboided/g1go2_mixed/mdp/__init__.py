@@ -23,6 +23,7 @@ from .cross_embodied_mdp import (  # noqa: F401
     joint_acc_l2_cross,
     action_rate_l2_cross,
     joint_pos_limits_cross,
+    joint_deviation_g1_l1_cross,
     # ---- terminations ----
     base_below_threshold_cross,
     bad_orientation_cross,

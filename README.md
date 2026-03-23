@@ -125,6 +125,14 @@ python scripts/rsl_rl/train.py \
   --task=LeggedRLLab-Isaac-Velocity-Rough-Unitree-Go1-v0 \
   --num_envs 4096 \
   --headless
+
+CUDA_VISIBLE_DEVICES=0,1,2,3 python -m torch.distributed.run \
+    --nproc_per_node=4 \
+    --master_port=54321 \
+    scripts/rsl_rl/train.py \
+    --task LeggedRLLab-Isaac-Velocity-Rough-Unitree-Go2-v0 \
+    --num_envs 4096 \
+    --headless  
 ```
 
 ```bash
@@ -275,8 +283,7 @@ Both G1 (29 DOF) and Go2 (12 DOF) are spawned in the **same** Isaac Lab scene.
 A single PPO network (98-dim actor obs, 29-dim actions) trains on both embodiments simultaneously via a 2-dim robot-ID one-hot.
 
 ```bash
-# Default: 512 envs (256 G1 + 256 Go2)
-python scripts/rsl_rl/train_cross_embodied_shared.py --headless
+python scripts/rsl_rl/train_cross_embodied_shared.py --headless --num_envs 1024
 
 # Custom size / device
 python -m torch.distributed.run \

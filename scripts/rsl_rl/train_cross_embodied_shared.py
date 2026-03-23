@@ -91,10 +91,15 @@ simulation_app = app_launcher.app
 # With thousands of envs, Go2's rotor visuals generate tens of thousands of
 # these per-env warnings that flood stdout and block training startup.
 # ---------------------------------------------------------------------------
-import carb
-
-_carb_settings = carb.settings.get_settings()
-_carb_settings.set("/log/channels/omni.usd/level", "error")
+# Suppress "Unresolved reference prim path" USD warnings from Go2 rotor visuals.
+# These come from go2_description_base.usd referencing visual prims absent in
+# go2_description_physics.usd (rotor links + Head_upper/lower).
+# omni.log.set_channel_enabled(channel, False) disables the channel entirely.
+try:
+    import omni.log as _omni_log
+    _omni_log.get_log().set_channel_enabled("omni.usd", False)
+except Exception:
+    pass
 
 # ---------------------------------------------------------------------------
 # Post-launch imports
