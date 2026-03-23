@@ -4,10 +4,10 @@ import numpy as np
 import cv2
 import noise
 
-ROBOT = "g1"
+ROBOT = "go2"
 _SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 INPUT_SCENE_PATH = os.path.join(_SCRIPT_DIR, "scene.xml")
-OUTPUT_SCENE_PATH = os.path.join(_SCRIPT_DIR, "../../g1_deploy/assets/scene_terrain.xml")
+OUTPUT_SCENE_PATH = os.path.join(_SCRIPT_DIR, "../../go2_deploy/assets/scene_terrain.xml")
 
 
 # zyx euler angle to quaternion
@@ -132,7 +132,7 @@ class TerrainGenerator:
                          init_pos=[1.0, 0.0, 0.0],
                          yaw=0.0,
                          width=0.8,
-                         height=0.14,
+                         height=0.12,
                          length=1.5,
                          stair_nums=10,
                          top_width=0.8):

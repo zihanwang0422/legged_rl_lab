@@ -325,23 +325,49 @@ python scripts/rsl_rl/play_cross_embodied_dual.py \
 
 ## Sim2Sim
 
-Define own task:
+Terrain Generator
 
-1. Modify the yaml file in `legged_rl_lab/deploy/config`
+Use the terrain generator script follow the instruction in [terrain_tool](deploy/utils/terrain_tool/readme.md)
 
-2. Exported the `policy.pt` to `legged_rl_lab/deploy/exported_policy`
+```bash
+python3 deploy/utils/terrain_tool/terrain_generator.py
+```
 
-3. Detail sim2sim guide in  [sim2sim guide](Instruction_CN.md#sim2sim-guide)
+<details>
+<summary><b>Go2 Walk (Rough)</b></summary>
 
-4. Play the sim2sim script
+1. Modify the yaml file in `deploy/go2_deploy/config/go2_walk.yaml`
+
+2. Exported the `policy.pt` to `deploy/go2_deploy/exported_policy`
+
+3. run [sim2sim_walk.py](deploy/go2_deploy/sim2sim_walk.py)
+
 
 ```bash
 pip install mujoco
 #Walk
-python deploy/sim2sim_walk.py --mode sim --model policy.pt
-#Handstand
-python deploy/sim2sim_handstand.py --mode sim --model policy.pt
+python deploy/go2_deploy/sim2sim_walk.py --model go2_rough.pt
 ```
+</details>
+
+
+<details>
+<summary><b>G1 Walk (Rough)</b></summary>
+1. Modify the yaml file in `deploy/go2_deploy/config/go2_walk.yaml`
+
+2. Exported the `policy.pt` to `deploy/go2_deploy/exported_policy`
+
+3. run [sim2sim_walk.py](deploy/go2_deploy/sim2sim_walk.py)
+
+
+```bash
+pip install mujoco
+#Walk
+python deploy/go2_deploy/sim2sim_walk.py --model go2_rough.pt
+```
+</details>
+
+
 
 ## Sim2Real
 
