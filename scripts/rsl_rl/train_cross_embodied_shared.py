@@ -68,6 +68,14 @@ parser.add_argument("--run_name", type=str, default=None, help="Optional tag app
 parser.add_argument("--video", action="store_true", default=False, help="Record training videos.")
 parser.add_argument("--video_length", type=int, default=200, help="Video length in steps.")
 parser.add_argument("--video_interval", type=int, default=2000, help="Video recording interval (iterations).")
+parser.add_argument(
+    "--logger", type=str, default="wandb", choices={"wandb", "tensorboard", "neptune"},
+    help="Logger module to use."
+)
+parser.add_argument(
+    "--log_project_name", type=str, default="legged-rl-lab",
+    help="Name of the logging project when using wandb or neptune."
+)
 
 AppLauncher.add_app_launcher_args(parser)
 args_cli = parser.parse_args()
@@ -77,6 +85,16 @@ if args_cli.video:
 
 app_launcher = AppLauncher(args_cli)
 simulation_app = app_launcher.app
+
+# ---------------------------------------------------------------------------
+# Suppress USD stage "Unresolved reference prim path" warnings.
+# With thousands of envs, Go2's rotor visuals generate tens of thousands of
+# these per-env warnings that flood stdout and block training startup.
+# ---------------------------------------------------------------------------
+import carb
+
+_carb_settings = carb.settings.get_settings()
+_carb_settings.set("/log/channels/omni.usd/level", "error")
 
 # ---------------------------------------------------------------------------
 # Post-launch imports
@@ -131,6 +149,12 @@ def main() -> None:
 
     if args_cli.run_name:
         agent_cfg.run_name = args_cli.run_name
+
+    # Apply logger settings
+    agent_cfg.logger = args_cli.logger
+    if args_cli.logger in {"wandb", "neptune"}:
+        agent_cfg.wandb_project = args_cli.log_project_name
+        agent_cfg.neptune_project = args_cli.log_project_name
 
     # ------------------------------------------------------------------
     # 2. Build log directory

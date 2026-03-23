@@ -279,10 +279,10 @@ A single PPO network (98-dim actor obs, 29-dim actions) trains on both embodimen
 python scripts/rsl_rl/train_cross_embodied_shared.py --headless
 
 # Custom size / device
-python scripts/rsl_rl/train_cross_embodied_shared.py \
-  --num_envs 1024 \
-  --device cuda:0 \
-  --max_iterations 20000 \
+python -m torch.distributed.run \
+  --nproc_per_node=4 \
+  scripts/rsl_rl/train_cross_embodied_shared.py \
+  --num_envs 4096 \
   --headless
 ```
 

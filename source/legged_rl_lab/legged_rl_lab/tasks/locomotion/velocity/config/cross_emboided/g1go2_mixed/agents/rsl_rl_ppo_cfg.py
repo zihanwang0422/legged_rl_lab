@@ -22,6 +22,8 @@ class CrossEmbodiedG1Go2FlatPPORunnerCfg(RslRlOnPolicyRunnerCfg):
     save_interval = 50
     experiment_name = "cross_embodied_g1go2_flat"
     empirical_normalization = False
+    logger = "wandb"
+    wandb_project = "legged-rl-lab"
 
     policy = RslRlPpoActorCriticCfg(
         noise_std_type="scalar",
