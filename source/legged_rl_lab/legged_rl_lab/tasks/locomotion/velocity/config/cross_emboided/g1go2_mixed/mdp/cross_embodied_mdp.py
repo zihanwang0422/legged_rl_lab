@@ -335,20 +335,6 @@ def illegal_contact_cross(
 # ---------------------------------------------------------------------------
 
 
-@configclass
-class CrossEmbodiedJointPosActionCfg(ActionTermCfg):
-    """Configuration for :class:`CrossEmbodiedJointPosAction`."""
-
-    class_type: type = None  # filled below after class definition
-
-    scale_g1: float = 0.5
-    """Action scale applied to G1 envs (scales raw policy output before adding
-    to default joint positions)."""
-
-    scale_go2: float = 0.25
-    """Action scale applied to Go2 envs."""
-
-
 class CrossEmbodiedJointPosAction(ActionTerm):
     """Routes padded joint-position targets to the active robot per environment.
 
@@ -362,9 +348,9 @@ class CrossEmbodiedJointPosAction(ActionTerm):
     so it remains still.
     """
 
-    cfg: CrossEmbodiedJointPosActionCfg
+    cfg: "CrossEmbodiedJointPosActionCfg"
 
-    def __init__(self, cfg: CrossEmbodiedJointPosActionCfg, env: ManagerBasedEnv) -> None:
+    def __init__(self, cfg: "CrossEmbodiedJointPosActionCfg", env: ManagerBasedEnv) -> None:
         super().__init__(cfg, env)
         self._robot_g1 = self._env.scene["robot_g1"]
         self._robot_go2 = self._env.scene["robot_go2"]
@@ -451,5 +437,19 @@ class CrossEmbodiedJointPosAction(ActionTerm):
             )
 
 
-# Bind class_type forward reference after class definition
-CrossEmbodiedJointPosActionCfg.class_type = CrossEmbodiedJointPosAction
+@configclass
+class CrossEmbodiedJointPosActionCfg(ActionTermCfg):
+    """Configuration for :class:`CrossEmbodiedJointPosAction`."""
+
+    class_type: type = CrossEmbodiedJointPosAction
+
+    # asset_name is required by ActionTermCfg but unused here (robots are
+    # accessed directly via env.scene["robot_g1"] / env.scene["robot_go2"]).
+    asset_name: str = "robot_g1"
+
+    scale_g1: float = 0.5
+    """Action scale applied to G1 envs (scales raw policy output before adding
+    to default joint positions)."""
+
+    scale_go2: float = 0.25
+    """Action scale applied to Go2 envs."""

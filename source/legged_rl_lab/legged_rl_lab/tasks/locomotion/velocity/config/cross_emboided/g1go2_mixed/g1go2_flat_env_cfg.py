@@ -460,22 +460,25 @@ class CrossEmbodiedG1Go2Env(ManagerBasedRLEnv):
 
     cfg: CrossEmbodiedG1Go2FlatEnvCfg
 
-    def __init__(self, cfg: CrossEmbodiedG1Go2FlatEnvCfg, render_mode: str | None = None) -> None:
-        super().__init__(cfg, render_mode)
-
-        n = self.num_envs
+    def __init__(self, cfg: CrossEmbodiedG1Go2FlatEnvCfg, render_mode: str | None = None, **kwargs) -> None:
+        # Pre-initialize robot type tensors BEFORE super().__init__() because
+        # ObservationManager._prepare_terms() (called inside load_managers())
+        # probes obs shapes by calling each obs function once, which requires
+        # these tensors to already exist on the env object.
+        n = cfg.scene.num_envs
         n_g1 = n // 2
-        n_go2 = n - n_g1
+        device = cfg.sim.device
 
-        # --- Robot type tensors (immutable after init) ----------------------
-        self.robot_type_mask = torch.zeros(n, dtype=torch.long, device=self.device)
+        self.robot_type_mask = torch.zeros(n, dtype=torch.long, device=device)
         self.robot_type_mask[n_g1:] = 1
-
         self.is_g1_env: torch.Tensor = self.robot_type_mask == 0  # (N,) bool
-
-        self.robot_type_onehot = torch.zeros(n, 2, device=self.device)
+        self.robot_type_onehot = torch.zeros(n, 2, device=device)
         self.robot_type_onehot[:n_g1, 0] = 1.0   # G1 → [1, 0]
         self.robot_type_onehot[n_g1:, 1] = 1.0   # Go2 → [0, 1]
+
+        # gymnasium passes all registered kwargs (e.g. env_cfg_entry_point,
+        # rsl_rl_cfg_entry_point) into the constructor; discard them here.
+        super().__init__(cfg, render_mode)
 
         # --- Initial parking ------------------------------------------------
         all_g1_ids = self.is_g1_env.nonzero(as_tuple=False).view(-1)
