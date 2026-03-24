@@ -309,6 +309,110 @@ def bad_orientation_cross(
     return torch.acos(-grav[:, 2].clamp(-1.0, 1.0)) > limit_angle
 
 
+def base_height_g1_cross(
+    env: ManagerBasedRLEnv,
+    target_height: float = 0.78,
+) -> torch.Tensor:
+    """Squared base-height deviation for G1 only; zero for Go2 envs.
+
+    Without this, G1 has no incentive to stay upright.
+    Shape: ``(num_envs,)``.
+    """
+    env_z = env.scene.env_origins[:, 2]
+    g1_h = env.scene["robot_g1"].data.root_pos_w[:, 2] - env_z
+    rew = torch.square(g1_h - target_height)
+    rew[~env.is_g1_env] = 0.0
+    return rew
+
+
+def gait_g1_cross(
+    env: ManagerBasedRLEnv,
+    period: float = 0.8,
+    threshold: float = 0.55,
+    command_name: str = "base_velocity",
+) -> torch.Tensor:
+    """Bipedal alternating-ankle gait reward for G1; zero for Go2 envs.
+
+    Rewards the left-right alternating contact pattern.
+    Shape: ``(num_envs,)``.
+    """
+    sensor = env.scene.sensors["contact_forces_g1"]
+    if not hasattr(env, "_gait_g1_ankle_ids"):
+        ids, _ = sensor.find_bodies(".*ankle_roll.*")
+        env._gait_g1_ankle_ids = list(ids)
+
+    body_ids = env._gait_g1_ankle_ids
+    is_contact = sensor.data.current_contact_time[:, body_ids] > 0  # (N, 2)
+
+    offsets = [0.0, 0.5]
+    global_phase = (env.episode_length_buf * env.step_dt) % period / period  # (N,)
+    reward = torch.zeros(env.num_envs, dtype=torch.float, device=env.device)
+    for i, off in enumerate(offsets):
+        phase = (global_phase + off) % 1.0
+        is_stance = phase < threshold
+        reward += (~(is_stance ^ is_contact[:, i])).float()
+
+    if command_name is not None:
+        cmd_norm = torch.norm(env.command_manager.get_command(command_name), dim=1)
+        reward = reward * (cmd_norm > 0.1).float()
+
+    reward[~env.is_g1_env] = 0.0
+    return reward / len(offsets)
+
+
+def feet_air_time_go2_cross(
+    env: ManagerBasedRLEnv,
+    threshold: float = 0.5,
+    command_name: str = "base_velocity",
+) -> torch.Tensor:
+    """Foot air-time reward for Go2 (quadruped); zero for G1 envs.
+
+    Rewards each foot for staying in the air beyond *threshold* seconds.
+    Shape: ``(num_envs,)``.
+    """
+    sensor = env.scene.sensors["contact_forces_go2"]
+    if not hasattr(env, "_go2_foot_ids"):
+        ids, _ = sensor.find_bodies(".*_foot")
+        env._go2_foot_ids = list(ids)
+
+    body_ids = env._go2_foot_ids
+    first_contact = sensor.compute_first_contact(env.step_dt)[:, body_ids]
+    last_air_time = sensor.data.last_air_time[:, body_ids]
+    reward = torch.sum((last_air_time - threshold) * first_contact, dim=1).clamp(min=0.0)
+
+    if command_name is not None:
+        cmd_norm = torch.norm(env.command_manager.get_command(command_name), dim=1)
+        reward = reward * (cmd_norm > 0.1).float()
+
+    reward[env.is_g1_env] = 0.0
+    return reward
+
+
+def stand_still_cross(
+    env: ManagerBasedRLEnv,
+    command_name: str = "base_velocity",
+    command_threshold: float = 0.06,
+) -> torch.Tensor:
+    """Penalise joint deviation from default when commanded velocity is near zero.
+
+    Applies to the active robot per environment.
+    Shape: ``(num_envs,)``.
+    """
+    cmd_norm = torch.norm(env.command_manager.get_command(command_name)[:, :3], dim=1)
+    is_still = (cmd_norm < command_threshold).float()
+
+    g1_dev = torch.sum(
+        torch.abs(env.scene["robot_g1"].data.joint_pos - env.scene["robot_g1"].data.default_joint_pos),
+        dim=1,
+    )
+    go2_dev = torch.sum(
+        torch.abs(env.scene["robot_go2"].data.joint_pos - env.scene["robot_go2"].data.default_joint_pos),
+        dim=1,
+    )
+    deviation = torch.where(env.is_g1_env, g1_dev, go2_dev)
+    return deviation * is_still
+
+
 def illegal_contact_cross(
     env: ManagerBasedRLEnv,
     threshold: float = 1.0,

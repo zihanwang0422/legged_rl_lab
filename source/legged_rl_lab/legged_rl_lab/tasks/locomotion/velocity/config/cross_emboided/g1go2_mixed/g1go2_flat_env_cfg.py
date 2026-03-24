@@ -390,6 +390,32 @@ class CrossEmbodiedRewardsCfg:
         params={"joint_names": [".*_hip_roll_joint", ".*_hip_yaw_joint"]},
     )
 
+    # --- G1 height (critical: without this G1 has no incentive to stay upright) ---
+    base_height_g1 = RewTerm(
+        func=cross_mdp.base_height_g1_cross,
+        weight=-10.0,
+        params={"target_height": 0.78},
+    )
+
+    # --- Gait rewards ---
+    gait_g1 = RewTerm(
+        func=cross_mdp.gait_g1_cross,
+        weight=0.5,
+        params={"period": 0.8, "threshold": 0.55, "command_name": "base_velocity"},
+    )
+    feet_air_time_go2 = RewTerm(
+        func=cross_mdp.feet_air_time_go2_cross,
+        weight=0.5,
+        params={"threshold": 0.5, "command_name": "base_velocity"},
+    )
+
+    # --- Stand still: penalise joint drift when commanded to stand ---
+    stand_still = RewTerm(
+        func=cross_mdp.stand_still_cross,
+        weight=-0.5,
+        params={"command_name": "base_velocity", "command_threshold": 0.06},
+    )
+
 
 ##############################################################################
 # Terminations
@@ -405,10 +431,10 @@ class CrossEmbodiedTerminationsCfg:
         func=cross_mdp.base_below_threshold_cross,
         params={"min_height": 0.25},
     )
-    # bad_orientation = DoneTerm(
-    #     func=cross_mdp.bad_orientation_cross,
-    #     params={"limit_angle": 0.8},
-    # )
+    bad_orientation = DoneTerm(
+        func=cross_mdp.bad_orientation_cross,
+        params={"limit_angle": 0.8},
+    )
 
 
 ##############################################################################

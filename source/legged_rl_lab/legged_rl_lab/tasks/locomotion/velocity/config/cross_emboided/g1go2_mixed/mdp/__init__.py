@@ -24,6 +24,11 @@ from .cross_embodied_mdp import (  # noqa: F401
     action_rate_l2_cross,
     joint_pos_limits_cross,
     joint_deviation_g1_l1_cross,
+    # ---- additional rewards ----
+    base_height_g1_cross,
+    gait_g1_cross,
+    feet_air_time_go2_cross,
+    stand_still_cross,
     # ---- terminations ----
     base_below_threshold_cross,
     bad_orientation_cross,

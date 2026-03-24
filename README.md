@@ -272,28 +272,20 @@ python scripts/rsl_rl/train_cross_embodied_dual.py \
   --headless
 ```
 
-The script writes one combined `.pt` file under `logs/rsl_rl/policy_bank/`.
 Each robot retains its own network; the bank routes by robot type at deployment.
 
 ---
 
-#### Mode 2 — Single GPU, shared network, mixed scene （一张 GPU）
+#### Mode 2 — Single GPU, shared network, mixed scene （
 
-Both G1 (29 DOF) and Go2 (12 DOF) are spawned in the **same** Isaac Lab scene.
-A single PPO network (98-dim actor obs, 29-dim actions) trains on both embodiments simultaneously via a 2-dim robot-ID one-hot.
 
 ```bash
-python scripts/rsl_rl/train_cross_embodied_shared.py --headless --num_envs 1024
-
-# Custom size / device
 python -m torch.distributed.run \
   --nproc_per_node=4 \
   scripts/rsl_rl/train_cross_embodied_shared.py \
   --num_envs 4096 \
   --headless
 ```
-
-Or use the standard `train.py` directly with the registered task:
 
 ```bash
 python scripts/rsl_rl/train.py \
@@ -302,26 +294,10 @@ python scripts/rsl_rl/train.py \
   --headless
 ```
 
-Checkpoints are saved to `logs/rsl_rl/cross_embodied_g1go2_flat/`.
-
 ---
 
-#### Play — load a robot from a policy bank
+#### Play 
 
-```bash
-# Play G1 policy extracted from bank
-python scripts/rsl_rl/play_cross_embodied_dual.py \
-  --bank logs/rsl_rl/policy_bank/cross_embodied_g1_go2_<timestamp>.pt \
-  --robot g1 \
-  --num_envs 4
-
-# Play Go2 policy and export JIT / ONNX
-python scripts/rsl_rl/play_cross_embodied_dual.py \
-  --bank logs/rsl_rl/policy_bank/cross_embodied_g1_go2_<timestamp>.pt \
-  --robot go2 \
-  --num_envs 4 \
-  --export
-```
 
 ## Sim2Sim
 

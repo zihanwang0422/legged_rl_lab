@@ -64,6 +64,7 @@ parser.add_argument(
     help="Resume training from the latest checkpoint in the experiment directory.",
 )
 parser.add_argument("--checkpoint", type=str, default=None, help="Explicit checkpoint path to resume from.")
+parser.add_argument("--load_run", type=str, default=None, help="Run directory name (e.g. 2026-03-23_20-00-32) to resume from.")
 parser.add_argument("--run_name", type=str, default=None, help="Optional tag appended to the run directory.")
 parser.add_argument("--video", action="store_true", default=False, help="Record training videos.")
 parser.add_argument("--video_length", type=int, default=200, help="Video length in steps.")
@@ -178,11 +179,14 @@ def main() -> None:
     # 3. Resolve checkpoint for resuming
     # ------------------------------------------------------------------
     resume_path: str | None = None
-    if args_cli.checkpoint:
+    if args_cli.checkpoint and os.path.isabs(args_cli.checkpoint):
         resume_path = args_cli.checkpoint
         print(f"[INFO] Resuming from explicit checkpoint: {resume_path}")
-    elif args_cli.resume:
-        resume_path = get_checkpoint_path(log_root_path, agent_cfg.load_run, agent_cfg.load_checkpoint)
+    elif args_cli.load_run or args_cli.checkpoint or args_cli.resume:
+        load_run = args_cli.load_run if args_cli.load_run else agent_cfg.load_run
+        load_checkpoint = args_cli.checkpoint if args_cli.checkpoint else agent_cfg.load_checkpoint
+        resume_path = get_checkpoint_path(log_root_path, load_run, load_checkpoint)
+        print(f"[INFO] Resuming from: {resume_path}")
         print(f"[INFO] Resuming from: {resume_path}")
 
     # ------------------------------------------------------------------
