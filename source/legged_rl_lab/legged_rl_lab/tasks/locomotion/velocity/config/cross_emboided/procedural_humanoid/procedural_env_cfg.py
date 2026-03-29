@@ -87,9 +87,11 @@ class ProceduralHumanoidFlatEnvCfg(LocomotionVelocityRoughEnvCfg):
         self.observations.critic.height_scan = None
 
         from isaaclab.managers import ObservationTermCfg as ObsTerm
-        from legged_rl_lab.tasks.locomotion.velocity.mdp import observations
+        from legged_rl_lab.tasks.locomotion.velocity.config.cross_emboided.g1go2_mixed.mdp import (
+            morphology_params,
+        )
 
-        self.observations.policy.morphology_params = ObsTerm(func=observations.morphology_params)
+        self.observations.policy.morphology_params = ObsTerm(func=morphology_params)
 
         self.observations.policy.base_lin_vel.scale = 0.2
         self.observations.policy.base_lin_vel.clip = (-100.0, 100.0)
@@ -218,9 +220,11 @@ class ProceduralHumanoidRoughEnvCfg(LocomotionVelocityRoughEnvCfg):
         self.scene.replicate_physics = False
 
         from isaaclab.managers import ObservationTermCfg as ObsTerm
-        from legged_rl_lab.tasks.locomotion.velocity.mdp import observations
+        from legged_rl_lab.tasks.locomotion.velocity.config.cross_emboided.g1go2_mixed.mdp import (
+            morphology_params,
+        )
 
-        self.observations.policy.morphology_params = ObsTerm(func=observations.morphology_params)
+        self.observations.policy.morphology_params = ObsTerm(func=morphology_params)
 
         self.observations.policy.base_lin_vel.scale = 0.2
         self.observations.policy.base_lin_vel.clip = (-100.0, 100.0)

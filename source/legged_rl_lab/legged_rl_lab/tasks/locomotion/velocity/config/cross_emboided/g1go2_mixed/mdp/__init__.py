@@ -3,6 +3,14 @@
 
 """MDP terms for the cross-embodied G1 + Go2 mixed scene."""
 
+from .procedural_obs import (  # noqa: F401
+    phase,
+    morphology_params,
+    modify_procedural_articulations,
+    setup_morphology_params,
+    setup_cross_embodied_morphology_params,
+)
+
 from .cross_embodied_mdp import (  # noqa: F401
     # ---- observations ----
     robot_type_id,
@@ -29,6 +37,15 @@ from .cross_embodied_mdp import (  # noqa: F401
     gait_g1_cross,
     feet_air_time_go2_cross,
     stand_still_cross,
+    # ---- G1-specific feet ----
+    feet_slide_g1_cross,
+    feet_clearance_g1_cross,
+    feet_air_time_g1_cross,
+    undesired_contacts_g1_cross,
+    # ---- Go2-specific feet / contact ----
+    feet_slide_go2_cross,
+    undesired_contacts_go2_cross,
+    joint_torques_go2_cross,
     # ---- terminations ----
     base_below_threshold_cross,
     bad_orientation_cross,

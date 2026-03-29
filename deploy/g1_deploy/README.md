@@ -18,7 +18,7 @@ pip install torch numpy scipy pyyaml mujoco pygame
 ### Startup
 
 ```bash
-python deploy/g1_deploy/sim2sim_walk.py --model policy.pt --config g1_walk.yaml
+python sim2sim_walk.py --model g1_flat_1.pt --config g1_walk.yaml
 ```
 
 ### Gamesir 

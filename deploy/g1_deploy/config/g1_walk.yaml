@@ -5,33 +5,38 @@ control_dt: 0.02
 sim_dt: 0.005
 control_decimation: 4
 
-policy_path: "exported_policy/g1_walk.pt"
+policy_path: "exported_policy/g1_flat_1.pt"
 history_length: 1
 
-# ========== PD gains (Isaac Order used by policy) ==========
-# MuJoCo joint order (29 DOF):
-#  [ 0] left_hip_pitch       [ 1] left_hip_roll        [ 2] left_hip_yaw
-#  [ 3] left_knee            [ 4] left_ankle_pitch     [ 5] left_ankle_roll
-#  [ 6] right_hip_pitch      [ 7] right_hip_roll       [ 8] right_hip_yaw
-#  [ 9] right_knee           [10] right_ankle_pitch    [11] right_ankle_roll
-#  [12] waist_yaw            [13] waist_roll           [14] waist_pitch
-#  [15] left_shoulder_pitch  [16] left_shoulder_roll   [17] left_shoulder_yaw
-#  [18] left_elbow           [19] left_wrist_roll      [20] left_wrist_pitch
-#  [21] left_wrist_yaw       [22] right_shoulder_pitch [23] right_shoulder_roll
-#  [24] right_shoulder_yaw   [25] right_elbow          [26] right_wrist_roll
-#  [27] right_wrist_pitch    [28] right_wrist_yaw
+# ========== PD gains (Isaac policy order) ==========
+# kps/kds are in Isaac policy order:
+# [ 0] L/R hip_pitch, waist_yaw
+# [ 3] L/R hip_roll,  waist_roll
+# [ 6] L/R hip_yaw,   waist_pitch
+# [ 9] L/R knee,      L/R shoulder_pitch
+# [13] L/R ankle_pitch, L/R shoulder_roll
+# [17] L/R ankle_roll,  L/R shoulder_yaw
+# [21] L/R elbow,    L/R wrist_roll
+# [25] L/R wrist_pitch, L/R wrist_yaw
+kps: [100.0, 100.0, 200.0,      # hip_pitch(L,R), waist_yaw
+      100.0, 100.0,  40.0,      # hip_roll(L,R),  waist_roll
+      100.0, 100.0,  40.0,      # hip_yaw(L,R),   waist_pitch
+      150.0, 150.0,  40.0,  40.0, # knee(L,R),      shoulder_pitch(L,R)
+       40.0,  40.0,  40.0,  40.0, # ankle_pitch(L,R), shoulder_roll(L,R)
+       40.0,  40.0,  40.0,  40.0, # ankle_roll(L,R),  shoulder_yaw(L,R)
+       40.0,  40.0,              # elbow(L,R)
+       40.0,  40.0,  40.0,  40.0, # wrist_roll(L,R), wrist_pitch(L,R)
+       40.0,  40.0]              # wrist_yaw(L,R)
 
-kps: [100.0, 100.0, 100.0, 150.0, 40.0, 40.0,   # left leg
-  100.0, 100.0, 100.0, 150.0, 40.0, 40.0,    # right leg
-  200.0, 40.0, 40.0,                          # waist
-  40.0, 40.0, 40.0, 40.0, 40.0, 40.0, 40.0,  # left arm
-  40.0, 40.0, 40.0, 40.0, 40.0, 40.0, 40.0]  # right arm
-
-kds: [2.0, 2.0, 2.0, 4.0, 2.0, 2.0,             # left leg
-  2.0, 2.0, 2.0, 4.0, 2.0, 2.0,              # right leg
-  5.0, 5.0, 5.0,                              # waist
-  1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0,         # left arm
-  1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]         # right arm
+kds: [2.0, 2.0, 5.0,            # hip_pitch(L,R),   waist_yaw
+      2.0, 2.0, 5.0,            # hip_roll(L,R),    waist_roll
+      2.0, 2.0, 5.0,            # hip_yaw(L,R),     waist_pitch
+      4.0, 4.0, 1.0, 1.0,       # knee(L,R),        shoulder_pitch(L,R)
+      2.0, 2.0, 1.0, 1.0,       # ankle_pitch(L,R), shoulder_roll(L,R)
+      2.0, 2.0, 1.0, 1.0,       # ankle_roll(L,R),  shoulder_yaw(L,R)
+      1.0, 1.0,                  # elbow(L,R)
+      1.0, 1.0, 1.0, 1.0,       # wrist_roll(L,R),  wrist_pitch(L,R)
+      1.0, 1.0]                  # wrist_yaw(L,R)
 
 # ========== Joint ordering configuration(MuJoCo Order) ==========
 # MuJoCo joint names (in actuator order from XML)

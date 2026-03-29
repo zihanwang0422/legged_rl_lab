@@ -240,44 +240,18 @@ python scripts/amp/verify_joint_order.py
 - `amp_replay_buffer_size`: 1,000,000
 
 ### Metamorphology
-#### Train
+
 ```bash
+#Train
 python scripts/rsl_rl/train.py     --task LeggedRLLab-Isaac-Velocity-Flat-Procedural-Quadruped-v0     --num_envs 4096     --headless
 ```
-#### Play
+
 ```bash
+#Play
 python scripts/rsl_rl/play.py     --task LeggedRLLab-Isaac-Velocity-Flat-Procedural-Quadruped-v0     --num_envs 32
 ```
 
 ### Cross-Embodied (G1 + Go2)
-
-Three training modes are available depending on your hardware:
-
----
-
-#### Mode 1 — Dual GPU, independent networks → policy bank （两张 GPU）
-
-Launch G1 on GPU0 and Go2 on GPU1 in parallel, then save a merged policy bank file:
-
-```bash
-python scripts/rsl_rl/train_cross_embodied_dual.py \
-  --g1-gpu 0 \
-  --go2-gpu 1 \
-  --g1-task LeggedRLLab-Isaac-Velocity-Flat-Unitree-G1-v0 \
-  --go2-task LeggedRLLab-Isaac-Velocity-Flat-Unitree-Go2-v0 \
-  --g1-num-envs 2048 \
-  --go2-num-envs 2048 \
-  --g1-max-iterations 15000 \
-  --go2-max-iterations 15000 \
-  --headless
-```
-
-Each robot retains its own network; the bank routes by robot type at deployment.
-
----
-
-#### Mode 2 — Single GPU, shared network, mixed scene （
-
 
 ```bash
 python -m torch.distributed.run \
@@ -285,18 +259,20 @@ python -m torch.distributed.run \
   scripts/rsl_rl/train_cross_embodied_shared.py \
   --num_envs 4096 \
   --headless
+
+python scripts/rsl_rl/train_cross_embodied_shared.py \
+  --num_envs 4096 \
+  --headless 
 ```
 
 ```bash
-python scripts/rsl_rl/train.py \
-  --task LeggedRLLab-Isaac-Velocity-Flat-G1Go2-Mixed-v0 \
-  --num_envs 512 \
-  --headless
+#Play
+python scripts/rsl_rl/play_cross_embodied_shared.py \
+  --num_envs 32 
 ```
 
 ---
 
-#### Play 
 
 
 ## Sim2Sim

@@ -262,16 +262,16 @@ class Controller:
             )
 
         # Group-major reorganization
-        # [omega×5, gravity×5, cmd×5, pos×5, vel×5, action×5]
-        obs_arr = self.current_obs_history  # (5, 96)
-        n = self.config.num_actions  # 29
+        # [omega×H, gravity×H, cmd×H, pos×H, vel×H, action×H], H=history_length
+        obs_arr = self.current_obs_history  # (H, num_obs)
+        n = self.config.num_actions
         obs_input = np.concatenate([
-            obs_arr[:, 0:3].reshape(-1),          # omega × 5 frames
-            obs_arr[:, 3:6].reshape(-1),          # gravity × 5 frames
-            obs_arr[:, 6:9].reshape(-1),          # cmd × 5 frames
-            obs_arr[:, 9:9+n].reshape(-1),        # joint pos × 5 frames
-            obs_arr[:, 9+n:9+2*n].reshape(-1),    # joint vel × 5 frames
-            obs_arr[:, 9+2*n:9+3*n].reshape(-1),  # last action × 5 frames
+            obs_arr[:, 0:3].reshape(-1),          # omega × H frames
+            obs_arr[:, 3:6].reshape(-1),          # gravity × H frames
+            obs_arr[:, 6:9].reshape(-1),          # cmd × H frames
+            obs_arr[:, 9:9+n].reshape(-1),        # joint pos × H frames
+            obs_arr[:, 9+n:9+2*n].reshape(-1),    # joint vel × H frames
+            obs_arr[:, 9+2*n:9+3*n].reshape(-1),  # last action × H frames
         ])
         obs_batch = obs_input[np.newaxis, :].astype(np.float32)
 

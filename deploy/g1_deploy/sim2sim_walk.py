@@ -144,8 +144,9 @@ class Sim2SimController:
         
         # 7. 初始化缓冲区与增益 (直接从 config 读取)
         self.obs_history = deque([np.zeros(96, dtype=np.float32)] * c.history_length, maxlen=c.history_length)
-        self.kp = c.kps
-        self.kd = c.kds
+        # kps/kds are stored in Isaac order; pd_controller works in MuJoCo order
+        self.kp = c.kps[c.isaac_to_mujoco_map]
+        self.kd = c.kds[c.isaac_to_mujoco_map]
         self.last_action = np.zeros(self.num_joints, dtype=np.float32)
         
         # 8. 初始姿态对齐 (Isaac -> MuJoCo)
@@ -190,8 +191,8 @@ class Sim2SimController:
         c = new_cfg
         self.policy = torch.jit.load(policy_path, map_location='cpu')
         self.policy_decimation = int(c.control_dt / c.sim_dt)
-        self.kp = c.kps
-        self.kd = c.kds
+        self.kp = c.kps[c.isaac_to_mujoco_map]
+        self.kd = c.kds[c.isaac_to_mujoco_map]
         self.default_qpos_mj = c.default_joint_pos[c.isaac_to_mujoco_map]
         self.target_qpos_mj = self.default_qpos_mj.copy()
         # Reset observation buffers
@@ -248,7 +249,12 @@ class Sim2SimController:
 
                 # Get MuJoCo internal simulation time
                 sim_time = self.data.time
-                
+
+                # Apply mouse perturbation force from viewer UI:
+                #   Double-click a body to select it, then Ctrl + Right-drag to push
+                self.data.xfrc_applied[:] = 0
+                mujoco.mjv_applyPerturbForce(self.model, self.data, viewer.perturb)
+
                 self.pd_controller(self.target_qpos_mj, np.zeros_like(self.kd))
                 
                 mujoco.mj_step(self.model, self.data)

@@ -28,6 +28,8 @@ import torch.nn.functional as F
 from isaaclab.managers import ActionTerm, ActionTermCfg, SceneEntityCfg
 from isaaclab.utils import configclass
 
+from isaaclab.utils.math import quat_apply_inverse, yaw_quat
+
 if TYPE_CHECKING:
     from isaaclab.envs import ManagerBasedEnv, ManagerBasedRLEnv
 
@@ -134,18 +136,25 @@ def track_lin_vel_xy_cross(
     command_name: str,
     std: float,
 ) -> torch.Tensor:
-    """Gaussian velocity-tracking reward for the active robot (XY plane).
+    """Velocity-tracking reward in yaw-frame for the active robot.
+
+    - G1 envs: yaw-frame XY velocity (same as track_lin_vel_xy_yaw_frame_exp).
+    - Go2 envs: body-frame XY velocity (quadruped convention).
 
     Shape: ``(num_envs,)``.
     """
-    g1_vel = env.scene["robot_g1"].data.root_lin_vel_b[:, :2]   # (N, 2)
-    go2_vel = env.scene["robot_go2"].data.root_lin_vel_b[:, :2]  # (N, 2)
-    cmd = env.command_manager.get_command(command_name)[:, :2]   # (N, 2)
+    cmd = env.command_manager.get_command(command_name)[:, :2]  # (N, 2)
 
-    mask = env.is_g1_env.unsqueeze(-1)
-    vel = torch.where(mask, g1_vel, go2_vel)
+    # G1: project to yaw-frame to decouple from heading (fixes backward-only issue)
+    g1 = env.scene["robot_g1"]
+    g1_vel_yaw = quat_apply_inverse(yaw_quat(g1.data.root_quat_w), g1.data.root_lin_vel_w[:, :3])  # (N, 3)
+    g1_error = torch.sum(torch.square(cmd - g1_vel_yaw[:, :2]), dim=1)
 
-    error = torch.sum(torch.square(cmd - vel), dim=1)
+    # Go2: body-frame XY (quadruped training convention)
+    go2_vel = env.scene["robot_go2"].data.root_lin_vel_b[:, :2]
+    go2_error = torch.sum(torch.square(cmd - go2_vel), dim=1)
+
+    error = torch.where(env.is_g1_env, g1_error, go2_error)
     return torch.exp(-error / std**2)
 
 
@@ -154,16 +163,24 @@ def track_ang_vel_z_cross(
     command_name: str,
     std: float,
 ) -> torch.Tensor:
-    """Gaussian yaw-rate tracking reward for the active robot.
+    """Yaw-rate tracking reward for the active robot.
+
+    - G1: world-frame yaw rate (same as track_ang_vel_z_world_exp).
+    - Go2: body-frame yaw rate.
 
     Shape: ``(num_envs,)``.
     """
-    g1_yaw = env.scene["robot_g1"].data.root_ang_vel_b[:, 2]
-    go2_yaw = env.scene["robot_go2"].data.root_ang_vel_b[:, 2]
     cmd_yaw = env.command_manager.get_command(command_name)[:, 2]  # (N,)
 
-    yaw = torch.where(env.is_g1_env, g1_yaw, go2_yaw)
-    error = torch.square(cmd_yaw - yaw)
+    # G1: world-frame yaw rate
+    g1_yaw = env.scene["robot_g1"].data.root_ang_vel_w[:, 2]
+    g1_error = torch.square(cmd_yaw - g1_yaw)
+
+    # Go2: body-frame yaw rate
+    go2_yaw = env.scene["robot_go2"].data.root_ang_vel_b[:, 2]
+    go2_error = torch.square(cmd_yaw - go2_yaw)
+
+    error = torch.where(env.is_g1_env, g1_error, go2_error)
     return torch.exp(-error / std**2)
 
 
@@ -411,6 +428,191 @@ def stand_still_cross(
     )
     deviation = torch.where(env.is_g1_env, g1_dev, go2_dev)
     return deviation * is_still
+
+
+# ---------------------------------------------------------------------------
+# G1-specific feet rewards
+# ---------------------------------------------------------------------------
+
+
+def feet_slide_g1_cross(env: ManagerBasedRLEnv) -> torch.Tensor:
+    """Penalise ankle_roll sliding while in contact for G1; zero for Go2 envs.
+
+    Shape: ``(num_envs,)``.
+    """
+    sensor = env.scene.sensors["contact_forces_g1"]
+    asset = env.scene["robot_g1"]
+    if not hasattr(env, "_slide_g1_body_ids"):
+        env._slide_g1_body_ids = asset.find_bodies(".*ankle_roll.*")[0]
+        env._slide_g1_contact_ids = sensor.find_bodies(".*ankle_roll.*")[0]
+
+    contacts = (
+        sensor.data.net_forces_w_history[:, :, env._slide_g1_contact_ids, :]
+        .norm(dim=-1)
+        .max(dim=1)[0] > 1.0
+    )  # (N, num_feet)
+    body_vel = asset.data.body_lin_vel_w[:, env._slide_g1_body_ids, :2]  # (N, num_feet, 2)
+    reward = torch.sum(body_vel.norm(dim=-1) * contacts, dim=1)
+
+    reward[~env.is_g1_env] = 0.0
+    return reward
+
+
+def feet_clearance_g1_cross(
+    env: ManagerBasedRLEnv,
+    target_height: float = 0.1,
+    std: float = 0.05,
+    tanh_mult: float = 2.0,
+    command_name: str = "base_velocity",
+) -> torch.Tensor:
+    """Foot-clearance reward for G1 (ankle_roll bodies); zero for Go2 envs.
+
+    Rewards the swing foot for reaching *target_height* above the ground.
+    Shape: ``(num_envs,)``.
+    """
+    asset = env.scene["robot_g1"]
+    if not hasattr(env, "_clear_g1_body_ids"):
+        env._clear_g1_body_ids = asset.find_bodies(".*ankle_roll.*")[0]
+
+    foot_pos_w = asset.data.body_pos_w[:, env._clear_g1_body_ids, :]  # (N, 2, 3)
+    terrain_h = env.scene.terrain.env_origins[:, 2].unsqueeze(1)  # (N, 1)
+    relative_h = foot_pos_w[:, :, 2] - terrain_h  # (N, 2)
+
+    foot_vel_xy = asset.data.body_lin_vel_w[:, env._clear_g1_body_ids, :2].norm(dim=-1)  # (N, 2)
+    swing_mask = torch.tanh(tanh_mult * foot_vel_xy)
+
+    h_error = torch.square(relative_h - target_height)
+    swing_sum = torch.sum(swing_mask, dim=1)
+    avg_error = torch.sum(h_error * swing_mask, dim=1) / (swing_sum + 1e-6)
+    reward = torch.exp(-avg_error / std)
+
+    # Avoid rewarding standing still: only reward when there is swing motion and non-trivial command.
+    has_swing = (swing_sum > 0.1).float()
+    if command_name is not None:
+        cmd_norm = torch.norm(env.command_manager.get_command(command_name)[:, :2], dim=1)
+        has_swing = has_swing * (cmd_norm > 0.1).float()
+    reward = reward * has_swing
+
+    reward[~env.is_g1_env] = 0.0
+    return reward
+
+
+def feet_air_time_g1_cross(
+    env: ManagerBasedRLEnv,
+    threshold: float = 0.4,
+    command_name: str = "base_velocity",
+) -> torch.Tensor:
+    """Foot air-time reward for G1 (ankle_roll); zero for Go2 envs.
+
+    Shape: ``(num_envs,)``.
+    """
+    sensor = env.scene.sensors["contact_forces_g1"]
+    if not hasattr(env, "_air_g1_contact_ids"):
+        env._air_g1_contact_ids = sensor.find_bodies(".*ankle_roll.*")[0]
+
+    body_ids = env._air_g1_contact_ids
+    first_contact = sensor.compute_first_contact(env.step_dt)[:, body_ids]
+    last_air_time = sensor.data.last_air_time[:, body_ids]
+    reward = torch.sum((last_air_time - threshold) * first_contact, dim=1).clamp(min=0.0)
+
+    if command_name is not None:
+        cmd_norm = torch.norm(env.command_manager.get_command(command_name)[:, :2], dim=1)
+        reward = reward * (cmd_norm > 0.1).float()
+
+    reward[~env.is_g1_env] = 0.0
+    return reward
+
+
+def undesired_contacts_g1_cross(
+    env: ManagerBasedRLEnv,
+    threshold: float = 1.0,
+) -> torch.Tensor:
+    """Penalise non-ankle contacts for G1 (uses contact_forces_g1 sensor); zero for Go2 envs.
+
+    The contact_forces_g1 sensor should cover all bodies *except* ankle_roll so
+    that only undesired contacts are counted.
+    Shape: ``(num_envs,)``.
+    """
+    sensor = env.scene.sensors["contact_forces_g1"]
+    # Exclude normal foot contacts (ankle/foot) and keep the rest as undesired.
+    if not hasattr(env, "_undesired_g1_ids"):
+        all_ids = list(range(sensor.data.net_forces_w.shape[1]))
+        allowed_ids = set(sensor.find_bodies(".*(ankle|foot).*")[0])
+        env._undesired_g1_ids = [i for i in all_ids if i not in allowed_ids]
+
+    if not env._undesired_g1_ids:
+        return torch.zeros(env.num_envs, device=env.device)
+
+    ids = env._undesired_g1_ids
+    net_forces = sensor.data.net_forces_w[:, ids, :]
+    is_contact = net_forces.norm(dim=-1).max(dim=-1)[0] > threshold  # (N,)
+
+    reward = is_contact.float()
+    reward[~env.is_g1_env] = 0.0
+    return reward
+
+
+# ---------------------------------------------------------------------------
+# Go2-specific feet / contact rewards
+# ---------------------------------------------------------------------------
+
+
+def feet_slide_go2_cross(env: ManagerBasedRLEnv) -> torch.Tensor:
+    """Penalise foot sliding while in contact for Go2; zero for G1 envs.
+
+    Shape: ``(num_envs,)``.
+    """
+    sensor = env.scene.sensors["contact_forces_go2"]
+    asset = env.scene["robot_go2"]
+    if not hasattr(env, "_slide_go2_body_ids"):
+        env._slide_go2_body_ids = asset.find_bodies(".*_foot")[0]
+        env._slide_go2_contact_ids = sensor.find_bodies(".*_foot")[0]
+
+    contacts = (
+        sensor.data.net_forces_w_history[:, :, env._slide_go2_contact_ids, :]
+        .norm(dim=-1)
+        .max(dim=1)[0] > 1.0
+    )  # (N, num_feet)
+    body_vel = asset.data.body_lin_vel_w[:, env._slide_go2_body_ids, :2]  # (N, num_feet, 2)
+    reward = torch.sum(body_vel.norm(dim=-1) * contacts, dim=1)
+
+    reward[env.is_g1_env] = 0.0
+    return reward
+
+
+def undesired_contacts_go2_cross(
+    env: ManagerBasedRLEnv,
+    threshold: float = 1.0,
+) -> torch.Tensor:
+    """Penalise calf/thigh/hip/head contacts for Go2; zero for G1 envs.
+
+    Shape: ``(num_envs,)``.
+    """
+    sensor = env.scene.sensors["contact_forces_go2"]
+    if not hasattr(env, "_undesired_go2_ids"):
+        env._undesired_go2_ids = sensor.find_bodies(".*_(calf|thigh|hip)")[0]
+
+    ids = env._undesired_go2_ids
+    if len(ids) == 0:
+        return torch.zeros(env.num_envs, device=env.device)
+
+    net_forces = sensor.data.net_forces_w[:, ids, :]
+    is_contact = net_forces.norm(dim=-1).max(dim=-1)[0] > threshold  # (N,)
+
+    reward = is_contact.float()
+    reward[env.is_g1_env] = 0.0
+    return reward
+
+
+def joint_torques_go2_cross(env: ManagerBasedRLEnv) -> torch.Tensor:
+    """L2 penalty on joint torques for Go2; zero for G1 envs.
+
+    Shape: ``(num_envs,)``.
+    """
+    torques = env.scene["robot_go2"].data.applied_torque
+    reward = torch.sum(torch.square(torques), dim=1)
+    reward[env.is_g1_env] = 0.0
+    return reward
 
 
 def illegal_contact_cross(

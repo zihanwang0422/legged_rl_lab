@@ -340,34 +340,124 @@ class CrossEmbodiedEventsCfg:
 
 @configclass
 class CrossEmbodiedRewardsCfg:
-    """Shared reward terms for both G1 and Go2 robots."""
+    """Reward terms for the cross-embodied G1 + Go2 policy.
 
-    # --- task rewards ---
+    Structure:
+      1. Shared rewards  – apply to both robots with unified weights.
+      2. Go2-specific   – reference UnitreeGo2FlatEnvCfg weights.
+      3. G1-specific    – reference G1FlatEnvCfg weights.
+    """
+
+    # =========================================================================
+    # 1. Shared rewards (same for G1 and Go2)
+    # =========================================================================
+
+    # Velocity tracking — yaw-frame for G1, body-frame for Go2
     track_lin_vel_xy = RewTerm(
         func=cross_mdp.track_lin_vel_xy_cross,
         weight=1.0,
-        params={"command_name": "base_velocity", "std": math.sqrt(0.25)},
+        params={"command_name": "base_velocity", "std": math.sqrt(0.5)},
     )
     track_ang_vel_z = RewTerm(
         func=cross_mdp.track_ang_vel_z_cross,
-        weight=0.5,
-        params={"command_name": "base_velocity", "std": math.sqrt(0.25)},
+        weight=1.0,
+        params={"command_name": "base_velocity", "std": math.sqrt(0.5)},
     )
+
     alive = RewTerm(func=cross_mdp.is_alive_cross, weight=0.15)
 
-    # --- base penalties ---
+    # Base penalties
     lin_vel_z_l2 = RewTerm(func=cross_mdp.lin_vel_z_l2_cross, weight=-2.0)
     ang_vel_xy_l2 = RewTerm(func=cross_mdp.ang_vel_xy_l2_cross, weight=-0.05)
-    flat_orientation_l2 = RewTerm(func=cross_mdp.flat_orientation_l2_cross, weight=-5.0)
+    flat_orientation_l2 = RewTerm(func=cross_mdp.flat_orientation_l2_cross, weight=-2.0)
 
-    # --- joint / action penalties ---
+    # Joint / action penalties
     joint_vel = RewTerm(func=cross_mdp.joint_vel_l2_cross, weight=-0.001)
     joint_acc = RewTerm(func=cross_mdp.joint_acc_l2_cross, weight=-2.5e-7)
-    action_rate = RewTerm(func=cross_mdp.action_rate_l2_cross, weight=-0.05)
-    dof_pos_limits = RewTerm(func=cross_mdp.joint_pos_limits_cross, weight=-5.0)
+    action_rate = RewTerm(func=cross_mdp.action_rate_l2_cross, weight=-0.01)
+    dof_pos_limits = RewTerm(func=cross_mdp.joint_pos_limits_cross, weight=-2.0)
 
-    # --- G1-only joint deviation penalties (zero for Go2 envs) ---
-    # Prevent G1's arms, waist, and hip roll/yaw from drifting far from default.
+    # Stand-still penalty (shared, penalises joint drift when cmd ≈ 0)
+    stand_still = RewTerm(
+        func=cross_mdp.stand_still_cross,
+        weight=-0.5,
+        params={"command_name": "base_velocity", "command_threshold": 0.06},
+    )
+
+    # =========================================================================
+    # 2. Go2-specific rewards  (ref: UnitreeGo2FlatEnvCfg)
+    # =========================================================================
+
+    # Undesired contacts on calf / thigh / hip
+    undesired_contacts_go2 = RewTerm(
+        func=cross_mdp.undesired_contacts_go2_cross,
+        weight=-1.0,
+    )
+
+    # Foot air-time (encourages trot gait)
+    feet_air_time_go2 = RewTerm(
+        func=cross_mdp.feet_air_time_go2_cross,
+        weight=0.1,
+        params={"threshold": 0.5, "command_name": "base_velocity"},
+    )
+
+    # Foot sliding penalty
+    feet_slide_go2 = RewTerm(
+        func=cross_mdp.feet_slide_go2_cross,
+        weight=-0.1,
+    )
+
+    # Joint torques (Go2 only)
+    joint_torques_go2 = RewTerm(
+        func=cross_mdp.joint_torques_go2_cross,
+        weight=-2e-4,
+    )
+
+    # =========================================================================
+    # 3. G1-specific rewards  (ref: G1FlatEnvCfg)
+    # =========================================================================
+
+    # Height maintenance (without this G1 has no incentive to stay upright)
+    base_height_g1 = RewTerm(
+        func=cross_mdp.base_height_g1_cross,
+        weight=-2.0,
+        params={"target_height": 0.78},
+    )
+
+    # Bipedal gait rhythm
+    gait_g1 = RewTerm(
+        func=cross_mdp.gait_g1_cross,
+        weight=0.5,
+        params={"period": 0.8, "threshold": 0.55, "command_name": "base_velocity"},
+    )
+
+    # Foot clearance during swing
+    feet_clearance_g1 = RewTerm(
+        func=cross_mdp.feet_clearance_g1_cross,
+        weight=1.0,
+        params={"target_height": 0.1, "std": 0.05, "tanh_mult": 2.0, "command_name": "base_velocity"},
+    )
+
+    # Foot air-time
+    feet_air_time_g1 = RewTerm(
+        func=cross_mdp.feet_air_time_g1_cross,
+        weight=0.2,
+        params={"threshold": 0.4, "command_name": "base_velocity"},
+    )
+
+    # Foot sliding penalty
+    feet_slide_g1 = RewTerm(
+        func=cross_mdp.feet_slide_g1_cross,
+        weight=-0.2,
+    )
+
+    # Undesired contacts (non-ankle bodies)
+    undesired_contacts_g1 = RewTerm(
+        func=cross_mdp.undesired_contacts_g1_cross,
+        weight=-1.0,
+    )
+
+    # Joint deviation — keep arms / waist / hip roll&yaw near default
     joint_deviation_g1_arms = RewTerm(
         func=cross_mdp.joint_deviation_g1_l1_cross,
         weight=-0.1,
@@ -390,31 +480,6 @@ class CrossEmbodiedRewardsCfg:
         params={"joint_names": [".*_hip_roll_joint", ".*_hip_yaw_joint"]},
     )
 
-    # --- G1 height (critical: without this G1 has no incentive to stay upright) ---
-    base_height_g1 = RewTerm(
-        func=cross_mdp.base_height_g1_cross,
-        weight=-10.0,
-        params={"target_height": 0.78},
-    )
-
-    # --- Gait rewards ---
-    gait_g1 = RewTerm(
-        func=cross_mdp.gait_g1_cross,
-        weight=0.5,
-        params={"period": 0.8, "threshold": 0.55, "command_name": "base_velocity"},
-    )
-    feet_air_time_go2 = RewTerm(
-        func=cross_mdp.feet_air_time_go2_cross,
-        weight=0.5,
-        params={"threshold": 0.5, "command_name": "base_velocity"},
-    )
-
-    # --- Stand still: penalise joint drift when commanded to stand ---
-    stand_still = RewTerm(
-        func=cross_mdp.stand_still_cross,
-        weight=-0.5,
-        params={"command_name": "base_velocity", "command_threshold": 0.06},
-    )
 
 
 ##############################################################################
@@ -535,6 +600,10 @@ class CrossEmbodiedG1Go2Env(ManagerBasedRLEnv):
         all_go2_ids = (~self.is_g1_env).nonzero(as_tuple=False).view(-1)
         self._park_robot("robot_go2", all_g1_ids)   # park Go2 in G1 envs
         self._park_robot("robot_g1", all_go2_ids)   # park G1 in Go2 envs
+
+        # --- Morphology parameters (for procedural-obs) --------------------
+        from .mdp.procedural_obs import setup_cross_embodied_morphology_params
+        setup_cross_embodied_morphology_params(self)
 
     # ------------------------------------------------------------------
     # Parking helpers

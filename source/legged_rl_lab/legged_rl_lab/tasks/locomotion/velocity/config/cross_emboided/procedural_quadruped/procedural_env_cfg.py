@@ -95,8 +95,10 @@ class ProceduralQuadrupedFlatEnvCfg(LocomotionVelocityRoughEnvCfg):
         
         # Add morphology parameters as observation for heterogeneous training
         from isaaclab.managers import ObservationTermCfg as ObsTerm
-        from legged_rl_lab.tasks.locomotion.velocity.mdp import observations
-        self.observations.policy.morphology_params = ObsTerm(func=observations.morphology_params)
+        from legged_rl_lab.tasks.locomotion.velocity.config.cross_emboided.g1go2_mixed.mdp import (
+            morphology_params,
+        )
+        self.observations.policy.morphology_params = ObsTerm(func=morphology_params)
         
         # Add scale and clip to observations for better training stability
         self.observations.policy.base_lin_vel.scale = 0.2
