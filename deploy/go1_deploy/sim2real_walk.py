@@ -57,32 +57,6 @@ def build_obs(base_ang_vel, projected_gravity, commands,
 class Go1RealController:
     """Low-level position controller for Go1 via unitree_legged_sdk."""
 
-    # SDK motor indices (FR, FL, RR, RL — Unitree convention)
-    SDK_IDX = {
-        "FR_0": 0, "FR_1": 1, "FR_2": 2,
-        "FL_0": 3, "FL_1": 4, "FL_2": 5,
-        "RR_0": 6, "RR_1": 7, "RR_2": 8,
-        "RL_0": 9, "RL_1": 10, "RL_2": 11,
-    }
-
-    # Isaac order → SDK motor name mapping (12 joints)
-    #  Isaac: FL_hip, FR_hip, RL_hip, RR_hip, FL_thigh, FR_thigh, ...
-    #  SDK:   FL_0,   FR_0,   RL_0,   RR_0,   FL_1,     FR_1,     ...
-    ISAAC_TO_SDK = [
-        "FL_0", "FR_0", "RL_0", "RR_0",   # hips
-        "FL_1", "FR_1", "RL_1", "RR_1",   # thighs
-        "FL_2", "FR_2", "RL_2", "RR_2",   # calves
-    ]
-
-    # SDK → Isaac order for reading sensor data
-    # SDK order: FR0 FR1 FR2 FL0 FL1 FL2 RR0 RR1 RR2 RL0 RL1 RL2
-    # We read in Isaac order:
-    SDK_TO_ISAAC = [
-        ("FL_0", 0), ("FR_0", 1), ("RL_0", 2), ("RR_0", 3),
-        ("FL_1", 4), ("FR_1", 5), ("RL_1", 6), ("RR_1", 7),
-        ("FL_2", 8), ("FR_2", 9), ("RL_2", 10), ("RR_2", 11),
-    ]
-
     def __init__(self, config_path: str, model_name: str):
         # ---- Load config ----
         with open(config_path, "r") as f:
@@ -112,6 +86,12 @@ class Go1RealController:
         # PD gains — expand scalar to per-joint array if needed
         self.kp = np.broadcast_to(np.asarray(cfg.kp_walk, dtype=np.float32), (12,)).copy()
         self.kd = np.broadcast_to(np.asarray(cfg.kd_walk, dtype=np.float32), (12,)).copy()
+
+        # Joint mapping from config
+        # sdk_to_isaac_map[sdk_idx] = isaac_idx  → pos_isaac[sdk_to_isaac_map] = pos_sdk
+        # isaac_to_sdk_map[isaac_idx] = sdk_idx
+        self._sdk_to_isaac = np.asarray(cfg.sdk_to_isaac_map, dtype=np.int32)
+        self._isaac_to_sdk = np.asarray(cfg.isaac_to_sdk_map, dtype=np.int32)
 
         # ---- SDK setup ----
         robot_ip = getattr(cfg, "robot_ip", "192.168.123.10")
@@ -147,17 +127,17 @@ class Go1RealController:
 
     def _get_joint_pos_isaac(self) -> np.ndarray:
         """Return 12-dim joint positions in Isaac order."""
-        pos = np.empty(12, dtype=np.float32)
-        for sdk_name, isaac_idx in self.SDK_TO_ISAAC:
-            pos[isaac_idx] = self.state.motorState[self.SDK_IDX[sdk_name]].q
-        return pos
+        pos_sdk = np.array([self.state.motorState[i].q for i in range(12)], dtype=np.float32)
+        pos_isaac = np.empty(12, dtype=np.float32)
+        pos_isaac[self._sdk_to_isaac] = pos_sdk
+        return pos_isaac
 
     def _get_joint_vel_isaac(self) -> np.ndarray:
         """Return 12-dim joint velocities in Isaac order."""
-        vel = np.empty(12, dtype=np.float32)
-        for sdk_name, isaac_idx in self.SDK_TO_ISAAC:
-            vel[isaac_idx] = self.state.motorState[self.SDK_IDX[sdk_name]].dq
-        return vel
+        vel_sdk = np.array([self.state.motorState[i].dq for i in range(12)], dtype=np.float32)
+        vel_isaac = np.empty(12, dtype=np.float32)
+        vel_isaac[self._sdk_to_isaac] = vel_sdk
+        return vel_isaac
 
     def _get_body_ang_vel(self) -> np.ndarray:
         """Smoothed body angular velocity from IMU gyroscope."""
@@ -207,17 +187,14 @@ class Go1RealController:
 
     def _send_joint_pos(self, target_isaac: np.ndarray, kp, kd):
         """Send position commands in Isaac order to SDK motors."""
-        for isaac_idx, sdk_name in enumerate(self.ISAAC_TO_SDK):
-            motor_id = self.SDK_IDX[sdk_name]
-            self.cmd.motorCmd[motor_id].q = float(target_isaac[isaac_idx])
-            self.cmd.motorCmd[motor_id].dq = 0.0
-            self.cmd.motorCmd[motor_id].Kp = float(
-                kp[isaac_idx] if hasattr(kp, "__len__") else kp
-            )
-            self.cmd.motorCmd[motor_id].Kd = float(
-                kd[isaac_idx] if hasattr(kd, "__len__") else kd
-            )
-            self.cmd.motorCmd[motor_id].tau = 0.0
+        kp_arr = np.broadcast_to(np.asarray(kp, dtype=np.float32), (12,))
+        kd_arr = np.broadcast_to(np.asarray(kd, dtype=np.float32), (12,))
+        for isaac_idx, sdk_idx in enumerate(self._isaac_to_sdk):
+            self.cmd.motorCmd[sdk_idx].q = float(target_isaac[isaac_idx])
+            self.cmd.motorCmd[sdk_idx].dq = 0.0
+            self.cmd.motorCmd[sdk_idx].Kp = float(kp_arr[isaac_idx])
+            self.cmd.motorCmd[sdk_idx].Kd = float(kd_arr[isaac_idx])
+            self.cmd.motorCmd[sdk_idx].tau = 0.0
 
     def _safe_send(self):
         self.safe.PowerProtect(self.cmd, self.state, 9)
