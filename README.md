@@ -401,65 +401,89 @@ python scripts/rsl_rl/play_cross_embodied_shared.py \
 
 ## Sim2Sim
 
-Terrain Generator
-
-Use the terrain generator script follow the instruction in [terrain_tool](deploy/utils/terrain_tool/readme.md)
+Terrain Generator: use the terrain generator script, see [terrain_tool](deploy/utils/terrain_tool/readme.md) for details.
 
 ```bash
 python3 deploy/utils/terrain_tool/terrain_generator.py
 ```
 
 <details>
-<summary><b>Go2 Walk (Rough)</b></summary>
+<summary><b>Go1 Walk</b></summary>
 
-1. Modify the yaml file in `deploy/go2_deploy/config/go2_walk.yaml`
-
-2. Exported the `policy.pt` to `deploy/go2_deploy/exported_policy`
-
-3. run [sim2sim_walk.py](deploy/go2_deploy/sim2sim_walk.py)
-
+详细说明见 [deploy/go1_deploy/README.md](deploy/go1_deploy/README.md)
 
 ```bash
 pip install mujoco
-#Walk
-python deploy/go2_deploy/sim2sim_walk.py --model go2_rough.pt
+python deploy/go1_deploy/sim2sim_walk.py --model go1_flat.pt
 ```
-</details>
 
+</details>
 
 <details>
-<summary><b>G1 Walk (Rough)</b></summary>
-1. Modify the yaml file in `deploy/go2_deploy/config/go2_walk.yaml`
+<summary><b>Go2 Walk / Handstand</b></summary>
 
-2. Exported the `policy.pt` to `deploy/go2_deploy/exported_policy`
-
-3. run [sim2sim_walk.py](deploy/go2_deploy/sim2sim_walk.py)
-
+详细说明见 [deploy/go2_deploy/README.md](deploy/go2_deploy/README.md)
 
 ```bash
 pip install mujoco
-#Walk
+# Walk
 python deploy/go2_deploy/sim2sim_walk.py --model go2_rough.pt
+# Handstand
+python deploy/go2_deploy/sim2sim_handstand.py --model go2_handstand.pt
 ```
+
 </details>
 
+<details>
+<summary><b>G1 Walk</b></summary>
 
+详细说明见 [deploy/g1_deploy/README.md](deploy/g1_deploy/README.md)
+
+```bash
+pip install mujoco
+python deploy/g1_deploy/sim2sim_walk.py --model g1_flat.pt --config g1_walk.yaml
+```
+
+</details>
+
+---
 
 ## Sim2Real
 
-Install [unitree_legged_sdk](https://github.com/unitreerobotics/unitree_legged_sdk) for go1:
-```bash
-git clone https://github.com/unitreerobotics/unitree_legged_sdk.git
-```
+<details>
+<summary><b>Go1 Walk</b></summary>
 
-
-
-
-
+详细说明见 [deploy/go1_deploy/README.md](deploy/go1_deploy/README.md)
 
 ```bash
-python sim2real_walk.py --mode real --model policy.pt
+# 依赖：unitree_legged_sdk（见 README）
+python deploy/go1_deploy/sim2real_walk.py --mode real --model policy.pt
 ```
+
+</details>
+
+<details>
+<summary><b>Go2 Walk</b></summary>
+
+详细说明见 [deploy/go2_deploy/README.md](deploy/go2_deploy/README.md)
+
+```bash
+python deploy/go2_deploy/sim2real_walk.py --mode real --model policy.pt
+```
+
+</details>
+
+<details>
+<summary><b>G1 Walk</b></summary>
+
+详细说明见 [deploy/g1_deploy/README.md](deploy/g1_deploy/README.md)
+
+```bash
+# 依赖：cyclonedds + unitree_sdk2_python（见 README）
+python deploy/g1_deploy/sim2real_walk.py
+```
+
+</details>
 
 
 
