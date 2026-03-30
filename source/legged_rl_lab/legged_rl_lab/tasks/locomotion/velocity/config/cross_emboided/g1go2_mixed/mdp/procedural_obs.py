@@ -27,9 +27,10 @@ import math
 from typing import TYPE_CHECKING
 
 import torch
+from isaaclab.envs import ManagerBasedRLEnv
 
 if TYPE_CHECKING:
-    from isaaclab.envs import ManagerBasedRLEnv
+    pass
 
 
 # ---------------------------------------------------------------------------
@@ -190,3 +191,24 @@ def setup_cross_embodied_morphology_params(env: ManagerBasedRLEnv) -> None:
         [is_g1 * 2.0 - 1.0, dof_norm, height_norm], dim=1
     )
     env.morphology_params_dim = 3
+
+
+# ---------------------------------------------------------------------------
+# Procedural robot environment
+# ---------------------------------------------------------------------------
+
+
+class ProceduralRobotEnv(ManagerBasedRLEnv):
+    """Custom ManagerBasedRLEnv for procedurally generated robots.
+
+    After ``super().__init__()`` the environment:
+    1. Calls :func:`modify_procedural_articulations` to adjust joint limits
+       and default positions via the metamorphosis builder.
+    2. Calls :func:`setup_morphology_params` to populate
+       ``env.morphology_params_tensor`` for the morphology observation.
+    """
+
+    def __init__(self, cfg, render_mode: str | None = None, **kwargs):
+        super().__init__(cfg, render_mode, **kwargs)
+        modify_procedural_articulations(self)
+        setup_morphology_params(self)

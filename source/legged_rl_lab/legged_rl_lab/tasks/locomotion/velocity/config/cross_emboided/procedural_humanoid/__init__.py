@@ -14,7 +14,7 @@ from . import agents
 
 
 # Use custom environment class for procedural robots
-_PROCEDURAL_ENV_ENTRY_POINT = "legged_rl_lab.tasks.locomotion.velocity.mdp.procedural_env:ProceduralRobotEnv"
+_PROCEDURAL_ENV_ENTRY_POINT = "legged_rl_lab.tasks.locomotion.velocity.config.cross_emboided.g1go2_mixed.mdp.procedural_obs:ProceduralRobotEnv"
 
 
 gym.register(

@@ -1,3 +1,6 @@
+# Deploy — local deployment packages (not tracked)
+deploy/LeggedLabDeploy/
+
 # C++
 **/cmake-build*/
 **/build*/

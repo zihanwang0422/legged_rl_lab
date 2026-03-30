@@ -9,6 +9,7 @@ from .procedural_obs import (  # noqa: F401
     modify_procedural_articulations,
     setup_morphology_params,
     setup_cross_embodied_morphology_params,
+    ProceduralRobotEnv,
 )
 
 from .cross_embodied_mdp import (  # noqa: F401

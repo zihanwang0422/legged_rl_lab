@@ -176,68 +176,140 @@ python scripts/rsl_rl/play.py \
 
 #### AMP (Adversarial Motion Priors)
 
-**Architecture:**
-- `AMPManagerBasedRLEnv`: Custom env that captures AMP observations before environment reset
-- `AMPPPO`: PPO extended with discriminator, replay buffer, and style reward computation
-- `MotionLoader`: Loads LAFAN1 CSV or AMASS NPZ motion data with automatic joint reordering (AMASS DFS -> IsaacLab BFS)
+<details>
+<summary><b>Architecture</b></summary>
 
-**Supported datasets:**
+| Component | Description |
+|---|---|
+| `AMPManagerBasedRLEnv` | Overrides `step()` to compute AMP observations **before** terminated environments are reset, so `(s, s')` transition pairs reflect true physics transitions rather than post-reset artifacts. AMP obs are passed via `extras["amp_obs"]`. |
+| `AmpRslRlVecEnvWrapper` | Wraps the env for RSL-RL, extracting the `amp` observation group and forwarding it through `extras`. |
+| `AMPPPO` | Extends `PPO` with an AMP discriminator, circular replay buffer, and style-reward blending. Discriminator parameters are added to the PPO optimizer as separate param groups with their own learning rate. |
+| `AMPDiscriminator` | MLP that takes concatenated `(s, s')` and outputs a logit. Style reward: `r_style = -log(1 - σ(D(s,s'))) = softplus(D(s,s'))`. Trained with BCE loss + R1 gradient penalty + logit regularization. Supports optional empirical observation normalization. |
+| `AMPReplayBuffer` | Fixed-size circular buffer storing agent `(state, next_state)` pairs for discriminator training. |
+| `MotionLoader` | Loads reference motions from CSV (LAFAN1) or NPZ (AMASS). Automatically reorders joints from MuJoCo/AMASS DFS traversal order to IsaacLab BFS order via a gather map. Supports directory-recursive loading. |
+
+**Reward blending:**
+
+$$r = \alpha \cdot r_{\text{task}} + (1 - \alpha) \cdot r_{\text{style}}$$
+
+where $\alpha$ = `amp_task_reward_lerp` (default 0.4).
+
+**AMP observation features** (per frame, 70-dim for G1):
+
+| Feature | Dim | Source |
+|---|---|---|
+| `joint_pos_rel` (joint pos - default pos) | 29 | CSV columns / NPZ `dof_positions` |
+| `joint_vel` | 29 | Finite diff (CSV) / NPZ `dof_velocities` |
+| `base_lin_vel` (base frame) | 3 | Finite diff / NPZ `body_linear_velocities` |
+| `base_ang_vel` (base frame) | 3 | Quat diff / NPZ `body_angular_velocities` |
+| `foot_pos` (base frame) | 6 | NPZ `body_positions` (CSV: zeros) |
+
+The discriminator input is `history_length=2` consecutive frames concatenated → 140-dim.
+
+</details>
+
+<details>
+<summary><b>Datasets</b></summary>
+
+**LAFAN1** — Retargeted CSV files (30 FPS). Column layout: `[x, y, z, qx, qy, qz, qw, joint_0 … joint_28]`
+
 ```text
 LAFAN1_Retargeting_Dataset/
-├── g1_walk/          # 12 CSV files, 86k frames at 30 FPS
-├── g1_run/
-├── g1_dance/
-├── g1_jump/
-├── g1_fall/
-└── g1_fight/
-
-AMASS_Retargeted_for_G1/
-└── g1/               # NPZ files from multiple motion capture databases
+├── g1/               # 40 CSV (all motions combined)
+├── g1_walk/          # 12 CSV,  ~86k frames
+├── g1_run/           #  4 CSV,  ~28k frames
+├── g1_sprint/        #  2 CSV,  ~16k frames
+├── g1_dance/         #  8 CSV,  ~45k frames
+├── g1_jump/          #  3 CSV,  ~22k frames
+├── g1_fall/          #  6 CSV,  ~28k frames
+└── g1_fight/         #  5 CSV,  ~36k frames
 ```
 
-**Registered environments:**
-| Environment ID | Dataset | Description |
-|---|---|---|
-| `LeggedRLLab-Isaac-AMP-Flat-Unitree-G1-v0` | AMASS | General AMP on flat terrain |
-| `LeggedRLLab-Isaac-AMP-Walk-Flat-Unitree-G1-v0` | LAFAN1 walk | Walk-specific AMP on flat terrain |
+**AMASS** — Retargeted NPZ files from 25 motion-capture databases (17,714 files). Keys: `dof_positions`, `dof_velocities`, `body_positions`, `body_rotations`, `body_linear_velocities`, `body_angular_velocities`. Quaternion convention: `[w, x, y, z]`.
 
-##### Train (LAFAN1 Walk)
+```text
+AMASS_Retargeted_for_G1/
+└── g1/
+    ├── ACCAD/
+    ├── BioMotionLab_NTroje/
+    ├── CMU/
+    ├── DanceDB/
+    ├── KIT/
+    ├── ...           # 25 sub-databases total
+    └── WEIZMANN/
+```
+
+</details>
+
+**Registered environments:**
+
+| Environment ID | Description |
+|---|---|
+| `LeggedRLLab-Isaac-AMP-Flat-Unitree-G1-v0` | AMP on flat terrain (default motion: AMASS) |
+| `LeggedRLLab-Isaac-AMP-Flat-Unitree-G1-Play-v0` | Play/visualize (50 envs, no randomization) |
+
+##### Train
 
 ```bash
+# Train with default AMASS dataset
 python scripts/amp/train.py \
-    --task LeggedRLLab-Isaac-AMP-Walk-Flat-Unitree-G1-v0 \
+    --task LeggedRLLab-Isaac-AMP-Flat-Unitree-G1-v0 \
     --num_envs 4096 \
     --headless
 ```
 
-You can also override the motion data path:
+Override motion data via `--motion_file` (supports directory or single file):
+
 ```bash
+# Train with LAFAN1 walk subset
 python scripts/amp/train.py \
     --task LeggedRLLab-Isaac-AMP-Flat-Unitree-G1-v0 \
     --motion_file source/legged_rl_lab/legged_rl_lab/data/motion/LAFAN1_Retargeting_Dataset/g1_walk \
-    --headless --num_envs 4096
+    --num_envs 4096 --headless
 ```
 
 ##### Play
 
 ```bash
 python scripts/amp/play.py \
-    --task LeggedRLLab-Isaac-AMP-Walk-Flat-Unitree-G1-Play-v0 \
+    --task LeggedRLLab-Isaac-AMP-Flat-Unitree-G1-Play-v0 \
+    --motion_file source/legged_rl_lab/legged_rl_lab/data/motion/LAFAN1_Retargeting_Dataset/g1_walk \
     --num_envs 32
 ```
 
 ##### Verify Joint Order
 
-To verify that the LAFAN1/AMASS joint order is correctly aligned with IsaacLab:
+Verify that LAFAN1/AMASS joint order is correctly mapped to IsaacLab BFS order (no IsaacSim dependency):
+
 ```bash
 python scripts/amp/verify_joint_order.py
 ```
 
-**Key hyperparameters** (in `rsl_rl_amp_cfg.py`):
-- `amp_task_reward_lerp`: 0.4 (40% task, 60% style -- increase for better command tracking)
-- `amp_disc_gradient_penalty_coef`: 5.0 (increase if discriminator overfits)
-- `amp_discriminator_hidden_dims`: [1024, 512]
-- `amp_replay_buffer_size`: 1,000,000
+##### Record Reference Motion
+
+Record AMP observations from a trained locomotion policy for use as reference data:
+
+```bash
+python scripts/amp/record_reference_motion.py \
+    --task LeggedRLLab-Isaac-Velocity-Rough-Unitree-Go2-v0 \
+    --checkpoint logs/rsl_rl/<experiment>/<run>/model_xxx.pt \
+    --num_steps 5000 \
+    --output source/legged_rl_lab/legged_rl_lab/data/motion/recorded/go2_trot.pt
+```
+
+##### Key Hyperparameters
+
+Defined in `rsl_rl_amp_cfg.py`:
+
+| Parameter | Value | Notes |
+|---|---|---|
+| `amp_task_reward_lerp` | 0.4 | 40% task / 60% style. Increase for better command tracking |
+| `amp_disc_gradient_penalty_coef` | 10.0 | R1 gradient penalty. Increase if discriminator overfits |
+| `amp_learning_rate` | 5e-5 | Discriminator LR. Lower than actor/critic to prevent domination |
+| `amp_discriminator_hidden_dims` | [1024, 512] | Discriminator MLP architecture |
+| `amp_replay_buffer_size` | 1,000,000 | Circular buffer for agent transitions |
+| `amp_disc_logit_reg_coef` | 0.05 | L2 regularization on discriminator logits |
+| `amp_disc_weight_decay` | 0.0001 | Weight decay for discriminator parameters |
 
 ### Metamorphology
 
