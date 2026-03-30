@@ -483,42 +483,10 @@ In this case, add the path to your extension in `.vscode/settings.json` under th
 pkill -f "python.*train.py"
 ```
 
-<!-- 
+
 ## Acknowledgements
 
-### rl_locomotion
-
 * [robot_lab](https://github.com/fan-ziqi/robot_lab)
-* [basic-locomotion-dls-isaaclab](https://github.com/iit-DLSLab/basic-locomotion-dls-isaaclab)
 * [unitree_rl_lab](https://github.com/unitreerobotics/unitree_rl_lab?tab=readme-ov-file#acknowledgements)
-* [LeggedLab](https://github.com/Hellod035/LeggedLab)
-* [parkour_lab](https://github.com/CAI23sbP/Isaaclab_Parkour)
-* [wheel_legged_lab](https://github.com/jaykorea/Isaac-RL-Two-wheel-Legged-Bot)
-
-### AMP/IL_locomotion
-
 * [legged_lab](https://github.com/zitongbai/legged_lab)
-* [MimicKit](https://github.com/xbpeng/MimicKit)
-* [beyondAMP](https://github.com/Renforce-Dynamics/beyondAMP)
-* [motion_imitation](https://github.com/erwincoumans/motion_imitation/tree/master)
-* [ManagerAMP](https://github.com/XinyuSong123/ManagerAMP)
-
-
-### motion_tracking_WBC
-
-* [holosoma](https://github.com/amazon-far/holosoma?tab=readme-ov-file)
-
-### loco_mani_WBC
-
-### navigation
-
-* [isaac-go2-ros2](https://github.com/Zhefan-Xu/isaac-go2-ros2)
-* [legged-loco](https://github.com/yang-zj1026/legged-loco)
-* [go2-ros2](https://github.com/abizovnuralem/go2_omniverse)
-
-### mujoco
-
 * [unitree_mujoco](https://github.com/unitreerobotics/unitree_mujoco)
-* [mjlab](https://github.com/mujocolab/mjlab)
-* [mujoco_playground](https://github.com/google-deepmind/mujoco_playground)
-* [FastTD3](https://github.com/younggyoseo/FastTD3) -->
