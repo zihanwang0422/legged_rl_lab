@@ -1,422 +1,380 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
 """
-Go1 Sim2Sim (MuJoCo) and Sim2Real (Unitree SDK) controller
+Sim2Real deployment for Unitree Go1.
 
-Usage:
-    Sim:  python sim2real_walk.py --mode sim  [--model policy.pt] [--config go1_walk.yaml]
-    Real: python sim2real_walk.py --mode real [--model policy.pt] [--config go1_walk.yaml]
+Reads joystick commands from the Go1 wireless remote (LowState.wirelessRemote),
+runs the JIT-traced policy, and sends position commands via unitree_legged_sdk.
+
+Usage (on the Go1 onboard computer or a wired PC):
+    python deploy/go1_deploy/sim2real_walk.py --model go1_flat.pt --config go1_walk.yaml
+
+Prerequisites:
+    1. Build unitree_legged_sdk (see deploy/go1_deploy/unitree_legged_sdk/README.md)
+    2. Connect to Go1 via Ethernet (192.168.123.x subnet)
+    3. Put Go1 into low-level mode (L2+A, L2+A, L1+L2+Start)
 """
 
-import time
-import numpy as np
-import argparse
-import torch
 import sys
 import os
-from collections import deque
-from pathlib import Path
-from types import SimpleNamespace
+import time
+import math
+import struct
+import argparse
+import numpy as np
+import torch
 import yaml
+from types import SimpleNamespace
+from collections import deque
 
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'utils'))
-from joystick import create_gamepad_controller
-
-# ========== Config loader ==========
-
-def load_config(config_path):
-    script_dir = os.path.dirname(os.path.abspath(config_path))
-    with open(config_path, 'r') as f:
-        raw = yaml.safe_load(f)
-
-    cfg = SimpleNamespace(**raw)
-    for k, v in raw.items():
-        if isinstance(v, list):
-            if k in ('joint_names_mujoco', 'actuator_names_mujoco', 'sdk_joint_order'):
-                setattr(cfg, k, v)
-                continue
-            try:
-                v = np.array(v, dtype=np.int32 if 'map' in k else np.float32)
-            except (ValueError, TypeError):
-                pass
-        setattr(cfg, k, v)
-
-    # resolve relative paths
-    for attr in ('policy_path', 'xml_path'):
-        val = getattr(cfg, attr, None)
-        if val and (val.startswith('./') or val.startswith('../')):
-            setattr(cfg, attr, os.path.abspath(os.path.join(script_dir, val)))
-
-    if hasattr(cfg, 'vx_range'):   cfg.vx_range   = tuple(cfg.vx_range)
-    if hasattr(cfg, 'vy_range'):   cfg.vy_range   = tuple(cfg.vy_range)
-    if hasattr(cfg, 'vyaw_range'): cfg.vyaw_range = tuple(cfg.vyaw_range)
-    return cfg
+# Add local unitree_legged_sdk to path
+_SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, os.path.join(_SCRIPT_DIR, "unitree_legged_sdk", "lib", "python", "amd64"))
+import robot_interface as sdk
 
 
-# ========== Shared helpers ==========
+# =====================================================================
+# Observation builder (must match sim2sim_walk.py / training order)
+# =====================================================================
 
-def quat_rotate_inverse(q, v):
-    q_w, q_vec = q[3], q[:3]
-    return v * (2.0 * q_w**2 - 1.0) - np.cross(q_vec, v) * q_w * 2.0 + q_vec * np.dot(q_vec, v) * 2.0
-
-
-def build_obs(base_ang_vel, proj_grav, commands, dof_pos_rel, dof_vel, last_action, cfg):
-    """45-dim observation (single frame, no history for Go1 baseline policy)."""
-    obs = np.concatenate([
-        base_ang_vel  * cfg.obs_scales['base_ang_vel'],
-        proj_grav,
-        commands,
-        dof_pos_rel   * cfg.obs_scales['joint_pos'],
-        dof_vel       * cfg.obs_scales['joint_vel'],
-        last_action,
-    ]).astype(np.float32)
+def build_obs(base_ang_vel, projected_gravity, commands,
+              dof_pos_rel, dof_vel, last_action, config):
+    """48-dim single-frame observation (Go1 12 DOF)."""
+    obs = np.empty(9 + 3 * 12, dtype=np.float32)
+    obs[0:3] = base_ang_vel * config.obs_scales["base_ang_vel"]
+    obs[3:6] = projected_gravity
+    obs[6:9] = commands
+    obs[9:21] = dof_pos_rel * config.obs_scales["joint_pos"]
+    obs[21:33] = dof_vel * config.obs_scales["joint_vel"]
+    obs[33:45] = last_action
     return obs
 
 
-def infer(policy, obs_np):
-    with torch.no_grad():
-        out = policy(torch.from_numpy(obs_np[np.newaxis]))
-        if isinstance(out, tuple): out = out[0]
-    return out.cpu().numpy().flatten().astype(np.float32)
+# =====================================================================
+# Sim2Real Controller
+# =====================================================================
 
+class Go1RealController:
+    """Low-level position controller for Go1 via unitree_legged_sdk."""
 
-# ========== Sim2Sim (MuJoCo) ==========
+    # SDK motor indices (FR, FL, RR, RL — Unitree convention)
+    SDK_IDX = {
+        "FR_0": 0, "FR_1": 1, "FR_2": 2,
+        "FL_0": 3, "FL_1": 4, "FL_2": 5,
+        "RR_0": 6, "RR_1": 7, "RR_2": 8,
+        "RL_0": 9, "RL_1": 10, "RL_2": 11,
+    }
 
-class Sim2SimController:
-    def __init__(self, cfg, model_name):
-        import mujoco, mujoco.viewer
-        from scipy.spatial.transform import Rotation as R
-        self._mujoco = mujoco
-        self._viewer_mod = mujoco.viewer
-        self._R = R
-        self.cfg = cfg
+    # Isaac order → SDK motor name mapping (12 joints)
+    #  Isaac: FL_hip, FR_hip, RL_hip, RR_hip, FL_thigh, FR_thigh, ...
+    #  SDK:   FL_0,   FR_0,   RL_0,   RR_0,   FL_1,     FR_1,     ...
+    ISAAC_TO_SDK = [
+        "FL_0", "FR_0", "RL_0", "RR_0",   # hips
+        "FL_1", "FR_1", "RL_1", "RR_1",   # thighs
+        "FL_2", "FR_2", "RL_2", "RR_2",   # calves
+    ]
 
-        base_dir = os.path.dirname(os.path.abspath(__file__))
-        xml_path    = os.path.join(base_dir, 'assets', os.path.basename(cfg.xml_path))
-        policy_path = os.path.join(base_dir, 'exported_policy', model_name)
+    # SDK → Isaac order for reading sensor data
+    # SDK order: FR0 FR1 FR2 FL0 FL1 FL2 RR0 RR1 RR2 RL0 RL1 RL2
+    # We read in Isaac order:
+    SDK_TO_ISAAC = [
+        ("FL_0", 0), ("FR_0", 1), ("RL_0", 2), ("RR_0", 3),
+        ("FL_1", 4), ("FR_1", 5), ("RL_1", 6), ("RR_1", 7),
+        ("FL_2", 8), ("FR_2", 9), ("RL_2", 10), ("RR_2", 11),
+    ]
 
-        print(f"Loading MuJoCo model: {xml_path}")
-        self.model = mujoco.MjModel.from_xml_path(xml_path)
-        self.data  = mujoco.MjData(self.model)
-        self.model.opt.timestep = cfg.sim_dt
-        self.policy_decimation  = int(cfg.policy_dt / cfg.sim_dt)
+    def __init__(self, config_path: str, model_name: str):
+        # ---- Load config ----
+        with open(config_path, "r") as f:
+            raw = yaml.safe_load(f)
+        self.config = cfg = SimpleNamespace(**raw)
+        for k, v in raw.items():
+            if isinstance(v, list) and k not in (
+                "joint_names_mujoco", "actuator_names_mujoco", "sdk_joint_order",
+            ):
+                try:
+                    v = np.array(v, dtype=np.int32 if "map" in k else np.float32)
+                except (ValueError, TypeError):
+                    pass
+            setattr(cfg, k, v)
 
-        self.joint_qpos_addrs = [self.model.jnt_qposadr[self.model.joint(n).id] for n in cfg.joint_names_mujoco]
-        self.joint_qvel_addrs = [self.model.jnt_dofadr [self.model.joint(n).id] for n in cfg.joint_names_mujoco]
-        self.actuator_ids     = [self.model.actuator(n).id                       for n in cfg.actuator_names_mujoco]
-        self.num_joints       = len(cfg.joint_names_mujoco)
-
+        # ---- Load policy ----
+        policy_path = os.path.join(_SCRIPT_DIR, "exported_policy", model_name)
         print(f"Loading policy: {policy_path}")
-        self.policy = torch.jit.load(policy_path, map_location='cpu')
+        self.policy = torch.jit.load(policy_path, map_location="cpu")
 
-        self.last_action = np.zeros(self.num_joints, dtype=np.float32)
-        self.kp = cfg.kp_walk
-        self.kd = cfg.kd_walk
+        # ---- Config shortcuts ----
+        self.dt = cfg.policy_dt  # 0.02 s (50 Hz)
+        self.num_joints = 12
+        self.default_qpos_isaac = cfg.default_qpos_isaac  # (12,) np array
+        self.action_scale = cfg.action_scale["pos"]
 
-        # default pose in MuJoCo order
-        self.default_qpos_mj = cfg.default_qpos_isaac[cfg.isaac_to_mujoco_map]
-        self.target_qpos_mj  = self.default_qpos_mj.copy()
+        # PD gains — expand scalar to per-joint array if needed
+        self.kp = np.broadcast_to(np.asarray(cfg.kp_walk, dtype=np.float32), (12,)).copy()
+        self.kd = np.broadcast_to(np.asarray(cfg.kd_walk, dtype=np.float32), (12,)).copy()
 
-        self.data.qpos[self.joint_qpos_addrs] = self.default_qpos_mj
-        self.data.qpos[2] = getattr(cfg, 'init_height', 0.35)
-        mujoco.mj_step(self.model, self.data)
-        print("Sim2Sim controller initialized")
+        # ---- SDK setup ----
+        robot_ip = getattr(cfg, "robot_ip", "192.168.123.10")
+        robot_port = getattr(cfg, "robot_port", 8007)
+        local_port = getattr(cfg, "local_port", 8080)
+        print(f"Connecting to Go1 @ {robot_ip}:{robot_port} (local {local_port})")
 
-    def _pd(self):
-        tau = self.kp * (self.target_qpos_mj - self.data.qpos[self.joint_qpos_addrs]) \
-            + self.kd * (0.0              - self.data.qvel[self.joint_qvel_addrs])
-        self.data.ctrl[self.actuator_ids] = tau
+        self.udp = sdk.UDP(0xFF, local_port, robot_ip, robot_port)
+        self.safe = sdk.Safety(sdk.LeggedType.Go1)
+        self.cmd = sdk.LowCmd()
+        self.state = sdk.LowState()
+        self.udp.InitCmdData(self.cmd)
 
-    def run(self, gamepad):
-        mujoco, viewer_mod, R = self._mujoco, self._viewer_mod, self._R
-        cfg = self.cfg
-        motiontime = 0
-        start_time = None
-
-        with viewer_mod.launch_passive(self.model, self.data) as viewer:
-            viewer.cam.lookat[:] = self.data.qpos[:3]
-            viewer.cam.distance  = 2.0
-            viewer.cam.azimuth   = 90
-            viewer.cam.elevation = -20
-            start_time = time.time()
-
-            while viewer.is_running():
-                if gamepad.exit_requested:
-                    break
-
-                self._pd()
-                mujoco.mj_step(self.model, self.data)
-                motiontime += 1
-
-                if motiontime % self.policy_decimation == 0:
-                    quat_wxyz = self.data.qpos[3:7]
-                    quat_xyzw = quat_wxyz[[1, 2, 3, 0]]
-                    proj_grav = R.from_quat(quat_xyzw).apply([0, 0, -1], inverse=True)
-                    base_ang  = self.data.qvel[3:6]
-
-                    curr_qpos_mj = self.data.qpos[self.joint_qpos_addrs]
-                    curr_qvel_mj = self.data.qvel[self.joint_qvel_addrs]
-                    dof_pos_rel  = curr_qpos_mj[cfg.mujoco_to_isaac_map] - cfg.default_qpos_isaac
-                    dof_vel      = curr_qvel_mj[cfg.mujoco_to_isaac_map]
-
-                    cmd_vx, cmd_vy, cmd_vyaw = gamepad.get_velocity()
-                    commands = np.array([cmd_vx, cmd_vy, cmd_vyaw], dtype=np.float32)
-
-                    obs    = build_obs(base_ang, proj_grav, commands, dof_pos_rel, dof_vel, self.last_action, cfg)
-                    action = infer(self.policy, obs)
-
-                    self.last_action    = action.copy()
-                    target_isaac        = action * cfg.action_scale['pos'] + cfg.default_qpos_isaac
-                    self.target_qpos_mj = target_isaac[cfg.isaac_to_mujoco_map]
-
-                viewer.cam.lookat[:] = self.data.qpos[:3]
-                viewer.sync()
-
-                expected = start_time + motiontime * cfg.sim_dt
-                sleep    = expected - time.time()
-                if sleep > 0:
-                    time.sleep(sleep)
-
-                if motiontime % int(1.0 / cfg.sim_dt) == 0:
-                    rt = time.time() - start_time
-                    vx, vy, vyaw = gamepad.get_velocity()
-                    print(f"[Gamepad] vx={vx:+.2f} vy={vy:+.2f} vyaw={vyaw:+.2f}")
-                    print(f"[Sim] t={motiontime*cfg.sim_dt:.1f}s h={self.data.qpos[2]:.3f}m "
-                          f"[Real] t={rt:.1f}s hz={motiontime/rt:.1f}")
-
-
-# ========== Sim2Real (Unitree SDK) ==========
-
-class Sim2RealController:
-    """Go1 real robot controller via unitree_legged_sdk."""
-
-    # SDK motor index: FR(0-2), FL(3-5), RR(6-8), RL(9-11)
-    LOWLEVEL = 0xff
-
-    def __init__(self, cfg, model_name):
-        self.cfg = cfg
-
-        # --- Load SDK ---
-        sdk_dir = os.path.abspath(os.path.join(
-            os.path.dirname(__file__), 'unitree_legged_sdk', 'lib', 'python', 'amd64'))
-        if sdk_dir not in sys.path:
-            sys.path.insert(0, sdk_dir)
-        import robot_interface as sdk
-        self.sdk = sdk
-
-        self.udp       = sdk.UDP(self.LOWLEVEL, cfg.local_port, cfg.robot_ip, cfg.robot_port)
-        self.safe      = sdk.Safety(sdk.LeggedType.Go1)
-        self.low_cmd   = sdk.LowCmd()
-        self.low_state = sdk.LowState()
-        self.udp.InitCmdData(self.low_cmd)
-        print(f"UDP: {cfg.robot_ip}:{cfg.robot_port}")
-
-        # --- Load policy ---
-        base_dir    = os.path.dirname(os.path.abspath(__file__))
-        policy_path = os.path.join(base_dir, 'exported_policy', model_name)
-        print(f"Loading policy: {policy_path}")
-        self.policy = torch.jit.load(policy_path, map_location='cpu')
-
+        # ---- Buffers ----
         self.last_action = np.zeros(12, dtype=np.float32)
-        # target in SDK order, held between policy steps
-        self.target_sdk  = cfg.default_qpos_isaac[cfg.isaac_to_sdk_map].copy()
-        self.policy_decimation = int(cfg.policy_dt / cfg.sim_dt)
+        self.obs_history = deque(
+            [np.zeros(9 + 3 * 12, dtype=np.float32)] * 5, maxlen=5
+        )
 
-    # ------------------------------------------------------------------
+        # Gyro smoothing
+        self.body_ang_vel = np.zeros(3, dtype=np.float64)
+        self.smoothing_ratio = 0.2
+
+        print("Go1 real controller initialised.")
+
+    # ----------------------------------------------------------------
+    # Sensor reading helpers
+    # ----------------------------------------------------------------
 
     def _recv(self):
         self.udp.Recv()
-        self.udp.GetRecv(self.low_state)
+        self.udp.GetRecv(self.state)
 
-    def _send(self, target_sdk, kp, kd):
-        for i in range(12):
-            self.low_cmd.motorCmd[i].q   = float(target_sdk[i])
-            self.low_cmd.motorCmd[i].dq  = 0.0
-            self.low_cmd.motorCmd[i].Kp  = float(kp[i]) if hasattr(kp, '__len__') else float(kp)
-            self.low_cmd.motorCmd[i].Kd  = float(kd[i]) if hasattr(kd, '__len__') else float(kd)
-            self.low_cmd.motorCmd[i].tau = 0.0
-        self.safe.PowerProtect(self.low_cmd, self.low_state, 1)
-        self.udp.SetSend(self.low_cmd)
+    def _get_joint_pos_isaac(self) -> np.ndarray:
+        """Return 12-dim joint positions in Isaac order."""
+        pos = np.empty(12, dtype=np.float32)
+        for sdk_name, isaac_idx in self.SDK_TO_ISAAC:
+            pos[isaac_idx] = self.state.motorState[self.SDK_IDX[sdk_name]].q
+        return pos
+
+    def _get_joint_vel_isaac(self) -> np.ndarray:
+        """Return 12-dim joint velocities in Isaac order."""
+        vel = np.empty(12, dtype=np.float32)
+        for sdk_name, isaac_idx in self.SDK_TO_ISAAC:
+            vel[isaac_idx] = self.state.motorState[self.SDK_IDX[sdk_name]].dq
+        return vel
+
+    def _get_body_ang_vel(self) -> np.ndarray:
+        """Smoothed body angular velocity from IMU gyroscope."""
+        gyro = np.array(self.state.imu.gyroscope, dtype=np.float64)
+        self.body_ang_vel = (
+            self.smoothing_ratio * gyro
+            + (1.0 - self.smoothing_ratio) * self.body_ang_vel
+        )
+        return self.body_ang_vel.astype(np.float32)
+
+    def _get_projected_gravity(self) -> np.ndarray:
+        """Projected gravity from IMU roll/pitch."""
+        roll, pitch = self.state.imu.rpy[0], self.state.imu.rpy[1]
+        # Rotation from world to body (small-angle Rodrigues isn't used;
+        # we directly compute the gravity projection)
+        cr, sr = math.cos(roll), math.sin(roll)
+        cp, sp = math.cos(pitch), math.sin(pitch)
+        # g_body = R_body_world @ [0, 0, -1]
+        gx = sp
+        gy = -sr * cp
+        gz = -cr * cp
+        return np.array([gx, gy, gz], dtype=np.float32)
+
+    def _get_commands(self) -> np.ndarray:
+        """Read velocity commands from Go1 wireless remote."""
+        wr = self.state.wirelessRemote
+        ly = struct.unpack("f", struct.pack("4B", *wr[20:24]))[0]  # forward
+        lx = struct.unpack("f", struct.pack("4B", *wr[4:8]))[0]    # lateral
+        rx = struct.unpack("f", struct.pack("4B", *wr[8:12]))[0]   # yaw
+
+        # Scale & deadzone
+        forward = ly * 0.6
+        if abs(forward) < 0.15:
+            forward = 0.0
+        side = -lx * 0.5
+        if abs(side) < 0.15:
+            side = 0.0
+        rotate = -rx * 0.8
+        if abs(rotate) < 0.2:
+            rotate = 0.0
+
+        return np.array([forward, side, rotate], dtype=np.float32)
+
+    # ----------------------------------------------------------------
+    # Motor command helpers
+    # ----------------------------------------------------------------
+
+    def _send_joint_pos(self, target_isaac: np.ndarray, kp, kd):
+        """Send position commands in Isaac order to SDK motors."""
+        for isaac_idx, sdk_name in enumerate(self.ISAAC_TO_SDK):
+            motor_id = self.SDK_IDX[sdk_name]
+            self.cmd.motorCmd[motor_id].q = float(target_isaac[isaac_idx])
+            self.cmd.motorCmd[motor_id].dq = 0.0
+            self.cmd.motorCmd[motor_id].Kp = float(
+                kp[isaac_idx] if hasattr(kp, "__len__") else kp
+            )
+            self.cmd.motorCmd[motor_id].Kd = float(
+                kd[isaac_idx] if hasattr(kd, "__len__") else kd
+            )
+            self.cmd.motorCmd[motor_id].tau = 0.0
+
+    def _safe_send(self):
+        self.safe.PowerProtect(self.cmd, self.state, 9)
+        self.udp.SetSend(self.cmd)
         self.udp.Send()
 
-    def _get_obs_parts(self):
-        """Extract (base_ang_vel, proj_grav, dof_pos_isaac, dof_vel_isaac) from low_state."""
-        from scipy.spatial.transform import Rotation as R
+    # ----------------------------------------------------------------
+    # Main loop
+    # ----------------------------------------------------------------
 
-        gyro = np.array(self.low_state.imu.gyroscope, dtype=np.float32)
+    def run(self):
+        """Stand up → stabilise → policy loop."""
+        cfg = self.config
+        standup_steps = int(getattr(cfg, "standup_duration", 2.0) / self.dt)
+        stabilize_steps = int(getattr(cfg, "stabilize_duration", 0.5) / self.dt)
+        warmup_steps = 80  # ~1.6 s at 50 Hz, zero commands / zero vel
 
-        rpy  = np.array(self.low_state.imu.rpy, dtype=np.float32)
-        quat_xyzw = R.from_euler('xyz', rpy).as_quat()
-        proj_grav = quat_rotate_inverse(quat_xyzw, np.array([0, 0, -1], dtype=np.float32))
+        print("\n" + "=" * 60)
+        print("  Go1 Sim2Real — Standing up …")
+        print("=" * 60)
 
-        q_sdk  = np.array([self.low_state.motorState[i].q  for i in range(12)], dtype=np.float32)
-        dq_sdk = np.array([self.low_state.motorState[i].dq for i in range(12)], dtype=np.float32)
+        step = 0
+        phase = "standup"  # standup → stabilize → warmup → run
 
-        dof_pos = q_sdk [self.cfg.sdk_to_isaac_map]
-        dof_vel = dq_sdk[self.cfg.sdk_to_isaac_map]
-        return gyro, proj_grav, dof_pos, dof_vel
+        try:
+            while True:
+                t0 = time.time()
+                self._recv()
 
-    # ------------------------------------------------------------------
+                # ---- Phase: Stand-up (soft → stiff) ----
+                if phase == "standup":
+                    kp = 5.0 if step < 50 else 50.0
+                    kd = 1.0 if step < 50 else 5.0
+                    self._send_joint_pos(self.default_qpos_isaac, kp, kd)
+                    self._safe_send()
+                    step += 1
+                    if step >= standup_steps:
+                        step = 0
+                        phase = "stabilize"
+                        print("  Stabilising …")
 
-    def _wait_for_connection(self):
-        print("Connecting to robot (damping mode)...")
-        for i in range(12):
-            self.low_cmd.motorCmd[i].q   = 0.0
-            self.low_cmd.motorCmd[i].dq  = 0.0
-            self.low_cmd.motorCmd[i].Kp  = 0.0
-            self.low_cmd.motorCmd[i].Kd  = 3.0
-            self.low_cmd.motorCmd[i].tau = 0.0
-        for _ in range(100):
-            self._recv()
-            self.udp.SetSend(self.low_cmd)
-            self.udp.Send()
-            time.sleep(self.cfg.sim_dt)
+                # ---- Phase: Stabilise (hold default pose with deploy gains) ----
+                elif phase == "stabilize":
+                    self._send_joint_pos(self.default_qpos_isaac, self.kp, self.kd)
+                    self._safe_send()
+                    step += 1
+                    if step >= stabilize_steps:
+                        step = 0
+                        phase = "warmup"
+                        print("  Warming up sensors …")
 
-        q_sum = sum(abs(self.low_state.motorState[i].q) for i in range(12))
-        if q_sum < 0.01:
-            print("ERROR: No joint data received. Check power and network.")
-            return False
-        print("Robot connected.")
-        return True
+                # ---- Phase: Warmup (run policy with zero commands) ----
+                elif phase == "warmup":
+                    obs = self._build_obs_step(force_zero_cmd=True, force_zero_vel=(step < 40))
+                    action = self._infer(obs)
+                    target = action * self.action_scale + self.default_qpos_isaac
+                    self._send_joint_pos(target, self.kp, self.kd)
+                    self._safe_send()
+                    step += 1
+                    if step >= warmup_steps:
+                        phase = "run"
+                        print("\n  ✅ Policy running! Use wireless remote to control.")
+                        print("     Ly=forward  Lx=lateral  Rx=yaw\n")
 
-    def run(self, gamepad):
-        if not self._wait_for_connection():
-            return
+                # ---- Phase: Run ----
+                else:
+                    obs = self._build_obs_step(force_zero_cmd=False, force_zero_vel=False)
+                    action = self._infer(obs)
+                    target = action * self.action_scale + self.default_qpos_isaac
+                    self._send_joint_pos(target, self.kp, self.kd)
+                    self._safe_send()
+                    step += 1
 
-        cfg = self.cfg
-        motiontime   = 0
-        policy_count = 0
-        start_time   = time.time()
+                    if step % 50 == 0:
+                        cmd = self._get_commands()
+                        print(
+                            f"[{step:6d}] cmd=({cmd[0]:+.2f}, {cmd[1]:+.2f}, {cmd[2]:+.2f})"
+                            f"  freq={1.0 / max(time.time() - t0, 1e-6):.1f} Hz"
+                        )
 
-        # initial joint positions (SDK order) for standup interpolation
-        self._recv()
-        q0_sdk = np.array([self.low_state.motorState[i].q for i in range(12)], dtype=np.float32)
-        default_sdk = cfg.default_qpos_isaac[cfg.isaac_to_sdk_map]
+                # ---- Timing ----
+                elapsed = time.time() - t0
+                sleep_t = self.dt - elapsed
+                if sleep_t > 0:
+                    time.sleep(sleep_t)
 
-        print("Starting control loop (200 Hz)...")
-        while True:
-            loop_start = time.time()
-            self._recv()
+        except KeyboardInterrupt:
+            print("\n  Interrupted — holding default pose …")
+            for _ in range(200):
+                self._recv()
+                self._send_joint_pos(self.default_qpos_isaac, 30.0, 5.0)
+                self._safe_send()
+                time.sleep(self.dt)
+            print("  Done.")
 
-            # update gamepad from wireless_remote (UnitreeSDK gamepad)
-            gamepad.update(list(self.low_state.wirelessRemote))
+    # ----------------------------------------------------------------
+    # Observation / inference helpers
+    # ----------------------------------------------------------------
 
-            if gamepad.exit_requested:
-                print("Exit requested.")
-                break
+    def _build_obs_step(self, force_zero_cmd: bool, force_zero_vel: bool) -> np.ndarray:
+        """Build group-major history observation (5 frames, 270-dim)."""
+        ang_vel = self._get_body_ang_vel()
+        proj_grav = self._get_projected_gravity()
+        joint_pos = self._get_joint_pos_isaac()
+        joint_vel = self._get_joint_vel_isaac()
 
-            sim_time = motiontime * cfg.sim_dt
+        if force_zero_vel:
+            ang_vel = np.zeros(3, dtype=np.float32)
+            joint_vel = np.zeros(12, dtype=np.float32)
 
-            # --- Phase 1: stand up ---
-            if sim_time < cfg.standup_duration:
-                rate = sim_time / cfg.standup_duration
-                target_sdk = q0_sdk * (1.0 - rate) + default_sdk * rate
-                kp = np.full(12, 20.0)
-                kd = np.full(12, 0.5)
+        cmd = np.zeros(3, dtype=np.float32) if force_zero_cmd else self._get_commands()
+        dof_pos_rel = joint_pos - self.default_qpos_isaac
 
-            # --- Phase 2: stabilize ---
-            elif sim_time < cfg.standup_duration + cfg.stabilize_duration:
-                target_sdk = default_sdk.copy()
-                kp = cfg.kp_walk
-                kd = cfg.kd_walk
+        obs_frame = build_obs(ang_vel, proj_grav, cmd, dof_pos_rel, joint_vel,
+                              self.last_action, self.config)
+        self.obs_history.append(obs_frame)
 
-            # --- Phase 3: policy ---
-            else:
-                # tilt check
-                rpy = np.array(self.low_state.imu.rpy, dtype=np.float32)
-                if abs(rpy[0]) > 0.8 or abs(rpy[1]) > 0.8:
-                    print(f"\nWARNING: tilt roll={rpy[0]:.2f} pitch={rpy[1]:.2f}, stopping.")
-                    break
+        # Group-major reorder: [omega×5, grav×5, cmd×5, pos×5, vel×5, act×5]
+        obs_arr = np.array(list(self.obs_history))  # (5, 45)
+        n = 12
+        obs_input = np.concatenate([
+            obs_arr[:, 0:3].reshape(-1),
+            obs_arr[:, 3:6].reshape(-1),
+            obs_arr[:, 6:9].reshape(-1),
+            obs_arr[:, 9:9 + n].reshape(-1),
+            obs_arr[:, 9 + n:9 + 2 * n].reshape(-1),
+            obs_arr[:, 9 + 2 * n:9 + 3 * n].reshape(-1),
+        ])
+        return obs_input
 
-                policy_count += 1
-                if policy_count >= self.policy_decimation:
-                    policy_count = 0
-
-                    base_ang, proj_grav, dof_pos, dof_vel = self._get_obs_parts()
-                    dof_pos_rel = dof_pos - cfg.default_qpos_isaac
-
-                    cmd_vx, cmd_vy, cmd_vyaw = gamepad.get_velocity()
-                    commands = np.array([cmd_vx, cmd_vy, cmd_vyaw], dtype=np.float32)
-
-                    obs    = build_obs(base_ang, proj_grav, commands, dof_pos_rel, dof_vel, self.last_action, cfg)
-                    action = infer(self.policy, obs)
-
-                    self.last_action = action.copy()
-                    target_isaac     = action * cfg.action_scale['pos'] + cfg.default_qpos_isaac
-                    self.target_sdk  = target_isaac[cfg.isaac_to_sdk_map]
-
-                target_sdk = self.target_sdk
-                kp = cfg.kp_walk
-                kd = cfg.kd_walk
-
-            self._send(target_sdk, kp, kd)
-            motiontime += 1
-
-            # status print ~1Hz
-            if motiontime % int(1.0 / cfg.sim_dt) == 0:
-                vx, vy, vyaw = gamepad.get_velocity()
-                rpy = np.array(self.low_state.imu.rpy, dtype=np.float32)
-                print(f"[t={sim_time:.1f}s] vx={vx:+.2f} vy={vy:+.2f} vyaw={vyaw:+.2f} "
-                      f"roll={rpy[0]:.2f} pitch={rpy[1]:.2f}")
-
-            elapsed = time.time() - loop_start
-            sleep   = cfg.sim_dt - elapsed
-            if sleep > 0:
-                time.sleep(sleep)
-
-        # safe stop: damping
-        for i in range(12):
-            self.low_cmd.motorCmd[i].Kp = 0.0
-            self.low_cmd.motorCmd[i].Kd = 2.0
-        self.udp.SetSend(self.low_cmd)
-        self.udp.Send()
-        print("Control stopped.")
+    def _infer(self, obs_input: np.ndarray) -> np.ndarray:
+        """Run JIT policy and return Isaac-order action (12-dim)."""
+        obs_batch = obs_input[np.newaxis, :].astype(np.float32)
+        with torch.no_grad():
+            out = self.policy(torch.from_numpy(obs_batch))
+            if isinstance(out, tuple):
+                out = out[0]
+            action = out.cpu().numpy().flatten().astype(np.float32)
+        self.last_action = action.copy()
+        return action
 
 
-# ========== Main ==========
+# =====================================================================
+# Main
+# =====================================================================
 
-if __name__ == '__main__':
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--mode',   type=str, default='sim',          help='sim | real')
-    parser.add_argument('--model',  type=str, default='policy.pt')
-    parser.add_argument('--config', type=str, default='go1_walk.yaml')
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Go1 Sim2Real Walk")
+    parser.add_argument("--model", type=str, default="go1_flat.pt",
+                        help="Policy file in exported_policy/")
+    parser.add_argument("--config", type=str, default="go1_walk.yaml",
+                        help="Config YAML in config/")
     args = parser.parse_args()
 
-    script_dir = os.path.dirname(os.path.abspath(__file__))
+    config_path = args.config
+    if not os.path.exists(config_path):
+        config_path = os.path.join(_SCRIPT_DIR, "config", args.config)
 
-    def resolve(name, subdir):
-        if os.path.exists(name): return name
-        return os.path.join(script_dir, subdir, name)
-
-    cfg = load_config(resolve(args.config, 'config'))
-
-    if args.mode == 'real':
-        gamepad_type = getattr(cfg, 'gamepad_type_sim2real', 'unitree_sdk')
-    else:
-        gamepad_type = getattr(cfg, 'gamepad_type_sim2sim', 'unitree_pygame')
-
-    gamepad = create_gamepad_controller(
-        gamepad_type,
-        vx_range=cfg.vx_range,
-        vy_range=cfg.vy_range,
-        vyaw_range=cfg.vyaw_range,
-    )
-    gamepad.start()
-
-    print("\n" + "="*60)
-    print(f"Go1 {'Sim2Real' if args.mode == 'real' else 'Sim2Sim'} | gamepad={gamepad_type}")
-    print("  Left stick  : vx (fwd/back) / vy (strafe)")
-    print("  Right stick : vyaw (turn)")
-    print("  RB+A        : Walk policy")
-    print("  Start       : Exit")
-    print("="*60 + "\n")
-
-    if args.mode == 'sim':
-        controller = Sim2SimController(cfg, args.model)
-        controller.run(gamepad)
-    else:
-        controller = Sim2RealController(cfg, args.model)
-        controller.run(gamepad)
-
-    gamepad.stop()
-    print("Done.")
+    ctrl = Go1RealController(config_path, args.model)
+    ctrl.run()

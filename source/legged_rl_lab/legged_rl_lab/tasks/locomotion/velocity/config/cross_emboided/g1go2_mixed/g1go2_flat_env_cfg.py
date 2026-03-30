@@ -441,7 +441,7 @@ class CrossEmbodiedRewardsCfg:
     # Foot air-time
     feet_air_time_g1 = RewTerm(
         func=cross_mdp.feet_air_time_g1_cross,
-        weight=0.2,
+        weight=0.8,
         params={"threshold": 0.4, "command_name": "base_velocity"},
     )
 
@@ -495,10 +495,6 @@ class CrossEmbodiedTerminationsCfg:
     base_fall = DoneTerm(
         func=cross_mdp.base_below_threshold_cross,
         params={"min_height": 0.25},
-    )
-    bad_orientation = DoneTerm(
-        func=cross_mdp.bad_orientation_cross,
-        params={"limit_angle": 0.8},
     )
 
 
