@@ -524,7 +524,7 @@ class CrossEmbodiedG1Go2FlatEnvCfg(ManagerBasedRLEnvCfg):
     scene: CrossEmbodiedG1Go2SceneCfg = CrossEmbodiedG1Go2SceneCfg(
         num_envs=512,
         env_spacing=4.0,
-        replicate_physics=False,  # Required for heterogeneous robots
+        replicate_physics=True,  # Both robots are identical across all envs; True avoids per-env USD copies
     )
     observations: CrossEmbodiedObsCfg = CrossEmbodiedObsCfg()
     actions: CrossEmbodiedActionsCfg = CrossEmbodiedActionsCfg()
