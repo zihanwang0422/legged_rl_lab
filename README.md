@@ -148,11 +148,10 @@ python scripts/rsl_rl/play.py \
 <details>
 <summary><b>Handstand</b></summary>
 
-### Footstand
+#### Footstand
 
 [<img src="media/footstand_isaac.gif" width="300px">](gifs/isaac.gif)
 
-#### Train
 
 ```bash
 python scripts/rsl_rl/train.py \
@@ -160,8 +159,6 @@ python scripts/rsl_rl/train.py \
   --num_envs 4096 \
   --headless
 ```
-
-#### Play
 
 ```bash
 python scripts/rsl_rl/play.py \
@@ -172,12 +169,53 @@ python scripts/rsl_rl/play.py \
 
 </details>
 
-### 🤖️Humanoid
-
-#### AMP (Adversarial Motion Priors)
+### 🤖️G1
 
 <details>
-<summary><b>Architecture</b></summary>
+<summary><b>Walk (Flat)</b></summary>
+
+```bash
+#Train
+python scripts/rsl_rl/train.py \
+  --task=LeggedRLLab-Isaac-Velocity-Flat-Unitree-G1-v0 \
+  --num_envs 4096 \
+  --headless
+```
+
+```bash
+#Play
+python scripts/rsl_rl/play.py \
+    --task=LeggedRLLab-Isaac-Velocity-Flat-Unitree-G1-v0 \
+    --num_envs 16
+```
+
+</details>
+
+<details>
+<summary><b>Walk (Rough)</b></summary>
+
+```bash
+#Train
+python scripts/rsl_rl/train.py \
+  --task=LeggedRLLab-Isaac-Velocity-Rough-Unitree-G1-v0 \
+  --num_envs 4096 \
+  --headless
+```
+
+```bash
+#Play
+python scripts/rsl_rl/play.py \
+    --task=LeggedRLLab-Isaac-Velocity-Rough-Unitree-G1-v0 \
+    --num_envs 16
+```
+
+</details>
+
+<details>
+<summary><b>AMP (Adversarial Motion Priors)</b></summary>
+
+<details>
+<summary>Architecture</summary>
 
 | Component | Description |
 |---|---|
@@ -209,7 +247,7 @@ The discriminator input is `history_length=2` consecutive frames concatenated �
 </details>
 
 <details>
-<summary><b>Datasets</b></summary>
+<summary>Datasets</summary>
 
 **LAFAN1** — Retargeted CSV files (30 FPS). Column layout: `[x, y, z, qx, qy, qz, qw, joint_0 … joint_28]`
 
@@ -248,7 +286,7 @@ AMASS_Retargeted_for_G1/
 | `LeggedRLLab-Isaac-AMP-Flat-Unitree-G1-v0` | AMP on flat terrain (default motion: AMASS) |
 | `LeggedRLLab-Isaac-AMP-Flat-Unitree-G1-Play-v0` | Play/visualize (50 envs, no randomization) |
 
-##### Train
+**Train:**
 
 ```bash
 # Train with default AMASS dataset
@@ -268,7 +306,7 @@ python scripts/amp/train.py \
     --num_envs 4096 --headless
 ```
 
-##### Play
+**Play:**
 
 ```bash
 python scripts/amp/play.py \
@@ -277,17 +315,13 @@ python scripts/amp/play.py \
     --num_envs 32
 ```
 
-##### Verify Joint Order
-
-Verify that LAFAN1/AMASS joint order is correctly mapped to IsaacLab BFS order (no IsaacSim dependency):
+**Verify Joint Order:**
 
 ```bash
 python scripts/amp/verify_joint_order.py
 ```
 
-##### Record Reference Motion
-
-Record AMP observations from a trained locomotion policy for use as reference data:
+**Record Reference Motion:**
 
 ```bash
 python scripts/amp/record_reference_motion.py \
@@ -297,7 +331,8 @@ python scripts/amp/record_reference_motion.py \
     --output source/legged_rl_lab/legged_rl_lab/data/motion/recorded/go2_trot.pt
 ```
 
-##### Key Hyperparameters
+<details>
+<summary>Key Hyperparameters</summary>
 
 Defined in `rsl_rl_amp_cfg.py`:
 
@@ -311,37 +346,54 @@ Defined in `rsl_rl_amp_cfg.py`:
 | `amp_disc_logit_reg_coef` | 0.05 | L2 regularization on discriminator logits |
 | `amp_disc_weight_decay` | 0.0001 | Weight decay for discriminator parameters |
 
-### Metamorphology
+</details>
+
+</details>
+
+<details>
+<summary><b>Procedural (Metamorphosis)</b></summary>
 
 ```bash
 #Train
-python scripts/rsl_rl/train.py     --task LeggedRLLab-Isaac-Velocity-Flat-Procedural-Quadruped-v0     --num_envs 4096     --headless
+python scripts/rsl_rl/train.py \
+    --task LeggedRLLab-Isaac-Velocity-Flat-Procedural-Quadruped-v0 \
+    --num_envs 4096 \
+    --headless
 ```
 
 ```bash
 #Play
-python scripts/rsl_rl/play.py     --task LeggedRLLab-Isaac-Velocity-Flat-Procedural-Quadruped-v0     --num_envs 32
+python scripts/rsl_rl/play.py \
+    --task LeggedRLLab-Isaac-Velocity-Flat-Procedural-Quadruped-v0 \
+    --num_envs 32
 ```
 
-### Cross-Embodied (G1 + Go2)
+</details>
+
+<details>
+<summary><b>Cross-Embodied (G1 + Go2)</b></summary>
 
 ```bash
+#Train (multi-GPU)
 python -m torch.distributed.run \
   --nproc_per_node=4 \
   scripts/rsl_rl/train_cross_embodied_shared.py \
   --num_envs 4096 \
   --headless
 
+#Train (single-GPU)
 python scripts/rsl_rl/train_cross_embodied_shared.py \
   --num_envs 4096 \
-  --headless 
+  --headless
 ```
 
 ```bash
 #Play
 python scripts/rsl_rl/play_cross_embodied_shared.py \
-  --num_envs 32 
+  --num_envs 32
 ```
+
+</details>
 
 ---
 
