@@ -328,9 +328,24 @@ class AMPPPO(PPO):
             # Total loss
             loss = ppo_loss + amp_loss + grad_pen_loss + logit_reg_loss
 
+            # NaN guard: skip this mini-batch if any loss term is non-finite
+            if not torch.isfinite(loss):
+                import warnings
+                warnings.warn(
+                    f"[AMPPPO] Non-finite loss detected (ppo={ppo_loss.item():.4f}, "
+                    f"amp={amp_loss.item():.4f}, gp={grad_pen_loss.item():.4f}). "
+                    f"Skipping update for this mini-batch.",
+                    RuntimeWarning,
+                )
+                continue
+
             # Backward
             self.optimizer.zero_grad()
             loss.backward()
+
+            # Synchronize actor/critic gradients across all GPUs (discriminator stays local per GPU)
+            if self.is_multi_gpu:
+                self.reduce_parameters()
 
             # Clip gradients only for actor-critic
             nn.utils.clip_grad_norm_(self.actor.parameters(), self.max_grad_norm)
@@ -405,6 +420,14 @@ class AMPPPO(PPO):
             "disc_accuracy_policy": mean_disc_accuracy_policy,
             "disc_accuracy_expert": mean_disc_accuracy_expert,
         }
+
+    def broadcast_parameters(self) -> None:
+        """Broadcast actor, critic, AND discriminator from rank 0 to all GPUs."""
+        super().broadcast_parameters()
+        if self.discriminator is not None:
+            disc_params = [self.discriminator.state_dict()]
+            torch.distributed.broadcast_object_list(disc_params, src=0)
+            self.discriminator.load_state_dict(disc_params[0])
 
     def train_mode(self) -> None:
         super().train_mode()

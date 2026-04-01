@@ -259,6 +259,14 @@ python scripts/amp/train.py \
     --motion_file source/legged_rl_lab/legged_rl_lab/data/motion/LAFAN1_Retargeting_Dataset/g1_walk \
     --resume --load_run <run_folder> --checkpoint model_xxx.pt \
     --num_envs 4096 --headless
+
+python -m torch.distributed.run \
+  --nproc_per_node=4 \
+  scripts/amp/train.py \
+  --task LeggedRLLab-Isaac-AMP-Flat-Unitree-G1-v0 \
+  --motion_file source/legged_rl_lab/legged_rl_lab/data/motion/LAFAN1_Retargeting_Dataset/g1_walk \
+  --num_envs 4096 --headless \
+  --distributed  
 ```
 
 ```bash

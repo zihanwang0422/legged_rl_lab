@@ -172,7 +172,21 @@ def amp_learn(runner: OnPolicyRunner, num_learning_iterations: int, init_at_rand
                 obs, rewards, dones, extras = env.step(actions.to(env.device))
 
                 if check_for_nan:
-                    check_nan(obs, rewards, dones)
+                    try:
+                        check_nan(obs, rewards, dones)
+                    except ValueError as e:
+                        # NaN in physics output: log and zero out the affected tensors
+                        # rather than crashing the whole distributed job.
+                        import warnings
+                        warnings.warn(
+                            f"[rank {runner.gpu_global_rank}] NaN detected in env output: {e}. "
+                            "Replacing NaN with zeros and continuing.",
+                            RuntimeWarning,
+                        )
+                        for key in obs.keys():
+                            obs[key] = torch.nan_to_num(obs[key], nan=0.0)
+                        rewards = torch.nan_to_num(rewards, nan=0.0)
+                        dones = torch.nan_to_num(dones, nan=1.0)  # treat as done to force reset
 
                 obs, rewards, dones = (
                     obs.to(device),
