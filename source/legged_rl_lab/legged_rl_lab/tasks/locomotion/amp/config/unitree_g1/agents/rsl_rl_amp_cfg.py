@@ -7,7 +7,7 @@ from isaaclab.utils import configclass
 from isaaclab_rl.rsl_rl import RslRlOnPolicyRunnerCfg, RslRlPpoActorCriticCfg, RslRlPpoAlgorithmCfg
 
 # Import the base AMP algorithm config shared across robots
-from legged_rl_lab.tasks.locomotion.amp.config.quadruped.unitree_go2.agents.rsl_rl_amp_cfg import (
+from legged_rl_lab.tasks.locomotion.amp.config.unitree_go2.agents.rsl_rl_amp_cfg import (
     RslRlAmpPpoAlgorithmCfg,
 )
 
