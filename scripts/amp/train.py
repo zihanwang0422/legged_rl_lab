@@ -256,6 +256,9 @@ def amp_learn(runner: OnPolicyRunner, num_learning_iterations: int, init_at_rand
         if has_amp and it % 10 == 0:
             amp_keys = ["amp_loss", "grad_pen_loss", "disc_accuracy_policy", "disc_accuracy_expert"]
             amp_info = {k: f"{loss_dict[k]:.4f}" for k in amp_keys if k in loss_dict}
+            # Also show average style reward magnitude for diagnostics
+            if ep_style_rewards is not None:
+                amp_info["mean_style_r"] = f"{ep_style_rewards.mean().item():.4f}"
             if amp_info:
                 print(f"  [AMP] {amp_info}")
 

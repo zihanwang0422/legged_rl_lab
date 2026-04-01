@@ -82,7 +82,7 @@ from isaaclab_tasks.utils import get_checkpoint_path
 from isaaclab_tasks.utils.hydra import hydra_task_config
 
 # AMP wrapper: extracts amp_obs from the "amp" observation group each step
-from legged_rl_lab.tasks.locomotion.amp.amp_env_wrapper import AmpRslRlVecEnvWrapper
+from legged_rl_lab.envs import AmpRslRlVecEnvWrapper
 
 
 @hydra_task_config(args_cli.task, args_cli.agent)
@@ -162,7 +162,7 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
     runner.load(resume_path)
 
     # obtain the trained policy for inference
-    policy = runner.get_inference_policy(device=env.unwrapped.device)
+    policy = runner.get_inference_policy(device=env.unwrapped_env.device)
 
     # extract policy nn module (rsl_rl >= 2.3)
     try:
@@ -178,7 +178,7 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
     print("Skipped JIT export for custom AMP model.")
     print("Skipped ONNX export for custom AMP model.")
 
-    dt = env.unwrapped.step_dt
+    dt = env.unwrapped_env.step_dt
 
     # reset environment
     obs = env.get_observations()

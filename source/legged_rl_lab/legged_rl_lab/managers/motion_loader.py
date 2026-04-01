@@ -133,6 +133,25 @@ def _quat_rotate_inverse_np(q: np.ndarray, v: np.ndarray) -> np.ndarray:
     return v + 2.0 * (q_w * uv + uuv)
 
 
+def _quat_rotate_np(q: np.ndarray, v: np.ndarray) -> np.ndarray:
+    """Rotate vector ``v`` by quaternion ``q`` (forward rotation, not inverse).
+
+    Used to convert body-frame angular velocity to world-frame.
+
+    Args:
+        q: ``(N, 4)`` quaternions in ``[w, x, y, z]`` order.
+        v: ``(N, 3)`` vectors.
+
+    Returns:
+        ``(N, 3)`` rotated vectors.
+    """
+    q_w = q[:, 0:1]
+    q_xyz = q[:, 1:4]            # not negated — forward rotation
+    uv = np.cross(q_xyz, v)
+    uuv = np.cross(q_xyz, uv)
+    return v + 2.0 * (q_w * uv + uuv)
+
+
 def _finite_diff(x: np.ndarray, fps: float) -> np.ndarray:
     """Central/forward finite difference along axis 0."""
     vel = np.empty_like(x)
@@ -199,6 +218,14 @@ class MotionLoader:
         else:
             self._default_jpos = profile.get("default_joint_pos", None)
         self.data: torch.Tensor | None = None
+        # Raw state tensors for Reference State Initialization (RSI).
+        # Set by _load_npz / _load_csv; None for pre-processed formats.
+        self.state_root_pos_w: torch.Tensor | None = None     # (N, 3) world frame
+        self.state_root_quat: torch.Tensor | None = None      # (N, 4) [w, x, y, z]
+        self.state_root_lin_vel_w: torch.Tensor | None = None # (N, 3) world frame
+        self.state_root_ang_vel_w: torch.Tensor | None = None # (N, 3) world frame
+        self.state_joint_pos: torch.Tensor | None = None      # (N, num_dof) BFS order
+        self.state_joint_vel: torch.Tensor | None = None      # (N, num_dof) BFS order
 
     # ------------------------------------------------------------------
     # Public API
@@ -248,6 +275,13 @@ class MotionLoader:
                 raise KeyError(f"Expected key 'amp_obs' in dict, got: {list(data.keys())}")
         tensor = torch.from_numpy(np.array(data, dtype=np.float32)).to(self.device)
         self.data = tensor
+        # Pre-processed files have no raw state — RSI not available
+        self.state_root_pos_w = None
+        self.state_root_quat = None
+        self.state_root_lin_vel_w = None
+        self.state_root_ang_vel_w = None
+        self.state_joint_pos = None
+        self.state_joint_vel = None
         return tensor
 
     def _load_pt(self, path: str) -> torch.Tensor:
@@ -260,6 +294,13 @@ class MotionLoader:
                 raise KeyError(f"Expected key 'amp_obs' in dict, got: {list(data.keys())}")
         tensor = data.float().to(self.device)
         self.data = tensor
+        # Pre-processed files have no raw state — RSI not available
+        self.state_root_pos_w = None
+        self.state_root_quat = None
+        self.state_root_lin_vel_w = None
+        self.state_root_ang_vel_w = None
+        self.state_joint_pos = None
+        self.state_joint_vel = None
         return tensor
 
     def _load_npz(self, path: str) -> torch.Tensor:
@@ -324,6 +365,15 @@ class MotionLoader:
         )
         tensor = torch.from_numpy(amp_obs_np).to(self.device)
         self.data = tensor
+
+        # Store raw state for RSI (Reference State Initialization)
+        self.state_root_pos_w = torch.from_numpy(root_pos).to(self.device)
+        self.state_root_quat = torch.from_numpy(body_rot[:, 0, :]).to(self.device)  # [w,x,y,z]
+        self.state_root_lin_vel_w = torch.from_numpy(body_lin[:, 0, :]).to(self.device)
+        self.state_root_ang_vel_w = torch.from_numpy(body_ang[:, 0, :]).to(self.device)
+        self.state_joint_pos = torch.from_numpy(dof_pos).to(self.device)  # BFS order
+        self.state_joint_vel = torch.from_numpy(dof_vel).to(self.device)  # BFS order
+
         return tensor
 
     def _load_csv(self, path: str) -> torch.Tensor:
@@ -374,28 +424,41 @@ class MotionLoader:
         jvel = _finite_diff(joint_pos, fps)                           # (N, J)
         root_lin_vel_w = _finite_diff(root_pos, fps)                  # (N, 3)
         base_lin_vel = _quat_rotate_inverse_np(root_quat, root_lin_vel_w)  # (N, 3)
-        base_ang_vel = _ang_vel_from_quats(root_quat, fps)            # (N, 3)
+        base_ang_vel = _ang_vel_from_quats(root_quat, fps)            # (N, 3) body frame
 
-        # foot positions: not available from CSV → zeros
-        num_feet = len(self._profile.get("foot_body_indices", [2]))
-        foot_zeros = np.zeros((data_np.shape[0], num_feet * 3), dtype=np.float32)
-        if num_feet > 0:
-            logger.warning(
-                "[MotionLoader] CSV format does not contain body positions. "
-                "Foot position features are set to zero. "
-                "For best results, use the AMASS .npz dataset."
-            )
-
+        # foot positions: NOT included for CSV format.
+        # CSV only has joint angles + root pose, no body positions (no FK data).
+        # Including zeros would give the discriminator a trivial shortcut to
+        # distinguish expert (zeros) from policy (real foot coords) → disc_acc=1.0
+        # from iteration 1 → style reward collapses to 0.
+        # When using CSV data, also set observations.amp.foot_positions = None
+        # in the environment config to keep reference-data and env-obs consistent.
         amp_obs_np = np.concatenate(
-            [jpos_rel, jvel, base_lin_vel, base_ang_vel, foot_zeros], axis=1
+            [jpos_rel, jvel, base_lin_vel, base_ang_vel], axis=1
         )
         tensor = torch.from_numpy(amp_obs_np).to(self.device)
         self.data = tensor
+
+        # Store raw state for RSI (Reference State Initialization)
+        # base_ang_vel is body-frame → rotate to world-frame for write_root_velocity_to_sim
+        ang_vel_w_np = _quat_rotate_np(root_quat, base_ang_vel)
+        self.state_root_pos_w = torch.from_numpy(root_pos).to(self.device)
+        self.state_root_quat = torch.from_numpy(root_quat).to(self.device)  # [w,x,y,z]
+        self.state_root_lin_vel_w = torch.from_numpy(root_lin_vel_w).to(self.device)
+        self.state_root_ang_vel_w = torch.from_numpy(ang_vel_w_np).to(self.device)
+        self.state_joint_pos = torch.from_numpy(joint_pos).to(self.device)  # BFS order
+        self.state_joint_vel = torch.from_numpy(jvel).to(self.device)
+
         return tensor
 
     def _load_directory(self, path: str) -> torch.Tensor:
         """Recursively load all supported motion files from a directory."""
-        all_data = []
+        all_data: list[torch.Tensor] = []
+        # Accumulate per-file state chunks for RSI concatenation
+        state_chunks: dict[str, list[torch.Tensor]] = {
+            "root_pos_w": [], "root_quat": [], "root_lin_vel_w": [],
+            "root_ang_vel_w": [], "joint_pos": [], "joint_vel": [],
+        }
         supported = (".npy", ".pt", ".pth", ".npz", ".csv")
         for root, _, files in os.walk(path):
             for filename in sorted(files):
@@ -405,6 +468,14 @@ class MotionLoader:
                 try:
                     chunk = self.load(filepath)
                     all_data.append(chunk)
+                    # Collect state data if this file provided it
+                    if self.state_root_pos_w is not None:
+                        state_chunks["root_pos_w"].append(self.state_root_pos_w)
+                        state_chunks["root_quat"].append(self.state_root_quat)
+                        state_chunks["root_lin_vel_w"].append(self.state_root_lin_vel_w)
+                        state_chunks["root_ang_vel_w"].append(self.state_root_ang_vel_w)
+                        state_chunks["joint_pos"].append(self.state_joint_pos)
+                        state_chunks["joint_vel"].append(self.state_joint_vel)
                 except Exception as e:
                     logger.warning(f"[MotionLoader] Skipping {filepath}: {e}")
 
@@ -413,6 +484,23 @@ class MotionLoader:
 
         tensor = torch.cat(all_data, dim=0)
         self.data = tensor
+
+        # Concatenate accumulated state tensors (or set to None if none available)
+        if state_chunks["root_pos_w"]:
+            self.state_root_pos_w = torch.cat(state_chunks["root_pos_w"], dim=0)
+            self.state_root_quat = torch.cat(state_chunks["root_quat"], dim=0)
+            self.state_root_lin_vel_w = torch.cat(state_chunks["root_lin_vel_w"], dim=0)
+            self.state_root_ang_vel_w = torch.cat(state_chunks["root_ang_vel_w"], dim=0)
+            self.state_joint_pos = torch.cat(state_chunks["joint_pos"], dim=0)
+            self.state_joint_vel = torch.cat(state_chunks["joint_vel"], dim=0)
+        else:
+            self.state_root_pos_w = None
+            self.state_root_quat = None
+            self.state_root_lin_vel_w = None
+            self.state_root_ang_vel_w = None
+            self.state_joint_pos = None
+            self.state_joint_vel = None
+
         return tensor
 
     def sample(self, batch_size: int, history_length: int = 2) -> torch.Tensor:
@@ -459,3 +547,41 @@ class MotionLoader:
     def obs_dim(self) -> int:
         """Observation dimension of the loaded data."""
         return 0 if self.data is None else self.data.shape[1]
+
+    @property
+    def has_state_data(self) -> bool:
+        """True if raw state tensors for RSI are available."""
+        return self.state_root_pos_w is not None
+
+    def get_random_state(self, n: int) -> dict[str, torch.Tensor]:
+        """Sample ``n`` random frames and return their raw robot state.
+
+        Returns a dict with keys:
+          ``root_pos``       — (n, 3) root position in world frame
+          ``root_quat``      — (n, 4) root quaternion [w, x, y, z]
+          ``root_lin_vel_w`` — (n, 3) root linear velocity, world frame
+          ``root_ang_vel_w`` — (n, 3) root angular velocity, world frame
+          ``joint_pos``      — (n, num_dof) absolute joint positions (BFS order)
+          ``joint_vel``      — (n, num_dof) joint velocities (BFS order)
+
+        Args:
+            n: Number of frames to sample.
+
+        Raises:
+            RuntimeError: If raw state data is not available.
+        """
+        if not self.has_state_data:
+            raise RuntimeError(
+                "MotionLoader has no raw state data for RSI. "
+                "Load a .npz or .csv motion file (not pre-processed .npy/.pt)."
+            )
+        num_frames = self.data.shape[0]
+        idx = torch.randint(0, num_frames, (n,), device=self.device)
+        return {
+            "root_pos":       self.state_root_pos_w[idx],
+            "root_quat":      self.state_root_quat[idx],
+            "root_lin_vel_w": self.state_root_lin_vel_w[idx],
+            "root_ang_vel_w": self.state_root_ang_vel_w[idx],
+            "joint_pos":      self.state_joint_pos[idx],
+            "joint_vel":      self.state_joint_vel[idx],
+        }

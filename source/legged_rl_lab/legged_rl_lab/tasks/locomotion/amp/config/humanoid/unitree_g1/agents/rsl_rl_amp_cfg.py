@@ -46,14 +46,30 @@ class UnitreeG1AMPFlatPPORunnerCfg(RslRlOnPolicyRunnerCfg):
         desired_kl=0.01,
         max_grad_norm=1.0,
         amp_cfg={
-            "amp_discriminator_hidden_dims": [1024, 512],
+            # 缩小判别器容量：[1024, 512] → [512, 256]
+            # 过大的判别器配合归一化泄漏问题会轻松达到完美区分（disc_acc≈1.0）
+            # 缩小容量使其更难记忆简单特征，迫使它关注真正的步态差异
+            "amp_discriminator_hidden_dims": [512, 256],
             "amp_discriminator_activation": "relu",
-            "amp_learning_rate": 5e-5,
+            # 减慢判别器学习，给 policy 更多赶上的机会
+            "amp_learning_rate": 1e-5,
             "amp_replay_buffer_size": 1000000,
-            # Humanoid requires more emphasis on style to achieve natural gait
-            "amp_task_reward_lerp": 0.4,
-            "amp_disc_gradient_penalty_coef": 10.0,
-            "amp_disc_logit_reg_coef": 0.05,
-            "amp_disc_weight_decay": 0.0001,
+            # 50% 任务 / 50% 风格：平衡任务与风格梯度
+            # 问题背景：disc_acc≈1.0时style_reward是常数（softplus(-0.75)≈1.16/step），
+            #   所有 transition 获得相同 style reward → advantage from style ≡ 0。
+            #   lerp=0.25时有效梯度只有25%task，太弱；改为0.5使task梯度翻倍，
+            #   先让策略学会走路（policy分布向expert靠近），disc_acc才能开始下降。
+            "amp_task_reward_lerp": 0.5,
+            # gradient penalty 保持标准值
+            "amp_disc_gradient_penalty_coef": 5.0,
+            # logit_reg 取中间值 0.2：
+            # - 0.3 时 logit≈±0.5，softplus 梯度 sigmoid(-0.5)=0.38 ✓ 但梯度稍弱
+            # - 0.1 时 logit≈±1.1，softplus 梯度 sigmoid(-1.1)=0.25 ✗ 反而更弱
+            # - 0.2 时 logit≈±0.75，softplus 梯度 sigmoid(-0.75)=0.32，平衡点
+            "amp_disc_logit_reg_coef": 0.2,
+            "amp_disc_weight_decay": 0.0005,
+            # reward_scale 降至2.0：scale=3.0时常量style项(≈3×0.387=1.16/step)过大，
+            #   淹没task差分信号，value网络偏向拟合style常量而非task结构。
+            "amp_reward_scale": 2.0,
         },
     )

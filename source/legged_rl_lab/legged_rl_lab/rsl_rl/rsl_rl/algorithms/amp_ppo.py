@@ -337,15 +337,32 @@ class AMPPPO(PPO):
             nn.utils.clip_grad_norm_(self.critic.parameters(), self.max_grad_norm)
             self.optimizer.step()
 
-            # Update discriminator normalizer
+            # Update discriminator normalizer from BOTH policy AND expert data.
+            # Bug fix: if normalizer only trains on policy data, expert obs get
+            # normalized by policy statistics → out-of-distribution values give
+            # the discriminator a trivial "free" cue (normalization leak).
             if self.amp_replay_buffer.num_samples > 0:
-                # Sample some obs to update normalizer
+                # Policy data
                 norm_indices = torch.randint(
                     0, self.amp_replay_buffer.num_samples,
                     (min(512, self.amp_replay_buffer.num_samples),),
                     device=self.device,
                 )
                 self.discriminator.update_normalizer(self.amp_replay_buffer.states[norm_indices])
+
+                # Expert data: construct history-stacked obs to match amp_obs_dim
+                num_frames = self.reference_data.shape[0]
+                hl = self.amp_history_length
+                max_start = max(1, num_frames - hl)
+                n_exp = min(512, max_start)
+                exp_idx = torch.randint(0, max_start, (n_exp,), device=self.device)
+                if hl > 1:
+                    offsets = torch.arange(hl, device=self.device)
+                    frame_indices = exp_idx.unsqueeze(1) + offsets.unsqueeze(0)
+                    expert_obs_hist = self.reference_data[frame_indices].reshape(n_exp, -1)
+                else:
+                    expert_obs_hist = self.reference_data[exp_idx]
+                self.discriminator.update_normalizer(expert_obs_hist)
 
             # Compute discriminator accuracy for logging
             with torch.no_grad():
@@ -406,7 +423,29 @@ class AMPPPO(PPO):
         return saved_dict
 
     def load(self, loaded_dict: dict, load_cfg: dict | None, strict: bool) -> bool:
+        # During play the discriminator is not initialized, so the optimizer only has 1
+        # param group (policy) while the checkpoint has 3 (policy + 2 disc groups).
+        # Skip optimizer loading when discriminator is absent to avoid ValueError.
+        if self.discriminator is None and load_cfg is None:
+            load_cfg = {
+                "actor": True,
+                "critic": True,
+                "optimizer": False,
+                "iteration": True,
+                "rnd": True,
+            }
         result = super().load(loaded_dict, load_cfg, strict)
         if self.discriminator is not None and "discriminator_state_dict" in loaded_dict:
-            self.discriminator.load_state_dict(loaded_dict["discriminator_state_dict"], strict=False)
+            try:
+                self.discriminator.load_state_dict(loaded_dict["discriminator_state_dict"], strict=False)
+            except RuntimeError:
+                # Architecture mismatch (e.g. hidden_dims changed) — start discriminator fresh.
+                print("[AMPPPO] Discriminator architecture changed; re-initializing from scratch.")
+            # Clear stale optimizer state for discriminator params.
+            # When discriminator architecture changes between checkpoint and current
+            # code, load_state_dict silently loads wrong-shaped momentum/variance
+            # tensors that would crash at the first optimizer.step().  Deleting the
+            # state here forces Adam to start fresh for disc params only.
+            for p in self.discriminator.parameters():
+                self.optimizer.state.pop(p, None)
         return result

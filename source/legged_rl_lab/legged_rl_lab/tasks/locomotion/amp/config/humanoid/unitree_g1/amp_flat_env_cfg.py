@@ -5,6 +5,7 @@
 
 import os
 
+from isaaclab.managers import EventTermCfg as EventTerm
 from isaaclab.managers import ObservationTermCfg as ObsTerm
 from isaaclab.managers import SceneEntityCfg
 from isaaclab.utils import configclass
@@ -48,11 +49,11 @@ class UnitreeG1AMPFlatEnvCfg(LocomotionAMPRoughEnvCfg):
         self.observations.policy.joint_pos.scale = 1.0
         self.observations.policy.joint_vel.scale = 0.05
 
-        # AMP: override foot_positions to use G1's ankle links
-        self.observations.amp.foot_positions = ObsTerm(
-            func=mdp.amp_foot_positions_base,
-            params={"asset_cfg": SceneEntityCfg("robot", body_names=self.foot_link_name)},
-        )
+        # AMP: LAFAN1 CSV 无刚体位置数据，foot_positions 会被置零，
+        # 与环境中真实计算的踝关节位置完全不同，判别器会以此轻松区分
+        # expert/policy → disc_acc=1.0 → 风格奖励恒为0。
+        # 使用 LAFAN1 数据时必须移除此项；只有 AMASS（.npz）才有真实脚部位置。
+        self.observations.amp.foot_positions = None
 
         # ----------------------------- Actions -----------------------------
         self.actions.joint_pos.scale = 0.25
@@ -60,23 +61,24 @@ class UnitreeG1AMPFlatEnvCfg(LocomotionAMPRoughEnvCfg):
         # ----------------------------- Events -----------------------------
         self.events.add_base_mass.params["asset_cfg"].body_names = [self.base_link_name]
         self.events.base_external_force_torque.params["asset_cfg"].body_names = [self.base_link_name]
-        self.events.reset_robot_joints.params["position_range"] = (1.0, 1.0)
-        self.events.reset_base.params = {
-            "pose_range": {"x": (-0.5, 0.5), "y": (-0.5, 0.5), "yaw": (-3.14, 3.14)},
-            "velocity_range": {
-                "x": (0.0, 0.0),
-                "y": (0.0, 0.0),
-                "z": (0.0, 0.0),
-                "roll": (0.0, 0.0),
-                "pitch": (0.0, 0.0),
-                "yaw": (0.0, 0.0),
-            },
-        }
         self.events.push_robot = None
 
+        # Replace uniform reset with Reference State Initialization (RSI):
+        # samples a random reference motion frame and sets the robot state to it.
+        # This eliminates the AMP dead-lock where the discriminator trivially
+        # identifies policy (always standing) vs expert (walking).
+        self.events.reset_base = None
+        self.events.reset_robot_joints = None
+        self.events.reset_from_ref = EventTerm(
+            func=mdp.reset_from_reference_motion,
+            mode="reset",
+            params={"asset_cfg": SceneEntityCfg("robot")},
+        )
+
         # ----------------------------- Rewards -----------------------------
-        # General
-        self.rewards.is_alive.weight = 0.0
+        # 生存奖励：减少 illegal contact（原 0, 导致 23% 倒地）
+        # 轻量权重 0.5，避免压制风格奖励信号
+        self.rewards.is_alive.weight = 0.5
 
         # Velocity-tracking rewards
         self.rewards.track_lin_vel_xy_exp.weight = 1.5
@@ -86,8 +88,10 @@ class UnitreeG1AMPFlatEnvCfg(LocomotionAMPRoughEnvCfg):
 
         # Root penalties
         self.rewards.lin_vel_z_l2.weight = 0.0
-        self.rewards.ang_vel_xy_l2.weight = -0.01
-        self.rewards.flat_orientation_l2.weight = 0.0
+        self.rewards.ang_vel_xy_l2.weight = -0.05
+        # 平地姿态稳定惩罚：-1.0 过重，限制了腿部自然摆动（走路需要轻微俯仰）
+        # 降至 -0.3，仍可防止大角度倾倒但不压制步态
+        self.rewards.flat_orientation_l2.weight = -0.3
 
         # Joint penalties
         self.rewards.joint_torques_l2.weight = -1.5e-7
@@ -96,7 +100,6 @@ class UnitreeG1AMPFlatEnvCfg(LocomotionAMPRoughEnvCfg):
         )
         self.rewards.joint_acc_l2.weight = -1.25e-7
 
-        # Action penalties
         self.rewards.action_rate_l2.weight = -0.001
 
         # Contact rewards

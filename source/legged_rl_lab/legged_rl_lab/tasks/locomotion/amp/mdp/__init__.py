@@ -16,4 +16,5 @@ from legged_rl_lab.tasks.locomotion.velocity.mdp.observations import *  # noqa: 
 from legged_rl_lab.tasks.locomotion.velocity.mdp.rewards import *  # noqa: F401, F403
 from legged_rl_lab.tasks.locomotion.velocity.mdp.utils import *  # noqa: F401, F403
 
+from .events import *  # noqa: F401, F403
 from .observations import *  # noqa: F401, F403
