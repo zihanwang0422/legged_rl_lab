@@ -1,6 +1,6 @@
 from isaaclab.utils import configclass
 
-from legged_rl_lab.tasks.tracking.robots.g1 import G1_ACTION_SCALE, G1_CYLINDER_CFG
+from legged_rl_lab.assets.unitree import G1_ACTION_SCALE, G1_CYLINDER_CFG
 from legged_rl_lab.tasks.tracking.config.g1.agents.rsl_rl_ppo_cfg import LOW_FREQ_SCALE
 from legged_rl_lab.tasks.tracking.tracking_env_cfg import TrackingEnvCfg
 

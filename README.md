@@ -39,6 +39,17 @@
     <td></td>
     <td></td>
   </tr>
+  <tr>
+    <td rowspan="2">Motion Tracking</td>
+    <td>G1 (Tracking)</td>
+    <td></td>
+    <td></td>
+  </tr>
+  <tr>
+    <td>SMPL Humanoid (Tracking)</td>
+    <td></td>
+    <td></td>
+  </tr>
 </table>
 
 </div>
@@ -323,6 +334,53 @@ python scripts/rsl_rl/play_cross_embodied_shared.py \
 ```
 
 </details>
+
+### 🏃 Motion Tracking
+
+**Dataset**: [LAFAN1_Retargeting_Dataset](https://huggingface.co/datasets/unitreerobotics/LAFAN1_Retargeting_Dataset) (CSV, 30 FPS, retargeted to G1-29DOF)
+
+```bash
+# Step 1 — Convert retargeted CSV to NPZ (runs FK via Isaac Sim to compute full body states)
+python scripts/csv_to_npz.py \
+  --input_file source/legged_rl_lab/legged_rl_lab/data/motion/LAFAN1_Retargeting_Dataset/g1_fall/fallAndGetUp1_subject1.csv \
+  --input_fps 30 \
+  --headless
+```
+
+```bash
+# Step 2 — (Optional) Replay NPZ in Isaac Sim to verify
+python scripts/replay_npz.py \
+    --file /path/to/npz_file
+```
+
+```bash
+# Step 3 — Train
+python scripts/rsl_rl/train.py \
+  --task Tracking-Flat-G1-v0 \
+  --motion_file /path/to/motion.npz \
+  --num_envs 4096 --headless
+
+# Resume
+python scripts/rsl_rl/train.py \
+  --task Tracking-Flat-G1-v0 \
+  --motion_file /path/to/motion.npz \
+  --resume --load_run <run_folder> --checkpoint model_xxx.pt \
+  --num_envs 4096 --headless
+```
+
+```bash
+# Step 4 — Play
+python scripts/rsl_rl/play.py \
+  --task Tracking-Flat-G1-v0 \
+  --motion_file /path/to/motion.npz \
+  --num_envs 16
+```
+
+| Task ID | Description |
+|---------|-------------|
+| `Tracking-Flat-G1-v0` | Standard, with state estimation |
+| `Tracking-Flat-G1-Wo-State-Estimation-v0` | No state estimation (closer to real deployment) |
+| `Tracking-Flat-G1-Low-Freq-v0` | Half-frequency control |
 
 ---
 

@@ -19,6 +19,13 @@ class MotionOnPolicyRunner(OnPolicyRunner):
         super().save(path, infos)
         policy_path = path.split("model")[0]
         filename = policy_path.split("/")[-2] + ".onnx"
+        policy_nn = self.alg.policy
+        if hasattr(policy_nn, "actor_obs_normalizer"):
+            normalizer = policy_nn.actor_obs_normalizer
+        elif hasattr(policy_nn, "student_obs_normalizer"):
+            normalizer = policy_nn.student_obs_normalizer
+        else:
+            normalizer = None
         export_motion_policy_as_onnx(
-            self.env.unwrapped, self.alg.policy, normalizer=self.obs_normalizer, path=policy_path, filename=filename
+            self.env.unwrapped, policy_nn, normalizer=normalizer, path=policy_path, filename=filename
         )
