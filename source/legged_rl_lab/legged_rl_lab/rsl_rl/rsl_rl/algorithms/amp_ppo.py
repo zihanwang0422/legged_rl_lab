@@ -252,6 +252,7 @@ class AMPPPO(PPO):
         mean_logit_reg_loss = 0.0
         mean_disc_accuracy_policy = 0.0
         mean_disc_accuracy_expert = 0.0
+        actual_updates = 0
 
         # Get PPO mini batch generator
         if self.actor.is_recurrent or self.critic.is_recurrent:
@@ -294,7 +295,11 @@ class AMPPPO(PPO):
                         pg["lr"] = self.learning_rate
 
             # Surrogate loss
-            ratio = torch.exp(actions_log_prob - torch.squeeze(batch.old_actions_log_prob))
+            # Clamp log-ratio to [-10, 10] to prevent exp() overflow when action std
+            # is large and log_prob_old approaches -inf at the tanh boundary.
+            log_ratio = actions_log_prob - torch.squeeze(batch.old_actions_log_prob)
+            log_ratio = torch.clamp(log_ratio, min=-10.0, max=10.0)
+            ratio = torch.exp(log_ratio)
             surrogate = -torch.squeeze(batch.advantages) * ratio
             surrogate_clipped = -torch.squeeze(batch.advantages) * torch.clamp(
                 ratio, 1.0 - self.clip_param, 1.0 + self.clip_param
@@ -380,12 +385,13 @@ class AMPPPO(PPO):
                 self.discriminator.update_normalizer(expert_obs_hist)
 
             # Compute discriminator accuracy for logging
+            # Use tanh threshold (LSGAN: expert→+1, policy→-1) not sigmoid (BCE).
             with torch.no_grad():
                 all_pairs = torch.cat([policy_pair, expert_pair], dim=0)
                 all_logits = self.discriminator(all_pairs)
                 p_logits, e_logits = all_logits.split(mini_batch_size, dim=0)
-                acc_policy = (torch.sigmoid(p_logits) < 0.5).float().mean().item()
-                acc_expert = (torch.sigmoid(e_logits) > 0.5).float().mean().item()
+                acc_policy = (torch.tanh(p_logits) < 0.0).float().mean().item()
+                acc_expert = (torch.tanh(e_logits) > 0.0).float().mean().item()
 
             # Accumulate
             mean_value_loss += value_loss.item()
@@ -396,9 +402,10 @@ class AMPPPO(PPO):
             mean_logit_reg_loss += logit_reg_loss.item()
             mean_disc_accuracy_policy += acc_policy
             mean_disc_accuracy_expert += acc_expert
+            actual_updates += 1
 
-        # Average
-        num_updates = self.num_learning_epochs * self.num_mini_batches
+        # Average over actually executed updates (skipped batches contribute nothing)
+        num_updates = max(1, actual_updates)
         mean_value_loss /= num_updates
         mean_surrogate_loss /= num_updates
         mean_entropy /= num_updates
