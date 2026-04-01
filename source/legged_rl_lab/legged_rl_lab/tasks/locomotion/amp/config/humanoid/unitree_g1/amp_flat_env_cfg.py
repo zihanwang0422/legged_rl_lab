@@ -6,7 +6,6 @@
 import os
 
 from isaaclab.managers import EventTermCfg as EventTerm
-from isaaclab.managers import ObservationTermCfg as ObsTerm
 from isaaclab.managers import SceneEntityCfg
 from isaaclab.utils import configclass
 
@@ -49,10 +48,10 @@ class UnitreeG1AMPFlatEnvCfg(LocomotionAMPRoughEnvCfg):
         self.observations.policy.joint_pos.scale = 1.0
         self.observations.policy.joint_vel.scale = 0.05
 
-        # AMP: LAFAN1 CSV 无刚体位置数据，foot_positions 会被置零，
-        # 与环境中真实计算的踝关节位置完全不同，判别器会以此轻松区分
-        # expert/policy → disc_acc=1.0 → 风格奖励恒为0。
-        # 使用 LAFAN1 数据时必须移除此项；只有 AMASS（.npz）才有真实脚部位置。
+        # AMP: 足部位置特征已禁用，保持 AMASS NPZ 和 LAFAN1 CSV 两种数据源
+        # 的 obs 维度一致（均为 64d = 29+29+3+3）。
+        # 若需要足部位置，需同时在 motion_loader G1 profile 中启用
+        # foot_body_indices 并确保所有数据源都包含刚体位置信息。
         self.observations.amp.foot_positions = None
 
         # ----------------------------- Actions -----------------------------

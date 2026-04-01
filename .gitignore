@@ -1,5 +1,8 @@
 # Deploy — local deployment packages (not tracked)
 deploy/LeggedLabDeploy/
+source/legged_rl_lab/legged_lab
+GMR
+
 
 # C++
 **/cmake-build*/

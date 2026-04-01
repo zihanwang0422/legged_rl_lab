@@ -62,6 +62,10 @@ import os
 import time
 import torch
 
+# Use default linalg library selection — avoids CUSOLVER_STATUS_INTERNAL_ERROR
+# that occurs when GPU memory is exhausted and cuSolver cannot initialize.
+torch.backends.cuda.preferred_linalg_library("default")
+
 from rsl_rl.runners import OnPolicyRunner
 
 from isaaclab.envs import (

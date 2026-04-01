@@ -49,7 +49,7 @@ logger = logging.getLogger(__name__)
 _ROBOT_PROFILES: dict[str, dict] = {
     "g1": {
         "num_dof": 29,
-        "foot_body_indices": [6, 12],  # left_ankle_roll_link, right_ankle_roll_link
+        "foot_body_indices": [],  # Disabled: CSV/NPZ must output same dim (64d). Enable only when all data sources include body positions.
         # G1 29-DOF default standing posture (matches UNITREE_G1_29DOF_CFG BFS order)
         "default_joint_pos": np.array([
             -0.1,  # [0] left_hip_pitch_joint

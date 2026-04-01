@@ -75,8 +75,18 @@ class AMPDiscriminator(nn.Module):
             Logit of shape ``(B, 1)``.
         """
         if self.obs_normalizer is not None:
-            # Normalize each half independently
-            s, s_next = amp_obs_pair.split(self.amp_obs_dim, dim=-1)
+            # Normalize each half independently.
+            # Validate input dimension before splitting to give a clear error.
+            pair_dim = amp_obs_pair.shape[-1]
+            if pair_dim != self.input_dim:
+                raise ValueError(
+                    f"AMPDiscriminator.forward: expected input dim {self.input_dim} "
+                    f"(= 2 × amp_obs_dim {self.amp_obs_dim}), but got {pair_dim}. "
+                    f"Check that env amp obs dim ({pair_dim // 2} per step) matches "
+                    f"motion_loader obs dim ({self.amp_obs_dim // 2} per frame). "
+                    f"Ensure foot_positions is consistently enabled/disabled in both."
+                )
+            s, s_next = amp_obs_pair.chunk(2, dim=-1)
             s = self.obs_normalizer(s)
             s_next = self.obs_normalizer(s_next)
             amp_obs_pair = torch.cat([s, s_next], dim=-1)
@@ -85,10 +95,16 @@ class AMPDiscriminator(nn.Module):
         return self.head(features)
 
     def predict_reward(self, amp_obs: torch.Tensor, amp_obs_next: torch.Tensor) -> torch.Tensor:
-        """Compute style reward from a transition pair.
+        """Compute style reward from a transition pair (LSGAN formulation).
 
-        Uses: reward = -log(1 - sigmoid(D(s, s'))) = softplus(D(s, s'))
-        Higher reward when discriminator thinks transition is expert-like.
+        LSGAN reward: r = max(0, 1 - 0.25*(D(s,s') - 1)^2)
+        where D = tanh(logit) ∈ (-1, 1).
+        - When D=+1 (expert-like): r = reward_scale × 1.0  (maximum)
+        - When D= 0 (boundary):   r = reward_scale × 0.75
+        - When D=-1 (policy-like): r = reward_scale × 0.0  (minimum)
+
+        The bounded output prevents reward divergence that occurs with
+        softplus(logit) as the discriminator becomes more confident.
 
         Args:
             amp_obs: Current AMP observation ``(B, amp_obs_dim)``.
@@ -99,8 +115,8 @@ class AMPDiscriminator(nn.Module):
         """
         with torch.no_grad():
             pair = torch.cat([amp_obs, amp_obs_next], dim=-1)
-            logit = self.forward(pair)
-            reward = self.reward_scale * torch.nn.functional.softplus(logit)
+            d_tanh = torch.tanh(self.forward(pair))  # (B,1) in (-1, 1)
+            reward = self.reward_scale * torch.clamp(1.0 - 0.25 * (d_tanh - 1.0) ** 2, min=0.0)
         return reward
 
     def compute_loss(
@@ -122,11 +138,14 @@ class AMPDiscriminator(nn.Module):
         all_logits = self.forward(all_pairs)
         policy_logits, expert_logits = all_logits.split(policy_pair.shape[0], dim=0)
 
-        # BCE loss: expert → 1, policy → 0
-        bce_loss = nn.functional.binary_cross_entropy_with_logits
+        # LSGAN loss: expert → 1, policy → -1  (outputs in raw logit space)
+        # E[(D(expert) - 1)^2] + E[(D(policy) + 1)^2]  using tanh squashing
+        # Equivalent formulation via logits: MSE against ±1 targets on tanh(logit)
+        policy_out = torch.tanh(policy_logits)   # mapped to (-1, 1)
+        expert_out = torch.tanh(expert_logits)   # mapped to (-1, 1)
         amp_loss = 0.5 * (
-            bce_loss(expert_logits, torch.ones_like(expert_logits))
-            + bce_loss(policy_logits, torch.zeros_like(policy_logits))
+            torch.mean((expert_out - 1.0) ** 2)
+            + torch.mean((policy_out + 1.0) ** 2)
         )
 
         # R1 gradient penalty on expert data
@@ -146,7 +165,7 @@ class AMPDiscriminator(nn.Module):
 
         # Normalize if needed
         if self.obs_normalizer is not None:
-            s, s_next = expert_pair.split(self.amp_obs_dim, dim=-1)
+            s, s_next = expert_pair.chunk(2, dim=-1)
             s_norm = self.obs_normalizer(s)
             s_next_norm = self.obs_normalizer(s_next)
             pair_norm = torch.cat([s_norm, s_next_norm], dim=-1)
