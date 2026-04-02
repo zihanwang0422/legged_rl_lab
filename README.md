@@ -502,3 +502,4 @@ pkill -f "python.*train.py"
 * [unitree_rl_lab](https://github.com/unitreerobotics/unitree_rl_lab?tab=readme-ov-file#acknowledgements)
 * [legged_lab](https://github.com/zitongbai/legged_lab)
 * [unitree_mujoco](https://github.com/unitreerobotics/unitree_mujoco)
+* [beyondmimic](https://github.com/HybridRobotics/whole_body_tracking)
