@@ -375,6 +375,7 @@ python scripts/rsl_rl/play.py \
   --motion_file /path/to/motion.npz \
   --num_envs 16
 ```
+[<img src="media/mimic_lafan.gif" width="300px">](gifs/walkrough.gif)
 
 | Task ID | Description |
 |---------|-------------|
