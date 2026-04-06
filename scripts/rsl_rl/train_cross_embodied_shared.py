@@ -129,7 +129,7 @@ from isaaclab_tasks.utils.parse_cfg import load_cfg_from_registry
 logger = logging.getLogger(__name__)
 
 # Task and agent identifiers (registered in g1go2_mixed/__init__.py)
-_TASK_ID = "LeggedRLLab-Isaac-Velocity-Flat-G1Go2-Mixed-v0"
+_TASK_ID = "LeggedRLLab-Isaac-CrossEmboided-Flat-G1Go2-Mixed-v0"
 _AGENT_ENTRY = "rsl_rl_cfg_entry_point"
 
 

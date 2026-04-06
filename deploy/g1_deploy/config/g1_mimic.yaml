@@ -1,0 +1,130 @@
+gamepad_type_sim2sim: "gamesir"
+xml_path: "./assets/scene_29dof.xml"
+
+control_dt: 0.02
+sim_dt: 0.005
+control_decimation: 4
+
+init_height: 0.76
+anchor_body_name: "torso_link"
+include_state_estimation: true
+num_obs: 160
+num_actions: 29
+
+# Tracked body names (order matches ONNX body_pos_w / body_quat_w output)
+body_names: [
+  "pelvis",
+  "left_hip_roll_link",
+  "left_knee_link",
+  "left_ankle_roll_link",
+  "right_hip_roll_link",
+  "right_knee_link",
+  "right_ankle_roll_link",
+  "torso_link",
+  "left_shoulder_roll_link",
+  "left_elbow_link",
+  "left_wrist_yaw_link",
+  "right_shoulder_roll_link",
+  "right_elbow_link",
+  "right_wrist_yaw_link"]
+
+# ========== PD gains (Isaac policy order, physics-derived from G1_CYLINDER_CFG) ==========
+# Isaac training order:
+#  [ 0] left_hip_pitch   [ 1] right_hip_pitch  [ 2] waist_yaw
+#  [ 3] left_hip_roll    [ 4] right_hip_roll   [ 5] waist_roll
+#  [ 6] left_hip_yaw     [ 7] right_hip_yaw    [ 8] waist_pitch
+#  [ 9] left_knee        [10] right_knee        [11] left_shoulder_pitch  [12] right_shoulder_pitch
+#  [13] left_ankle_pitch [14] right_ankle_pitch [15] left_shoulder_roll   [16] right_shoulder_roll
+#  [17] left_ankle_roll  [18] right_ankle_roll  [19] left_shoulder_yaw    [20] right_shoulder_yaw
+#  [21] left_elbow       [22] right_elbow       [23] left_wrist_roll      [24] right_wrist_roll
+#  [25] left_wrist_pitch [26] right_wrist_pitch [27] left_wrist_yaw       [28] right_wrist_yaw
+kps: [40.1792, 40.1792, 40.1792,           # hip_pitch(L,R), waist_yaw        (7520_14)
+      99.0984, 99.0984, 28.5012,           # hip_roll(L,R),  waist_roll       (7520_22, 2x5020)
+      40.1792, 40.1792, 28.5012,           # hip_yaw(L,R),   waist_pitch      (7520_14, 2x5020)
+      99.0984, 99.0984, 14.2506, 14.2506,  # knee(L,R),      shoulder_pitch   (7520_22, 5020)
+      28.5012, 28.5012, 14.2506, 14.2506,  # ankle_pitch,    shoulder_roll    (2x5020, 5020)
+      28.5012, 28.5012, 14.2506, 14.2506,  # ankle_roll,     shoulder_yaw     (2x5020, 5020)
+      14.2506, 14.2506,                     # elbow(L,R)                       (5020)
+      16.7783, 16.7783, 16.7783, 16.7783,  # wrist_roll, wrist_pitch          (4010)
+      16.7783, 16.7783]                     # wrist_yaw(L,R)                   (4010)
+
+kds: [2.5579, 2.5579, 2.5579,              # hip_pitch(L,R), waist_yaw
+      6.3088, 6.3088, 1.8144,              # hip_roll(L,R),  waist_roll
+      2.5579, 2.5579, 1.8144,              # hip_yaw(L,R),   waist_pitch
+      6.3088, 6.3088, 0.9072, 0.9072,      # knee(L,R),      shoulder_pitch
+      1.8144, 1.8144, 0.9072, 0.9072,      # ankle_pitch,    shoulder_roll
+      1.8144, 1.8144, 0.9072, 0.9072,      # ankle_roll,     shoulder_yaw
+      0.9072, 0.9072,                       # elbow(L,R)
+      1.0681, 1.0681, 1.0681, 1.0681,      # wrist_roll, wrist_pitch
+      1.0681, 1.0681]                       # wrist_yaw(L,R)
+
+# ========== Action scale (per-joint, = 0.25 * effort_limit / stiffness) ==========
+action_scale: [0.5475, 0.5475, 0.5475,           # hip_pitch(L,R), waist_yaw
+               0.3507, 0.3507, 0.4386,           # hip_roll(L,R),  waist_roll
+               0.5475, 0.5475, 0.4386,           # hip_yaw(L,R),   waist_pitch
+               0.3507, 0.3507, 0.4386, 0.4386,   # knee(L,R),      shoulder_pitch
+               0.4386, 0.4386, 0.4386, 0.4386,   # ankle_pitch,    shoulder_roll
+               0.4386, 0.4386, 0.4386, 0.4386,   # ankle_roll,     shoulder_yaw
+               0.4386, 0.4386,                     # elbow(L,R)
+               0.0745, 0.0745, 0.0745, 0.0745,   # wrist_roll, wrist_pitch
+               0.0745, 0.0745]                     # wrist_yaw(L,R)
+
+# ========== Joint ordering configuration (MuJoCo Order) ==========
+joint_names_mujoco: [
+  'left_hip_pitch_joint', 'left_hip_roll_joint', 'left_hip_yaw_joint',
+  'left_knee_joint', 'left_ankle_pitch_joint', 'left_ankle_roll_joint',
+  'right_hip_pitch_joint', 'right_hip_roll_joint', 'right_hip_yaw_joint',
+  'right_knee_joint', 'right_ankle_pitch_joint', 'right_ankle_roll_joint',
+  'waist_yaw_joint', 'waist_roll_joint', 'waist_pitch_joint',
+  'left_shoulder_pitch_joint', 'left_shoulder_roll_joint', 'left_shoulder_yaw_joint',
+  'left_elbow_joint', 'left_wrist_roll_joint', 'left_wrist_pitch_joint', 'left_wrist_yaw_joint',
+  'right_shoulder_pitch_joint', 'right_shoulder_roll_joint', 'right_shoulder_yaw_joint',
+  'right_elbow_joint', 'right_wrist_roll_joint', 'right_wrist_pitch_joint', 'right_wrist_yaw_joint']
+
+actuator_names_mujoco: [
+  'left_hip_pitch', 'left_hip_roll', 'left_hip_yaw',
+  'left_knee', 'left_ankle_pitch', 'left_ankle_roll',
+  'right_hip_pitch', 'right_hip_roll', 'right_hip_yaw',
+  'right_knee', 'right_ankle_pitch', 'right_ankle_roll',
+  'waist_yaw', 'waist_roll', 'waist_pitch',
+  'left_shoulder_pitch', 'left_shoulder_roll', 'left_shoulder_yaw',
+  'left_elbow', 'left_wrist_roll', 'left_wrist_pitch', 'left_wrist_yaw',
+  'right_shoulder_pitch', 'right_shoulder_roll', 'right_shoulder_yaw',
+  'right_elbow', 'right_wrist_roll', 'right_wrist_pitch', 'right_wrist_yaw']
+
+# Joint mapping (29 DOF):
+mujoco_to_isaac_map: [0, 6, 12, 1, 7, 13, 2, 8, 14, 3, 9, 15, 22, 4, 10, 16, 23, 5, 11, 17, 24, 18, 25, 19, 26, 20, 27, 21, 28]
+isaac_to_mujoco_map: [0, 3, 6, 9, 13, 17, 1, 4, 7, 10, 14, 18, 2, 5, 8, 11, 15, 19, 21, 23, 25, 27, 12, 16, 20, 22, 24, 26, 28]
+
+# ========== Default Standing Joint Angles (Isaac Training Order) ==========
+# From G1_CYLINDER_CFG: hip_pitch=-0.312, knee=0.669, ankle_pitch=-0.363
+#   shoulder_pitch=0.2(L)/0.2(R), shoulder_roll=0.2(L)/-0.2(R), elbow=0.6
+default_joint_pos: [-0.312, -0.312,  0.0,          # hip_pitch(L,R), waist_yaw
+                     0.0,    0.0,    0.0,          # hip_roll(L,R), waist_roll
+                     0.0,    0.0,    0.0,          # hip_yaw(L,R), waist_pitch
+                     0.669,  0.669,  0.2,   0.2,   # knee(L,R), shoulder_pitch(L,R)
+                    -0.363, -0.363,  0.2,  -0.2,   # ankle_pitch(L,R), shoulder_roll(L,R)
+                     0.0,    0.0,    0.0,   0.0,   # ankle_roll(L,R), shoulder_yaw(L,R)
+                     0.6,    0.6,    0.0,   0.0,   # elbow(L,R), wrist_roll(L,R)
+                     0.0,    0.0,    0.0,   0.0]   # wrist_pitch(L,R), wrist_yaw(L,R)
+
+# ========== Sim2Real configuration ==========
+msg_type: "hg"
+imu_type: "pelvis"
+torso_idx: 12
+
+lowcmd_topic: "rt/lowcmd"
+lowstate_topic: "rt/lowstate"
+
+sdk2isaac_idx: [0, 6, 12, 1, 7, 13, 2, 8, 14, 3, 9, 15, 22, 4, 10, 16, 23, 5, 11, 17, 24, 18, 25, 19, 26, 20, 27, 21, 28]
+
+sdk_joint_order: [
+  'left_hip_pitch_joint', 'left_hip_roll_joint', 'left_hip_yaw_joint',
+  'left_knee_joint', 'left_ankle_pitch_joint', 'left_ankle_roll_joint',
+  'right_hip_pitch_joint', 'right_hip_roll_joint', 'right_hip_yaw_joint',
+  'right_knee_joint', 'right_ankle_pitch_joint', 'right_ankle_roll_joint',
+  'waist_yaw_joint', 'waist_roll_joint', 'waist_pitch_joint',
+  'left_shoulder_pitch_joint', 'left_shoulder_roll_joint', 'left_shoulder_yaw_joint',
+  'left_elbow_joint', 'left_wrist_roll_joint', 'left_wrist_pitch_joint', 'left_wrist_yaw_joint',
+  'right_shoulder_pitch_joint', 'right_shoulder_roll_joint', 'right_shoulder_yaw_joint',
+  'right_elbow_joint', 'right_wrist_roll_joint', 'right_wrist_pitch_joint', 'right_wrist_yaw_joint']

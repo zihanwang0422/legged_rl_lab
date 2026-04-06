@@ -1,13 +1,7 @@
 # Copyright (c) 2024-2025 zihan wang
 # SPDX-License-Identifier: Apache-2.0
 
-"""Procedural / morphology helpers for the cross-embodied G1+Go2 env.
-
-This single file consolidates everything that was spread across:
-  - legged_rl_lab.tasks.locomotion.velocity.mdp.observations
-      (phase, morphology_params)
-  - legged_rl_lab.tasks.locomotion.velocity.mdp.procedural_env
-      (_modify_procedural_articulations, _set_morphology_params)
+"""Procedural / morphology helpers for cross-embodied locomotion tasks.
 
 Public API
 ----------
@@ -99,7 +93,6 @@ def modify_procedural_articulations(env: ManagerBasedRLEnv) -> None:
 def setup_morphology_params(env: ManagerBasedRLEnv) -> None:
     """Set ``env.morphology_params_tensor`` from metamorphosis builder params.
 
-    Mirrors ``ProceduralRobotEnv._set_morphology_params``.
     Tries QuadrupedBuilder first, then BipedBuilder.
     Falls back to zeros (dim=7) when no builder is available.
     """

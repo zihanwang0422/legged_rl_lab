@@ -14,11 +14,11 @@ from . import agents
 
 
 # Use custom environment class for procedural robots
-_PROCEDURAL_ENV_ENTRY_POINT = "legged_rl_lab.tasks.locomotion.velocity.config.cross_emboided.g1go2_mixed.mdp.procedural_obs:ProceduralRobotEnv"
+_PROCEDURAL_ENV_ENTRY_POINT = "legged_rl_lab.tasks.locomotion.cross_emboided.mdp.procedural_obs:ProceduralRobotEnv"
 
 
 gym.register(
-    id="LeggedRLLab-Isaac-Velocity-Flat-Procedural-Humanoid-v0",
+    id="LeggedRLLab-Isaac-CrossEmboided-Flat-Procedural-Humanoid-v0",
     entry_point=_PROCEDURAL_ENV_ENTRY_POINT,
     disable_env_checker=True,
     kwargs={
@@ -29,7 +29,7 @@ gym.register(
 
 
 gym.register(
-    id="LeggedRLLab-Isaac-Velocity-Flat-Procedural-Humanoid-Play-v0",
+    id="LeggedRLLab-Isaac-CrossEmboided-Flat-Procedural-Humanoid-Play-v0",
     entry_point=_PROCEDURAL_ENV_ENTRY_POINT,
     disable_env_checker=True,
     kwargs={
@@ -40,7 +40,7 @@ gym.register(
 
 
 gym.register(
-    id="LeggedRLLab-Isaac-Velocity-Rough-Procedural-Humanoid-v0",
+    id="LeggedRLLab-Isaac-CrossEmboided-Rough-Procedural-Humanoid-v0",
     entry_point=_PROCEDURAL_ENV_ENTRY_POINT,
     disable_env_checker=True,
     kwargs={
@@ -51,7 +51,7 @@ gym.register(
 
 
 gym.register(
-    id="LeggedRLLab-Isaac-Velocity-Rough-Procedural-Humanoid-Play-v0",
+    id="LeggedRLLab-Isaac-CrossEmboided-Rough-Procedural-Humanoid-Play-v0",
     entry_point=_PROCEDURAL_ENV_ENTRY_POINT,
     disable_env_checker=True,
     kwargs={

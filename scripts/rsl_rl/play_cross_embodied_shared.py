@@ -95,7 +95,7 @@ import legged_rl_lab  # noqa: F401
 from isaaclab_tasks.utils import get_checkpoint_path
 from isaaclab_tasks.utils.parse_cfg import load_cfg_from_registry
 
-_TASK_ID = "LeggedRLLab-Isaac-Velocity-Flat-G1Go2-Mixed-Play-v0"
+_TASK_ID = "LeggedRLLab-Isaac-CrossEmboided-Flat-G1Go2-Mixed-Play-v0"
 _AGENT_ENTRY = "rsl_rl_cfg_entry_point"
 
 

@@ -174,27 +174,7 @@ python scripts/rsl_rl/play.py \
 </details>
 
 <details>
-<summary><b>Procedural (Metamorphosis)</b></summary>
-
-```bash
-#Train
-python scripts/rsl_rl/train.py \
-    --task LeggedRLLab-Isaac-Velocity-Flat-Procedural-Quadruped-v0 \
-    --num_envs 4096 \
-    --headless
-```
-
-```bash
-#Play
-python scripts/rsl_rl/play.py \
-    --task LeggedRLLab-Isaac-Velocity-Flat-Procedural-Quadruped-v0 \
-    --num_envs 32
-```
-
-</details>
-
-<details>
-<summary><b>Cross-Embodied (G1 + Go2)</b></summary>
+<summary><b>Cross-Embodied G1+Go2 (Mixed)</b></summary>
 
 ```bash
 #Train (multi-GPU)
@@ -214,6 +194,46 @@ python scripts/rsl_rl/train_cross_embodied_shared.py \
 #Play
 python scripts/rsl_rl/play_cross_embodied_shared.py \
   --num_envs 32
+```
+
+</details>
+
+<details>
+<summary><b>Procedural Quadruped</b></summary>
+
+```bash
+#Train
+python scripts/rsl_rl/train.py \
+    --task LeggedRLLab-Isaac-CrossEmboided-Flat-Procedural-Quadruped-v0 \
+    --num_envs 4096 \
+    --headless
+```
+
+```bash
+#Play
+python scripts/rsl_rl/play.py \
+    --task LeggedRLLab-Isaac-CrossEmboided-Flat-Procedural-Quadruped-Play-v0 \
+    --num_envs 32
+```
+
+</details>
+
+<details>
+<summary><b>Procedural Humanoid</b></summary>
+
+```bash
+#Train
+python scripts/rsl_rl/train.py \
+    --task LeggedRLLab-Isaac-CrossEmboided-Flat-Procedural-Humanoid-v0 \
+    --num_envs 4096 \
+    --headless
+```
+
+```bash
+#Play
+python scripts/rsl_rl/play.py \
+    --task LeggedRLLab-Isaac-CrossEmboided-Flat-Procedural-Humanoid-Play-v0 \
+    --num_envs 32
 ```
 
 </details>
@@ -283,6 +303,14 @@ python scripts/amp/play.py \
 
 ### 🏃 Motion Tracking
 
+[<img src="media/mimic_lafan.gif" width="300px">](gifs/walkrough.gif)
+
+| Task ID | Description |
+|---------|-------------|
+| `Tracking-Flat-G1-v0` | Standard, with state estimation |
+| `Tracking-Flat-G1-Wo-State-Estimation-v0` | No state estimation (closer to real deployment) |
+| `Tracking-Flat-G1-Low-Freq-v0` | Half-frequency control |
+
 ```bash
 # Step 1 — Convert retargeted CSV to NPZ (runs FK via Isaac Sim to compute full body states)
 python scripts/csv_to_npz.py \
@@ -318,18 +346,17 @@ python scripts/rsl_rl/play.py \
   --task Tracking-Flat-G1-v0 \
   --motion_file /path/to/motion.npz \
   --num_envs 16
-```
-[<img src="media/mimic_lafan.gif" width="300px">](gifs/walkrough.gif)
 
-| Task ID | Description |
-|---------|-------------|
-| `Tracking-Flat-G1-v0` | Standard, with state estimation |
-| `Tracking-Flat-G1-Wo-State-Estimation-v0` | No state estimation (closer to real deployment) |
-| `Tracking-Flat-G1-Low-Freq-v0` | Half-frequency control |
+python scripts/rsl_rl/play.py \
+  --task Tracking-Flat-G1-v0 \
+  --motion_file source/legged_rl_lab/legged_rl_lab/data/motion/LAFAN1_Retargeting_Dataset/g1_jump/jumps1_subject1.npz \
+  --num_envs 16 \
+  --checkpoint logs/rsl_rl/g1_flat/2026-04-02_02-32-52/model_11000.pt
+
+```
+
 
 ---
-
-
 
 ## Sim2Sim
 

@@ -18,12 +18,12 @@ from . import agents
 ##
 
 _ENTRY_POINT = (
-    "legged_rl_lab.tasks.locomotion.velocity.config.cross_emboided"
-    ".g1go2_mixed.g1go2_flat_env_cfg:CrossEmbodiedG1Go2Env"
+    "legged_rl_lab.tasks.locomotion.cross_emboided"
+    ".config.g1go2_mixed.g1go2_flat_env_cfg:CrossEmbodiedG1Go2Env"
 )
 
 gym.register(
-    id="LeggedRLLab-Isaac-Velocity-Flat-G1Go2-Mixed-v0",
+    id="LeggedRLLab-Isaac-CrossEmboided-Flat-G1Go2-Mixed-v0",
     entry_point=_ENTRY_POINT,
     disable_env_checker=True,
     kwargs={
@@ -33,7 +33,7 @@ gym.register(
 )
 
 gym.register(
-    id="LeggedRLLab-Isaac-Velocity-Flat-G1Go2-Mixed-Play-v0",
+    id="LeggedRLLab-Isaac-CrossEmboided-Flat-G1Go2-Mixed-Play-v0",
     entry_point=_ENTRY_POINT,
     disable_env_checker=True,
     kwargs={

@@ -56,10 +56,9 @@ from isaaclab.utils.noise import AdditiveUniformNoiseCfg as Unoise
 
 import legged_rl_lab.tasks.locomotion.velocity.mdp as mdp
 from legged_rl_lab.assets.unitree import UNITREE_G1_29DOF_CFG, UNITREE_GO2_CFG
-from legged_rl_lab.tasks.locomotion.velocity.velocity_env_cfg import CommandsCfg
 
-from . import mdp as cross_mdp
-from .mdp.cross_embodied_mdp import CrossEmbodiedJointPosActionCfg
+from legged_rl_lab.tasks.locomotion.cross_emboided import mdp as cross_mdp
+from legged_rl_lab.tasks.locomotion.cross_emboided.mdp.cross_embodied_mdp import CrossEmbodiedJointPosActionCfg
 
 
 ##############################################################################
@@ -598,7 +597,7 @@ class CrossEmbodiedG1Go2Env(ManagerBasedRLEnv):
         self._park_robot("robot_g1", all_go2_ids)   # park G1 in Go2 envs
 
         # --- Morphology parameters (for procedural-obs) --------------------
-        from .mdp.procedural_obs import setup_cross_embodied_morphology_params
+        from legged_rl_lab.tasks.locomotion.cross_emboided.mdp.procedural_obs import setup_cross_embodied_morphology_params
         setup_cross_embodied_morphology_params(self)
 
     # ------------------------------------------------------------------
