@@ -45,6 +45,25 @@ docker/.container.cfg
 **/.history/
 
 
+# Motion data files — download separately (see Datasets section in README)
+source/legged_rl_lab/legged_rl_lab/data/motion/**/*.csv
+source/legged_rl_lab/legged_rl_lab/data/motion/**/*.npz
+
+# Robot description files — download separately
+source/legged_rl_lab/legged_rl_lab/data/robots/**/*.urdf
+source/legged_rl_lab/legged_rl_lab/data/robots/**/*.xacro
+source/legged_rl_lab/legged_rl_lab/data/robots/**/*.dae
+source/legged_rl_lab/legged_rl_lab/data/robots/**/*.obj
+source/legged_rl_lab/legged_rl_lab/data/robots/**/*.stl
+source/legged_rl_lab/legged_rl_lab/data/robots/**/*.STL
+source/legged_rl_lab/legged_rl_lab/data/robots/**/*.mtl
+source/legged_rl_lab/legged_rl_lab/data/robots/**/*.png
+source/legged_rl_lab/legged_rl_lab/data/robots/**/*.jpg
+source/legged_rl_lab/legged_rl_lab/data/robots/**/*.jpeg
+source/legged_rl_lab/legged_rl_lab/data/robots/**/*.yaml
+source/legged_rl_lab/legged_rl_lab/data/robots/**/*.json
+source/legged_rl_lab/legged_rl_lab/data/robots/**/*.bin
+
 # Outputs
 **/output/*
 **/outputs/*

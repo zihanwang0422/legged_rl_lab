@@ -6,57 +6,8 @@
 [![Linux platform](https://img.shields.io/badge/platform-linux--64-orange.svg)](https://releases.ubuntu.com/22.04/)
 [![License](https://img.shields.io/badge/license-Apache2.0-yellow.svg)](https://opensource.org/license/apache-2-0)
 
-## Overview
 
-<div style="margin: auto; width: fit-content;">
-
-<table border="1">
-  <tr>
-    <th>Robot</th>
-    <th>Task</th>
-    <th>Sim2Sim</th>
-    <th>Sim2Real</th>
-  </tr>
-  <tr>
-    <td rowspan="3">Unitree Go1</td>
-    <td>Flat</td>
-    <td>✅</td>
-    <td>✅</td>
-  </tr>
-  <tr>
-    <td>Rough</td>
-    <td></td>
-    <td></td>
-  </tr>
-  <tr>
-    <td>Footstand</td>
-    <td></td>
-    <td></td>
-  </tr>
-  <tr>
-    <td>OpenDuck Mini</td>
-    <td>Flat</td>
-    <td></td>
-    <td></td>
-  </tr>
-  <tr>
-    <td rowspan="2">Motion Tracking</td>
-    <td>G1 (Tracking)</td>
-    <td></td>
-    <td></td>
-  </tr>
-  <tr>
-    <td>SMPL Humanoid (Tracking)</td>
-    <td></td>
-    <td></td>
-  </tr>
-</table>
-
-</div>
-
-
-
-## 🧰️Setup 
+## 🧰️ Setup 
 
 * Use pip to install isaaclab [pip install isaaclab](https://isaac-sim.github.io/IsaacLab/main/source/setup/installation/isaaclab_pip_installation.html)
 
@@ -90,9 +41,9 @@ python scripts/list_envs.py
 
 ---
 
-## 🚀Train
+## 🚀 Train
 
-### 🐕️Go2
+### 🐕️ Go2
 
 <details>
 <summary><b>Walk (Flat)</b></summary>
@@ -180,7 +131,7 @@ python scripts/rsl_rl/play.py \
 
 </details>
 
-### 🤖️G1
+### 🤖️ G1
 
 <details>
 <summary><b>Walk (Flat)</b></summary>
@@ -218,74 +169,6 @@ python scripts/rsl_rl/train.py \
 python scripts/rsl_rl/play.py \
     --task=LeggedRLLab-Isaac-Velocity-Rough-Unitree-G1-v0 \
     --num_envs 16
-```
-
-</details>
-
-<details>
-<summary><b>AMP (Adversarial Motion Priors)</b></summary>
-
-> 算法原理、架构设计、数据集重定向方法与关节对应关系详见 [Instruction_CN.md](Instruction_CN.md#amp-in-isaaclab)
-
-**数据集**
-
-将以下数据集放入对应目录：
-
-```
-source/legged_rl_lab/legged_rl_lab/data/motion/
-├── LAFAN1_Retargeting_Dataset/   # 动作捕捉重定向 CSV（30 FPS）
-│   ├── g1_walk/                  # 12 CSV, ~86k frames
-│   ├── g1_run/                   #  4 CSV, ~28k frames
-│   ├── g1_sprint/                #  2 CSV, ~16k frames
-│   ├── g1_dance/                 #  8 CSV, ~45k frames
-│   ├── g1_jump/                  #  3 CSV, ~22k frames
-│   ├── g1_fall/                  #  6 CSV, ~28k frames
-│   └── g1_fight/                 #  5 CSV, ~36k frames
-└── AMASS_Retargeted_for_G1/      # 大规模动捕 NPZ（25 个子库，17,714 文件）
-    └── g1/
-        ├── CMU/
-        ├── KIT/
-        └── ...
-```
-
-- LAFAN1 重定向数据：[LAFAN1_Retargeting_Dataset](https://huggingface.co/datasets/unitreerobotics/LAFAN1_Retargeting_Dataset)
-- AMASS 重定向数据：[AMASS_Retargeted_for_G1](https://huggingface.co/datasets/unitreerobotics/AMASS_Retargeted_for_G1)
-
-```bash
-# Train with AMASS (default)
-python scripts/amp/train.py \
-    --task LeggedRLLab-Isaac-AMP-Flat-Unitree-G1-v0 \
-    --num_envs 4096 \
-    --headless
-
-# Train with LAFAN1 walk
-python scripts/amp/train.py \
-    --task LeggedRLLab-Isaac-AMP-Flat-Unitree-G1-v0 \
-    --motion_file source/legged_rl_lab/legged_rl_lab/data/motion/LAFAN1_Retargeting_Dataset/g1_walk \
-    --num_envs 4096 --headless
-
-# Resume training
-python scripts/amp/train.py \
-    --task LeggedRLLab-Isaac-AMP-Flat-Unitree-G1-v0 \
-    --motion_file source/legged_rl_lab/legged_rl_lab/data/motion/LAFAN1_Retargeting_Dataset/g1_walk \
-    --resume --load_run <run_folder> --checkpoint model_xxx.pt \
-    --num_envs 4096 --headless
-
-python -m torch.distributed.run \
-  --nproc_per_node=4 \
-  scripts/amp/train.py \
-  --task LeggedRLLab-Isaac-AMP-Flat-Unitree-G1-v0 \
-  --motion_file source/legged_rl_lab/legged_rl_lab/data/motion/LAFAN1_Retargeting_Dataset/g1_walk \
-  --num_envs 4096 --headless \
-  --distributed  
-```
-
-```bash
-#Play
-python scripts/amp/play.py \
-    --task LeggedRLLab-Isaac-AMP-Flat-Unitree-G1-Play-v0 \
-    --motion_file source/legged_rl_lab/legged_rl_lab/data/motion/LAFAN1_Retargeting_Dataset/g1_walk \
-    --num_envs 32
 ```
 
 </details>
@@ -335,9 +218,70 @@ python scripts/rsl_rl/play_cross_embodied_shared.py \
 
 </details>
 
-### 🏃 Motion Tracking
+### Datasets
 
-**Dataset**: [LAFAN1_Retargeting_Dataset](https://huggingface.co/datasets/unitreerobotics/LAFAN1_Retargeting_Dataset) (CSV, 30 FPS, retargeted to G1-29DOF)
+Place the following datasets in the corresponding directories:
+
+```
+source/legged_rl_lab/legged_rl_lab/data/motion/
+├── LAFAN1_Retargeting_Dataset/   # Motion capture retargeted CSV (30 FPS)
+│   ├── g1_walk/                  # 12 CSV, ~86k frames
+│   ├── g1_run/                   #  4 CSV, ~28k frames
+│   ├── g1_sprint/                #  2 CSV, ~16k frames
+│   ├── g1_dance/                 #  8 CSV, ~45k frames
+│   ├── g1_jump/                  #  3 CSV, ~22k frames
+│   ├── g1_fall/                  #  6 CSV, ~28k frames
+│   └── g1_fight/                 #  5 CSV, ~36k frames
+└── AMASS_Retargeted_for_G1/      # Large-scale motion capture NPZ (25 sub-libraries, 17,714 files)
+    └── g1/
+        ├── CMU/
+        ├── KIT/
+        └── ...
+```
+
+- LAFAN1 retargeted data: [LAFAN1_Retargeting_Dataset](https://huggingface.co/datasets/lvhaidong/LAFAN1_Retargeting_Dataset)
+- AMASS retargeted data: [AMASS_Retargeted_for_G1](https://huggingface.co/datasets/ember-lab-berkeley/AMASS_Retargeted_for_G1)
+
+### AMP (Adversarial Motion Priors)
+
+```bash
+# Train with AMASS (default)
+python scripts/amp/train.py \
+    --task LeggedRLLab-Isaac-AMP-Flat-Unitree-G1-v0 \
+    --num_envs 4096 \
+    --headless
+
+# Train with LAFAN1 walk
+python scripts/amp/train.py \
+    --task LeggedRLLab-Isaac-AMP-Flat-Unitree-G1-v0 \
+    --motion_file source/legged_rl_lab/legged_rl_lab/data/motion/LAFAN1_Retargeting_Dataset/g1_walk \
+    --num_envs 4096 --headless
+
+# Resume training
+python scripts/amp/train.py \
+    --task LeggedRLLab-Isaac-AMP-Flat-Unitree-G1-v0 \
+    --motion_file source/legged_rl_lab/legged_rl_lab/data/motion/LAFAN1_Retargeting_Dataset/g1_walk \
+    --resume --load_run <run_folder> --checkpoint model_xxx.pt \
+    --num_envs 4096 --headless
+
+python -m torch.distributed.run \
+  --nproc_per_node=4 \
+  scripts/amp/train.py \
+  --task LeggedRLLab-Isaac-AMP-Flat-Unitree-G1-v0 \
+  --motion_file source/legged_rl_lab/legged_rl_lab/data/motion/LAFAN1_Retargeting_Dataset/g1_walk \
+  --num_envs 4096 --headless \
+  --distributed
+```
+
+```bash
+#Play
+python scripts/amp/play.py \
+    --task LeggedRLLab-Isaac-AMP-Flat-Unitree-G1-Play-v0 \
+    --motion_file source/legged_rl_lab/legged_rl_lab/data/motion/LAFAN1_Retargeting_Dataset/g1_walk \
+    --num_envs 32
+```
+
+### 🏃 Motion Tracking
 
 ```bash
 # Step 1 — Convert retargeted CSV to NPZ (runs FK via Isaac Sim to compute full body states)
@@ -398,7 +342,7 @@ python3 deploy/utils/terrain_tool/terrain_generator.py
 <details>
 <summary><b>Go1 Walk</b></summary>
 
-详细说明见 [deploy/go1_deploy/README.md](deploy/go1_deploy/README.md)
+See [deploy/go1_deploy/README.md](deploy/go1_deploy/README.md) for details.
 
 ```bash
 pip install mujoco
@@ -410,7 +354,7 @@ python deploy/go1_deploy/sim2sim_walk.py --model go1_flat.pt
 <details>
 <summary><b>Go2 Walk / Handstand</b></summary>
 
-详细说明见 [deploy/go2_deploy/README.md](deploy/go2_deploy/README.md)
+See [deploy/go2_deploy/README.md](deploy/go2_deploy/README.md) for details.
 
 ```bash
 pip install mujoco
@@ -425,7 +369,7 @@ python deploy/go2_deploy/sim2sim_handstand.py --model go2_handstand.pt
 <details>
 <summary><b>G1 Walk</b></summary>
 
-详细说明见 [deploy/g1_deploy/README.md](deploy/g1_deploy/README.md)
+See [deploy/g1_deploy/README.md](deploy/g1_deploy/README.md) for details.
 
 ```bash
 pip install mujoco
@@ -441,10 +385,10 @@ python deploy/g1_deploy/sim2sim_walk.py --model g1_flat.pt --config g1_walk.yaml
 <details>
 <summary><b>Go1 Walk</b></summary>
 
-详细说明见 [deploy/go1_deploy/README.md](deploy/go1_deploy/README.md)
+See [deploy/go1_deploy/README.md](deploy/go1_deploy/README.md) for details.
 
 ```bash
-# 依赖：unitree_legged_sdk（见 README）
+# Dependency: unitree_legged_sdk (see README)
 python deploy/go1_deploy/sim2real_walk.py --mode real --model policy.pt
 ```
 
@@ -453,7 +397,7 @@ python deploy/go1_deploy/sim2real_walk.py --mode real --model policy.pt
 <details>
 <summary><b>Go2 Walk</b></summary>
 
-详细说明见 [deploy/go2_deploy/README.md](deploy/go2_deploy/README.md)
+See [deploy/go2_deploy/README.md](deploy/go2_deploy/README.md) for details.
 
 ```bash
 python deploy/go2_deploy/sim2real_walk.py --mode real --model policy.pt
@@ -464,10 +408,10 @@ python deploy/go2_deploy/sim2real_walk.py --mode real --model policy.pt
 <details>
 <summary><b>G1 Walk</b></summary>
 
-详细说明见 [deploy/g1_deploy/README.md](deploy/g1_deploy/README.md)
+See [deploy/g1_deploy/README.md](deploy/g1_deploy/README.md) for details.
 
 ```bash
-# 依赖：cyclonedds + unitree_sdk2_python（见 README）
+# Dependency: cyclonedds + unitree_sdk2_python (see README)
 python deploy/g1_deploy/sim2real_walk.py
 ```
 
