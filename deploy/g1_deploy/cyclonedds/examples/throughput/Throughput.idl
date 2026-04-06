@@ -1,9 +1,0 @@
-module ThroughputModule
-{
-  @final
-  struct DataType
-  {
-    unsigned long long count;
-    sequence<octet> payload;
-  };
-};
