@@ -7,6 +7,7 @@ GMR
 # C++
 **/cmake-build*/
 **/build*/
+!**/builder/
 **/*.so
 **/*.log*
 
@@ -119,6 +120,4 @@ source/legged_rl_lab/legged_rl_lab/data/robots/**/*.xml
 **/*.DAE
 **/*.zip
 
-# ONNX Policies
-**/*.onnx
 
