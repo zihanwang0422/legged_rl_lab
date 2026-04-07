@@ -93,14 +93,34 @@ def spawn_biped(
         torso_link_width_range=cfg.torso_link_width_range,
         torso_link_height_range=cfg.torso_link_height_range,
         pelvis_height_range=cfg.pelvis_height_range,
+        pelvis_radius_coeff_range=cfg.pelvis_radius_coeff_range,
         hip_spacing_range=cfg.hip_spacing_range,
         hip_pitch_link_length_range=cfg.hip_pitch_link_length_range,
         hip_pitch_link_radius_range=cfg.hip_pitch_link_radius_range,
         hip_roll_link_length_range=cfg.hip_roll_link_length_range,
         hip_roll_link_radius_range=cfg.hip_roll_link_radius_range,
         hip_pitch_link_initroll_range=cfg.hip_pitch_link_initroll_range,
+        hip_yaw_link_radius_range=cfg.hip_yaw_link_radius_range,
         leg_length_range=cfg.leg_length_range,
         shin_ratio_range=cfg.shin_ratio_range,
+        ankle_roll_link_length_range=cfg.ankle_roll_link_length_range,
+        ankle_roll_link_width_range=cfg.ankle_roll_link_width_range,
+        ankle_roll_link_height_range=cfg.ankle_roll_link_height_range,
+        head_radius_range=cfg.head_radius_range,
+        arm_length_range=cfg.arm_length_range,
+        forearm_ratio_range=cfg.forearm_ratio_range,
+        upper_arm_radius_range=cfg.upper_arm_radius_range,
+        torso_link_mass_range=cfg.torso_link_mass_range,
+        hip_pitch_link_mass_range=cfg.hip_pitch_link_mass_range,
+        hip_roll_link_mass_range=cfg.hip_roll_link_mass_range,
+        hip_yaw_link_mass_coeff_range=cfg.hip_yaw_link_mass_coeff_range,
+        knee_link_radius_coeff_range=cfg.knee_link_radius_coeff_range,
+        knee_link_mass_coeff_range=cfg.knee_link_mass_coeff_range,
+        ankle_roll_link_mass_range=cfg.ankle_roll_link_mass_range,
+        head_mass_coeff_range=cfg.head_mass_coeff_range,
+        upper_arm_mass_coeff_range=cfg.upper_arm_mass_coeff_range,
+        forearm_radius_coeff_range=cfg.forearm_radius_coeff_range,
+        forearm_mass_coeff_range=cfg.forearm_mass_coeff_range,
     )
 
     root_path, asset_path = prim_path.rsplit("/", 1)
@@ -119,60 +139,51 @@ def spawn_biped(
 
 @configclass
 class ProceduralBipedCfg(SpawnerCfg):
-    """Configuration parameters for spawning a procedural biped (legs only)."""
+    """Configuration parameters for spawning a procedural biped (G1-style)."""
 
     func: Callable = spawn_biped
-    """Function to use for spawning the asset."""
 
     activate_contact_sensors: bool = True
-    """Whether to activate contact sensors for the asset. Defaults to True."""
-
     articulation_props: schemas.ArticulationRootPropertiesCfg | None = None
-
     visible: bool = True
-    """Whether the spawned asset should be visible."""
-
     semantic_tags: list[tuple[str, str]] | None = None
-    """List of semantic tags to add to the spawned asset."""
-
     copy_from_source: bool = False
-    """Whether to copy the asset from the source prim or inherit it."""
 
-    torso_link_length_range: tuple[float, float] = (0.10, 0.16)
-    """Range for the torso length (box X dimension) in meters."""
+    # \u2500\u2500 Geometry ranges \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+    torso_link_length_range:        tuple[float, float] = (0.10, 0.16)
+    torso_link_width_range:         tuple[float, float] = (0.18, 0.26)
+    torso_link_height_range:        tuple[float, float] = (0.20, 0.30)
+    pelvis_height_range:            tuple[float, float] = (0.05, 0.08)
+    pelvis_radius_coeff_range:      tuple[float, float] = (0.20, 0.40)   # \u00d7 min(w, l)
+    hip_spacing_range:              tuple[float, float] = (0.16, 0.24)
+    hip_pitch_link_length_range:    tuple[float, float] = (0.03, 0.06)
+    hip_pitch_link_radius_range:    tuple[float, float] = (0.02, 0.04)
+    hip_roll_link_length_range:     tuple[float, float] = (0.03, 0.06)
+    hip_roll_link_radius_range:     tuple[float, float] = (0.02, 0.04)
+    hip_pitch_link_initroll_range:  tuple[float, float] = (0.00, 0.20)   # rad ~0-11\u00b0
+    hip_yaw_link_radius_range:      tuple[float, float] = (0.025, 0.040)
+    leg_length_range:               tuple[float, float] = (0.50, 0.70)
+    shin_ratio_range:               tuple[float, float] = (0.85, 1.15)
+    ankle_roll_link_length_range:   tuple[float, float] = (0.18, 0.25)
+    ankle_roll_link_width_range:    tuple[float, float] = (0.06, 0.10)
+    ankle_roll_link_height_range:   tuple[float, float] = (0.02, 0.03)
+    head_radius_range:              tuple[float, float] = (0.06, 0.12)
+    arm_length_range:               tuple[float, float] = (0.20, 0.40)
+    forearm_ratio_range:            tuple[float, float] = (0.80, 1.10)
+    upper_arm_radius_range:         tuple[float, float] = (0.020, 0.040)
 
-    torso_link_width_range: tuple[float, float] = (0.18, 0.26)
-    """Range for the torso width (box Y dimension) in meters."""
-
-    torso_link_height_range: tuple[float, float] = (0.08, 0.14)
-    """Range for the torso height (box Z dimension) in meters."""
-
-    pelvis_height_range: tuple[float, float] = (0.05, 0.08)
-    """Range for the waist/pelvis cylinder height in meters."""
-
-    hip_spacing_range: tuple[float, float] = (0.16, 0.24)
-    """Range for the distance between left and right hips in meters."""
-
-    hip_pitch_link_length_range: tuple[float, float] = (0.03, 0.06)
-    """Range for hip_pitch_link length in meters."""
-
-    hip_pitch_link_radius_range: tuple[float, float] = (0.02, 0.04)
-    """Range for hip_pitch_link radius in meters."""
-
-    hip_roll_link_length_range: tuple[float, float] = (0.03, 0.06)
-    """Range for hip_roll_link length in meters."""
-
-    hip_roll_link_radius_range: tuple[float, float] = (0.02, 0.04)
-    """Range for hip_roll_link radius in meters."""
-
-    hip_pitch_link_initroll_range: tuple[float, float] = (0.0, 1.5707963267948966)
-    """Range for hip pitch link initial roll angle in radians (0 to 90 degrees)."""
-
-    leg_length_range: tuple[float, float] = (0.5, 0.7)
-    """Range for the total leg length in meters."""
-
-    shin_ratio_range: tuple[float, float] = (0.85, 1.15)
-    """Range for shin length as a ratio of thigh length."""
+    # \u2500\u2500 Mass / coefficient ranges \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+    torso_link_mass_range:          tuple[float, float] = (3.0,  5.0)
+    hip_pitch_link_mass_range:      tuple[float, float] = (0.4,  0.8)
+    hip_roll_link_mass_range:       tuple[float, float] = (0.4,  0.8)
+    hip_yaw_link_mass_coeff_range:  tuple[float, float] = (1.5,  2.2)    # \u00d7 length
+    knee_link_radius_coeff_range:   tuple[float, float] = (0.75, 0.95)   # \u00d7 hip_yaw_radius
+    knee_link_mass_coeff_range:     tuple[float, float] = (1.2,  1.8)    # \u00d7 length
+    ankle_roll_link_mass_range:     tuple[float, float] = (0.2,  0.5)
+    head_mass_coeff_range:          tuple[float, float] = (250.0, 450.0) # \u00d7 radius\u00b3
+    upper_arm_mass_coeff_range:     tuple[float, float] = (1.0,  2.0)    # \u00d7 length
+    forearm_radius_coeff_range:     tuple[float, float] = (0.75, 0.95)   # \u00d7 ua_radius
+    forearm_mass_coeff_range:       tuple[float, float] = (0.8,  1.5)    # \u00d7 length
 
 
 def spawn_quadwheel(

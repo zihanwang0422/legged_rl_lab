@@ -156,9 +156,3 @@ PROCEDURAL_HUMANOID_CFG = ArticulationCfg(
 
 修改后直接重新 `train.py` 即可，无需重装包。
 
----
-
-## .gitignore 说明
-
-`builder/` 目录曾被 `.gitignore` 的 `**/build*/` 规则误忽略（`build*` 匹配 `builder`）。
-已在 `.gitignore` 中添加 `!**/builder/` 排除规则修复此问题。

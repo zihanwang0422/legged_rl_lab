@@ -52,15 +52,25 @@ BIPED_CONFIG = ArticulationCfg(
     ),
     init_state=ArticulationCfg.InitialStateCfg(
         joint_pos={
-            # Hip joints - G1-style neutral position
+            # Hip joints
             ".*_hip_pitch_joint": 0.0,
             ".*_hip_roll_joint": 0.0,
             ".*_hip_yaw_joint": 0.0,
-            # Knee - straight for standing
+            # Knee
             ".*_knee_joint": 0.0,
             # Ankle
             ".*_ankle_pitch_joint": 0.0,
             ".*_ankle_roll_joint": 0.0,
+            # Shoulder
+            ".*_shoulder_pitch_joint": 0.0,
+            ".*_shoulder_roll_joint": 0.0,
+            ".*_shoulder_yaw_joint": 0.0,
+            # Elbow
+            ".*_elbow_joint": 0.0,
+            # Wrist
+            ".*_wrist_roll_joint": 0.0,
+            ".*_wrist_pitch_joint": 0.0,
+            ".*_wrist_yaw_joint": 0.0,
         },
         pos=(0, 0, 1.2),  # Higher initial position to avoid ground collision
     ),
@@ -113,6 +123,65 @@ BIPED_CONFIG = ArticulationCfg(
             effort_limit_sim=50.0,
             stiffness=20.0,
             damping=2.0,
+            armature=0.00721945,
+            friction=0.1,
+        ),
+        # Shoulder actuators
+        "shoulder_pitch": ImplicitActuatorCfg(
+            joint_names_expr=[".*_shoulder_pitch_joint"],
+            effort_limit_sim=25.0,
+            stiffness=40.0,
+            damping=2.0,
+            armature=0.01017752004,
+            friction=0.1,
+        ),
+        "shoulder_roll": ImplicitActuatorCfg(
+            joint_names_expr=[".*_shoulder_roll_joint"],
+            effort_limit_sim=25.0,
+            stiffness=40.0,
+            damping=2.0,
+            armature=0.025101925,
+            friction=0.1,
+        ),
+        "shoulder_yaw": ImplicitActuatorCfg(
+            joint_names_expr=[".*_shoulder_yaw_joint"],
+            effort_limit_sim=25.0,
+            stiffness=40.0,
+            damping=2.0,
+            armature=0.01017752004,
+            friction=0.1,
+        ),
+        # Elbow actuator
+        "elbow": ImplicitActuatorCfg(
+            joint_names_expr=[".*_elbow_joint"],
+            effort_limit_sim=25.0,
+            stiffness=40.0,
+            damping=2.0,
+            armature=0.025101925,
+            friction=0.1,
+        ),
+        # Wrist actuators
+        "wrist_roll": ImplicitActuatorCfg(
+            joint_names_expr=[".*_wrist_roll_joint"],
+            effort_limit_sim=10.0,
+            stiffness=10.0,
+            damping=1.0,
+            armature=0.00721945,
+            friction=0.1,
+        ),
+        "wrist_pitch": ImplicitActuatorCfg(
+            joint_names_expr=[".*_wrist_pitch_joint"],
+            effort_limit_sim=10.0,
+            stiffness=10.0,
+            damping=1.0,
+            armature=0.00721945,
+            friction=0.1,
+        ),
+        "wrist_yaw": ImplicitActuatorCfg(
+            joint_names_expr=[".*_wrist_yaw_joint"],
+            effort_limit_sim=10.0,
+            stiffness=10.0,
+            damping=1.0,
             armature=0.00721945,
             friction=0.1,
         ),

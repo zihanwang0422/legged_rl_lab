@@ -16,8 +16,13 @@ from isaaclab.utils import configclass
 from isaaclab.assets import ArticulationCfg
 from isaaclab.actuators import ImplicitActuatorCfg
 from isaaclab.managers import ObservationTermCfg as ObsTerm
+from isaaclab.managers import RewardTermCfg as RewTerm
+from isaaclab.managers import SceneEntityCfg
+from isaaclab.sensors import RayCasterCfg, patterns
 
 import isaaclab.sim as sim_utils
+
+import legged_rl_lab.tasks.locomotion.cross_emboided.mdp as mdp
 
 from legged_rl_lab.tasks.locomotion.cross_emboided.cross_emboided_env_cfg import (
     CrossEmbodiedLocomotionEnvCfg,
@@ -37,16 +42,19 @@ PROCEDURAL_HUMANOID_CFG = ArticulationCfg(
         ),
         torso_link_length_range=(0.10, 0.16),
         torso_link_width_range=(0.18, 0.26),
-        torso_link_height_range=(0.08, 0.14),
+        torso_link_height_range=(0.2, 0.3),
         pelvis_height_range=(0.05, 0.08),
         hip_spacing_range=(0.16, 0.24),
         hip_pitch_link_length_range=(0.03, 0.06),
         hip_pitch_link_radius_range=(0.02, 0.04),
         hip_roll_link_length_range=(0.03, 0.06),
         hip_roll_link_radius_range=(0.02, 0.04),
-        hip_pitch_link_initroll_range=(0.0, np.pi / 2),
+        hip_pitch_link_initroll_range=(0.0, 0.2),  # ~0-11.5°, keeps hip_pitch axis near world-Y
         leg_length_range=(0.5, 0.7),
         shin_ratio_range=(0.85, 1.15),
+        head_radius_range=(0.08, 0.12),
+        arm_length_range=(0.22, 0.36),
+        forearm_ratio_range=(0.85, 1.10),
     ),
     init_state=ArticulationCfg.InitialStateCfg(
         pos=(0.0, 0.0, 1.2),
@@ -57,6 +65,13 @@ PROCEDURAL_HUMANOID_CFG = ArticulationCfg(
             ".*_knee_joint": 0.0,
             ".*_ankle_pitch_joint": 0.0,
             ".*_ankle_roll_joint": 0.0,
+            ".*_shoulder_pitch_joint": 0.0,
+            ".*_shoulder_roll_joint": 0.0,
+            ".*_shoulder_yaw_joint": 0.0,
+            ".*_elbow_joint": 0.0,
+            ".*_wrist_roll_joint": 0.0,
+            ".*_wrist_pitch_joint": 0.0,
+            ".*_wrist_yaw_joint": 0.0,
         },
         joint_vel={".*": 0.0},
     ),
@@ -97,30 +112,97 @@ class ProceduralHumanoidFlatEnvCfg(CrossEmbodiedLocomotionEnvCfg):
         self.observations.policy.morphology_params = ObsTerm(func=morphology_params)
 
         # ====Event Cfg====
-        # Flat terrain: disable push and COM randomisation
         self.events.randomize_push_robot = None
         self.events.randomize_com_positions = None
-        # Humanoid body name for mass/force randomisation
         self.events.randomize_rigid_body_mass_base.params["mass_distribution_params"] = (0.8, 1.2)
         self.events.randomize_rigid_body_mass_base.params["asset_cfg"].body_names = "torso_link"
         self.events.randomize_apply_external_force_torque.params["asset_cfg"].body_names = "torso_link"
         self.events.randomize_reset_joints.params["position_range"] = (1.0, 1.0)
 
+        # ====Rewards: velocity tracking (match G1 yaw-frame functions)====
+        self.rewards.track_lin_vel_xy_exp = RewTerm(
+            func=mdp.track_lin_vel_xy_yaw_frame_exp,
+            weight=2.0,
+            params={"command_name": "base_velocity", "std": 0.5},
+        )
+        self.rewards.track_ang_vel_z_exp = RewTerm(
+            func=mdp.track_ang_vel_z_world_exp,
+            weight=2.0,
+            params={"command_name": "base_velocity", "std": 0.5},
+        )
+
+        # ====Rewards: joint penalties (scope and tune to match G1)====
+        self.rewards.joint_torques_l2.weight = -2.0e-6
+        self.rewards.joint_torques_l2.params["asset_cfg"] = SceneEntityCfg(
+            "robot", joint_names=[".*_hip_.*", ".*_knee_joint", ".*_ankle_.*"]
+        )
+        self.rewards.joint_acc_l2.weight = -2.5e-7
+        self.rewards.joint_acc_l2.params["asset_cfg"] = SceneEntityCfg(
+            "robot", joint_names=[".*_hip_.*", ".*_knee_joint", ".*_ankle_.*"]
+        )
+        self.rewards.joint_vel_l2.weight = -0.001
+        self.rewards.action_rate_l2.weight = -0.005
+        self.rewards.joint_pos_limits.weight = -2.0
+        self.rewards.joint_pos_limits.params = {
+            "asset_cfg": SceneEntityCfg(
+                "robot", joint_names=[".*_ankle_pitch_joint", ".*_ankle_roll_joint"]
+            )
+        }
+
         # ====Rewards: humanoid-specific body names====
         self.rewards.undesired_contacts.params["sensor_cfg"].body_names = ".*_(hip|knee|pelvis).*"
-        self.rewards.feet_air_time.params["sensor_cfg"].body_names = ".*_ankle_roll_link"
+        self.rewards.feet_air_time = RewTerm(
+            func=mdp.feet_air_time_positive_biped,
+            weight=0.5,
+            params={
+                "command_name": "base_velocity",
+                "sensor_cfg": SceneEntityCfg("contact_forces", body_names=".*_ankle_roll_link"),
+                "threshold": 0.5,
+            },
+        )
         self.rewards.feet_slide.params["sensor_cfg"].body_names = ".*_ankle_roll_link"
         self.rewards.feet_slide.params["asset_cfg"].body_names = ".*_ankle_roll_link"
+        self.rewards.feet_clearance = RewTerm(
+            func=mdp.foot_clearance_reward_humanoid,
+            weight=2.0,
+            params={
+                "std": 0.05,
+                "tanh_mult": 2.0,
+                "target_height": 0.12,
+                "asset_cfg": SceneEntityCfg("robot", body_names=".*ankle_roll_link"),
+            },
+        )
 
-        # Left-right gait symmetry
-        self.rewards.joint_symmetry_l2.weight = -0.1
-        self.rewards.joint_symmetry_l2.params["mirror_joints"] = [
-            ["left_.*_joint", "right_.*_joint"],
-        ]
-        self.rewards.action_symmetry_l2.weight = -0.05
-        self.rewards.action_symmetry_l2.params["mirror_joints"] = [
-            ["left_.*_joint", "right_.*_joint"],
-        ]
+        # ====Rewards: posture / deviation====
+        self.rewards.joint_deviation_legs = RewTerm(
+            func=mdp.joint_deviation_l1,
+            weight=-0.5,
+            params={"asset_cfg": SceneEntityCfg(
+                "robot",
+                joint_names=[".*_hip_yaw_joint", ".*_hip_roll_joint", ".*_knee_joint"],
+            )},
+        )
+        self.rewards.joint_deviation_arms = RewTerm(
+            func=mdp.joint_deviation_l1,
+            weight=-0.3,
+            params={"asset_cfg": SceneEntityCfg(
+                "robot",
+                joint_names=[".*_shoulder_.*_joint", ".*_elbow_joint", ".*_wrist_.*_joint"],
+            )},
+        )
+
+        # ====Rewards: gait (enforce alternating foot contact)====
+        self.rewards.gait = RewTerm(
+            func=mdp.feet_gait,
+            weight=0.5,
+            params={
+                "period": 0.8,
+                "offset": [0.0, 0.5],
+                "threshold": 0.55,
+                "command_name": "base_velocity",
+                "sensor_cfg": SceneEntityCfg("contact_forces", body_names=".*_ankle_roll_link"),
+            },
+        )
 
         # ====Termination Cfg====
         self.terminations.illegal_contact.params["sensor_cfg"].body_names = "(torso_link|pelvis)"
@@ -150,31 +232,126 @@ class ProceduralHumanoidRoughEnvCfg(CrossEmbodiedLocomotionEnvCfg):
         self.scene.robot = PROCEDURAL_HUMANOID_CFG.replace(prim_path="{ENV_REGEX_NS}/Robot")
         self.scene.height_scanner.prim_path = "{ENV_REGEX_NS}/Robot/torso_link"
 
+        # Foot scanners (single-ray, straight down): used by feet_clearance reward
+        _foot_scanner_cfg = RayCasterCfg(
+            offset=RayCasterCfg.OffsetCfg(pos=(0.0, 0.0, 0.5)),
+            ray_alignment="world",
+            pattern_cfg=patterns.GridPatternCfg(resolution=0.1, size=[0.0, 0.0]),
+            debug_vis=False,
+            mesh_prim_paths=["/World/ground"],
+        )
+        self.scene.foot_scanner_l = _foot_scanner_cfg.replace(
+            prim_path="{ENV_REGEX_NS}/Robot/left_ankle_roll_link"
+        )
+        self.scene.foot_scanner_r = _foot_scanner_cfg.replace(
+            prim_path="{ENV_REGEX_NS}/Robot/right_ankle_roll_link"
+        )
+        self.scene.foot_scanner_l.update_period = self.decimation * self.sim.dt
+        self.scene.foot_scanner_r.update_period = self.decimation * self.sim.dt
+
         # Morphology parameters observation (procedural-specific)
         self.observations.policy.morphology_params = ObsTerm(func=morphology_params)
         self.observations.policy.height_scan.scale = 1.0
 
         # ====Event Cfg====
-        # Humanoid body name for mass/force randomisation
         self.events.randomize_rigid_body_mass_base.params["asset_cfg"].body_names = "torso_link"
         self.events.randomize_apply_external_force_torque.params["asset_cfg"].body_names = "torso_link"
         self.events.randomize_reset_joints.params["position_range"] = (1.0, 1.0)
 
+        # ====Rewards: velocity tracking (match G1 yaw-frame functions)====
+        self.rewards.track_lin_vel_xy_exp = RewTerm(
+            func=mdp.track_lin_vel_xy_yaw_frame_exp,
+            weight=2.0,
+            params={"command_name": "base_velocity", "std": 0.5},
+        )
+        self.rewards.track_ang_vel_z_exp = RewTerm(
+            func=mdp.track_ang_vel_z_world_exp,
+            weight=2.0,
+            params={"command_name": "base_velocity", "std": 0.5},
+        )
+
+        # ====Rewards: joint penalties (scope and tune to match G1)====
+        self.rewards.joint_torques_l2.weight = -2.0e-6
+        self.rewards.joint_torques_l2.params["asset_cfg"] = SceneEntityCfg(
+            "robot", joint_names=[".*_hip_.*", ".*_knee_joint", ".*_ankle_.*"]
+        )
+        self.rewards.joint_acc_l2.weight = -2.5e-7
+        self.rewards.joint_acc_l2.params["asset_cfg"] = SceneEntityCfg(
+            "robot", joint_names=[".*_hip_.*", ".*_knee_joint", ".*_ankle_.*"]
+        )
+        self.rewards.joint_vel_l2.weight = -0.001
+        self.rewards.action_rate_l2.weight = -0.005
+        self.rewards.joint_pos_limits.weight = -2.0
+        self.rewards.joint_pos_limits.params = {
+            "asset_cfg": SceneEntityCfg(
+                "robot", joint_names=[".*_ankle_pitch_joint", ".*_ankle_roll_joint"]
+            )
+        }
+
         # ====Rewards: humanoid-specific body names====
         self.rewards.undesired_contacts.params["sensor_cfg"].body_names = ".*_(hip|knee|pelvis).*"
-        self.rewards.feet_air_time.params["sensor_cfg"].body_names = ".*_ankle_roll_link"
+        self.rewards.feet_air_time = RewTerm(
+            func=mdp.feet_air_time_positive_biped,
+            weight=0.1,
+            params={
+                "command_name": "base_velocity",
+                "sensor_cfg": SceneEntityCfg("contact_forces", body_names=".*_ankle_roll_link"),
+                "threshold": 0.5,
+            },
+        )
         self.rewards.feet_slide.params["sensor_cfg"].body_names = ".*_ankle_roll_link"
         self.rewards.feet_slide.params["asset_cfg"].body_names = ".*_ankle_roll_link"
+        self.rewards.feet_clearance = RewTerm(
+            func=mdp.foot_clearance_reward_humanoid,
+            weight=2.0,
+            params={
+                "std": 0.05,
+                "tanh_mult": 2.0,
+                "target_height": 0.12,
+                "asset_cfg": SceneEntityCfg("robot", body_names=".*ankle_roll_link"),
+                "foot_scanner_cfgs": [
+                    SceneEntityCfg("foot_scanner_l"),
+                    SceneEntityCfg("foot_scanner_r"),
+                ],
+            },
+        )
 
-        # Left-right gait symmetry
+        # ====Rewards: posture / deviation====
+        self.rewards.joint_deviation_legs = RewTerm(
+            func=mdp.joint_deviation_l1,
+            weight=-0.5,
+            params={"asset_cfg": SceneEntityCfg(
+                "robot",
+                joint_names=[".*_hip_yaw_joint", ".*_hip_roll_joint", ".*_knee_joint"],
+            )},
+        )
+        self.rewards.joint_deviation_arms = RewTerm(
+            func=mdp.joint_deviation_l1,
+            weight=-0.3,
+            params={"asset_cfg": SceneEntityCfg(
+                "robot",
+                joint_names=[".*_shoulder_.*_joint", ".*_elbow_joint", ".*_wrist_.*_joint"],
+            )},
+        )
+
+        # ====Rewards: gait (enforce alternating foot contact)====
+        self.rewards.gait = RewTerm(
+            func=mdp.feet_gait,
+            weight=0.5,
+            params={
+                "period": 0.8,
+                "offset": [0.0, 0.5],
+                "threshold": 0.55,
+                "command_name": "base_velocity",
+                "sensor_cfg": SceneEntityCfg("contact_forces", body_names=".*_ankle_roll_link"),
+            },
+        )
+
+        # ====Rewards: symmetry====
         self.rewards.joint_symmetry_l2.weight = -0.1
-        self.rewards.joint_symmetry_l2.params["mirror_joints"] = [
-            ["left_.*_joint", "right_.*_joint"],
-        ]
+        self.rewards.joint_symmetry_l2.params["mirror_joints"] = [["left_.*_joint", "right_.*_joint"]]
         self.rewards.action_symmetry_l2.weight = -0.05
-        self.rewards.action_symmetry_l2.params["mirror_joints"] = [
-            ["left_.*_joint", "right_.*_joint"],
-        ]
+        self.rewards.action_symmetry_l2.params["mirror_joints"] = [["left_.*_joint", "right_.*_joint"]]
 
         # ====Termination Cfg====
         self.terminations.illegal_contact.params["sensor_cfg"].body_names = "(torso_link|pelvis)"
