@@ -400,7 +400,7 @@ See [deploy/g1_deploy/README.md](deploy/g1_deploy/README.md) for details.
 
 ```bash
 pip install mujoco
-python deploy/g1_deploy/sim2sim_walk.py --model g1_flat.pt --config g1_walk.yaml
+python deploy/g1_deploy/sim2sim_walk.py --model g1_flat_1.onnx --config g1_walk.yaml
 ```
 
 </details>

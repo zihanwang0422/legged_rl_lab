@@ -16,6 +16,7 @@ import time
 import argparse
 import os
 import sys
+from collections import deque
 
 import mujoco
 import mujoco.viewer
@@ -126,6 +127,27 @@ def build_tracking_obs(
     return np.concatenate(parts).astype(np.float32)
 
 
+def build_walk_obs(base_ang_vel_w, projected_gravity, commands, joint_pos_rel, joint_vel, last_action, cfg):
+    """
+    Build 96-dim walk/flat observation matching IsaacLab flat velocity policy:
+      base_ang_vel  (world frame, 3)  * ang_vel_scale
+      projected_gravity (body frame, 3)
+      commands [vx, vy, vyaw]  (3)
+      joint_pos_rel  (29) * dof_pos_scale
+      joint_vel      (29) * dof_vel_scale
+      last_action    (29)
+    Total: 96
+    """
+    return np.concatenate([
+        base_ang_vel_w * cfg.ang_vel_scale,
+        projected_gravity,
+        commands,
+        joint_pos_rel * cfg.dof_pos_scale,
+        joint_vel * cfg.dof_vel_scale,
+        last_action,
+    ]).astype(np.float32)
+
+
 # ==================== Sim2Sim Controller ====================
 
 class MimicSim2SimController:
@@ -156,8 +178,11 @@ class MimicSim2SimController:
         self.actuator_ids = [self.model.actuator(n).id for n in cfg.actuator_names_mujoco]
         self.num_joints = len(cfg.joint_names_mujoco)
 
-        # ---- Anchor body ID in MuJoCo ----
-        self.anchor_body_id = self.model.body(cfg.anchor_body_name).id
+        # ---- Anchor body ID in MuJoCo (tracking mode only) ----
+        self.anchor_body_id = (
+            self.model.body(cfg.anchor_body_name).id
+            if hasattr(cfg, 'anchor_body_name') else None
+        )
 
         # ---- Load ONNX policy ----
         self.policy_path = os.path.join(self._base_dir, "exported_policy", model_name)
@@ -175,6 +200,14 @@ class MimicSim2SimController:
         # ---- Buffers ----
         self.last_action = np.zeros(self.num_joints, dtype=np.float32)
         self.time_step = 0
+
+        # ---- Policy type (flat=walk stabilization / tracking=mimic) ----
+        self._policy_type = getattr(cfg, 'policy_type', 'tracking')
+        history_len = getattr(cfg, 'history_length', 1)
+        self._obs_history = deque(
+            [np.zeros(cfg.num_obs, dtype=np.float32)] * history_len,
+            maxlen=history_len,
+        )
 
         # ---- Set initial MuJoCo pose ----
         self.data.qpos[self.joint_qpos_addrs] = self.default_qpos_mj
@@ -213,9 +246,16 @@ class MimicSim2SimController:
         self.target_qpos_mj = self.default_qpos_mj.copy()
         self.last_action = np.zeros(self.num_joints, dtype=np.float32)
         self.time_step = 0
-        self.anchor_body_id = self.model.body(cfg.anchor_body_name).id
+        self._policy_type = getattr(cfg, 'policy_type', 'tracking')
+        history_len = getattr(cfg, 'history_length', 1)
+        self._obs_history = deque(
+            [np.zeros(cfg.num_obs, dtype=np.float32)] * history_len,
+            maxlen=history_len,
+        )
+        if hasattr(cfg, 'anchor_body_name'):
+            self.anchor_body_id = self.model.body(cfg.anchor_body_name).id
         self._active_policy_idx = policy_idx
-        print(f"[PolicySwitch] Switched to policy {policy_idx}")
+        print(f"[PolicySwitch] Switched to policy {policy_idx} (type={self._policy_type})")
         return True
 
     # -------- PD control --------
@@ -224,6 +264,15 @@ class MimicSim2SimController:
         tau = self.kp * (target_pos_mj - self.data.qpos[self.joint_qpos_addrs]) \
             + self.kd * (target_vel_mj - self.data.qvel[self.joint_qvel_addrs])
         self.data.ctrl[self.actuator_ids] = tau
+
+    def run_onnx_flat(self, obs):
+        """Run flat walk ONNX policy (single obs input -> actions)."""
+        obs_batch = obs[np.newaxis, :].astype(np.float32)
+        outputs = self.ort_session.run(
+            self.ort_output_names,
+            {self.ort_input_names[0]: obs_batch},
+        )
+        return outputs[0].flatten().astype(np.float32)
 
     # -------- ONNX inference --------
 
@@ -257,16 +306,23 @@ class MimicSim2SimController:
         include_se = getattr(cfg, 'include_state_estimation', True)
         self.model.opt.timestep = self.sim_dt
 
-        # First inference to get initial reference data from the embedded motion
-        dummy_obs = np.zeros(cfg.num_obs, dtype=np.float32)
-        onnx_out = self.run_onnx(dummy_obs)
-        ref_joint_pos = onnx_out[1].astype(np.float32)   # (29,) Isaac order
-        ref_joint_vel = onnx_out[2].astype(np.float32)   # (29,)
-        ref_body_pos_w = onnx_out[3].astype(np.float32)  # (N_bodies, 3)
-        ref_body_quat_w = onnx_out[4].astype(np.float32) # (N_bodies, 4) wxyz
+        # Initialize reference data for tracking mode
+        ref_joint_pos = ref_joint_vel = None
+        ref_body_pos_w = ref_body_quat_w = None
+        anchor_body_idx = None
 
-        # Find anchor body index within the tracked body_names list
-        anchor_body_idx = cfg.body_names.index(cfg.anchor_body_name)
+        def _init_tracking_refs(cfg):
+            nonlocal ref_joint_pos, ref_joint_vel, ref_body_pos_w, ref_body_quat_w, anchor_body_idx
+            dummy_obs = np.zeros(cfg.num_obs, dtype=np.float32)
+            onnx_out = self.run_onnx(dummy_obs)
+            ref_joint_pos = onnx_out[1].astype(np.float32)
+            ref_joint_vel = onnx_out[2].astype(np.float32)
+            ref_body_pos_w = onnx_out[3].astype(np.float32)
+            ref_body_quat_w = onnx_out[4].astype(np.float32)
+            anchor_body_idx = cfg.body_names.index(cfg.anchor_body_name)
+
+        if self._policy_type == 'tracking':
+            _init_tracking_refs(cfg)
 
         with mujoco.viewer.launch_passive(self.model, self.data) as viewer:
             viewer.cam.lookat[:] = self.data.qpos[:3]
@@ -286,19 +342,15 @@ class MimicSim2SimController:
                 if requested != 0 and requested != self._active_policy_idx:
                     if requested in policy_registry:
                         cfg_path, mdl_name = policy_registry[requested]
+                        print()  # newline to keep progress bar intact
                         if self.load_policy(cfg_path, mdl_name, requested):
                             cfg = self.config
                             include_se = getattr(cfg, 'include_state_estimation', True)
-                            anchor_body_idx = cfg.body_names.index(cfg.anchor_body_name)
-                            # Re-run initial inference for new policy
-                            dummy_obs = np.zeros(cfg.num_obs, dtype=np.float32)
-                            onnx_out = self.run_onnx(dummy_obs)
-                            ref_joint_pos = onnx_out[1].astype(np.float32)
-                            ref_joint_vel = onnx_out[2].astype(np.float32)
-                            ref_body_pos_w = onnx_out[3].astype(np.float32)
-                            ref_body_quat_w = onnx_out[4].astype(np.float32)
+                            if self._policy_type == 'tracking':
+                                _init_tracking_refs(cfg)
+                            print(f"[PolicySwitch] Active policy: {requested} ({self._policy_type})")
                     else:
-                        print(f"[PolicySwitch] Policy {requested} not registered.")
+                        print(f"\n[PolicySwitch] Policy {requested} not registered.")
 
                 # ---- Apply perturbation ----
                 self.data.xfrc_applied[:] = 0
@@ -320,54 +372,83 @@ class MimicSim2SimController:
                     joint_pos_rel = (curr_qpos_isaac - cfg.default_joint_pos).astype(np.float32)
                     joint_vel = curr_qvel_isaac.astype(np.float32)
 
-                    # Base velocity in BODY frame (IsaacLab convention)
                     base_quat_wxyz = self.data.qpos[3:7].copy().astype(np.float32)
                     base_lin_vel_w = self.data.qvel[0:3].copy().astype(np.float32)
                     base_ang_vel_w = self.data.qvel[3:6].copy().astype(np.float32)
-                    base_lin_vel_b = quat_rotate_inverse_np(base_quat_wxyz, base_lin_vel_w)
-                    base_ang_vel_b = quat_rotate_inverse_np(base_quat_wxyz, base_ang_vel_w)
 
-                    # Anchor transforms: relative position/orientation of motion target in robot body frame
-                    robot_anchor_pos, robot_anchor_quat = self._get_anchor_state()
-                    motion_anchor_pos = ref_body_pos_w[anchor_body_idx].astype(np.float32)
-                    motion_anchor_quat = ref_body_quat_w[anchor_body_idx].astype(np.float32)
+                    if self._policy_type == 'flat':
+                        # ---- Flat walk policy (stabilization) ----
+                        quat_xyzw = base_quat_wxyz[[1, 2, 3, 0]]
+                        proj_grav = R.from_quat(quat_xyzw).apply([0, 0, -1], inverse=True).astype(np.float32)
+                        commands = np.zeros(3, dtype=np.float32)
+                        obs = build_walk_obs(
+                            base_ang_vel_w, proj_grav, commands,
+                            joint_pos_rel, joint_vel, self.last_action, cfg,
+                        )
+                        self._obs_history.append(obs)
+                        obs_arr = np.array(list(self._obs_history))
+                        n = self.num_joints
+                        feature_indices = [
+                            (0, 3), (3, 6), (6, 9),
+                            (9, 9 + n), (9 + n, 9 + 2 * n), (9 + 2 * n, 9 + 3 * n),
+                        ]
+                        obs_input = np.concatenate([
+                            obs_arr[:, s:e].ravel() for s, e in feature_indices
+                        ])
+                        action = self.run_onnx_flat(obs_input)
 
-                    anchor_pos_b, anchor_quat_b = subtract_frame_transforms_np(
-                        robot_anchor_pos, robot_anchor_quat,
-                        motion_anchor_pos, motion_anchor_quat,
-                    )
-                    # Extract first 2 columns of rotation matrix -> 6 values
-                    anchor_mat = matrix_from_quat_np(anchor_quat_b)
-                    anchor_ori_b_6 = anchor_mat[:, :2].T.reshape(-1)  # column-major: [col0(3), col1(3)]
+                    else:
+                        # ---- Tracking policy ----
+                        base_lin_vel_b = quat_rotate_inverse_np(base_quat_wxyz, base_lin_vel_w)
+                        # MuJoCo qvel[3:6] is angular velocity already in body frame;
+                        # do NOT apply quat_rotate_inverse again.
+                        base_ang_vel_b = base_ang_vel_w
 
-                    # Build observation
-                    obs = build_tracking_obs(
-                        ref_joint_pos, ref_joint_vel,
-                        anchor_pos_b, anchor_ori_b_6,
-                        base_lin_vel_b, base_ang_vel_b,
-                        joint_pos_rel, joint_vel,
-                        self.last_action,
-                        include_state_estimation=include_se,
-                    )
+                        # Anchor transforms
+                        robot_anchor_pos, robot_anchor_quat = self._get_anchor_state()
+                        motion_anchor_pos = ref_body_pos_w[anchor_body_idx].astype(np.float32)
+                        motion_anchor_quat = ref_body_quat_w[anchor_body_idx].astype(np.float32)
 
-                    # Run ONNX policy
-                    onnx_out = self.run_onnx(obs)
-                    action = onnx_out[0].flatten().astype(np.float32)
+                        anchor_pos_b, anchor_quat_b = subtract_frame_transforms_np(
+                            robot_anchor_pos, robot_anchor_quat,
+                            motion_anchor_pos, motion_anchor_quat,
+                        )
+                        # Extract first 2 columns of rotation matrix -> 6 values (R6)
+                        # Must match Isaac Lab: mat[..., :2].reshape(N, -1) which is row-major
+                        # i.e. [m00, m01, m10, m11, m20, m21]
+                        anchor_mat = matrix_from_quat_np(anchor_quat_b)
+                        anchor_ori_b_6 = anchor_mat[:, :2].reshape(-1)  # row-major: [m00,m01,m10,m11,m20,m21]
 
-                    # Update reference data for next step
-                    ref_joint_pos = onnx_out[1].astype(np.float32)
-                    ref_joint_vel = onnx_out[2].astype(np.float32)
-                    ref_body_pos_w = onnx_out[3].astype(np.float32)
-                    ref_body_quat_w = onnx_out[4].astype(np.float32)
+                        # Build observation
+                        obs = build_tracking_obs(
+                            ref_joint_pos, ref_joint_vel,
+                            anchor_pos_b, anchor_ori_b_6,
+                            base_lin_vel_b, base_ang_vel_b,
+                            joint_pos_rel, joint_vel,
+                            self.last_action,
+                            include_state_estimation=include_se,
+                        )
 
+                        # Run ONNX policy
+                        onnx_out = self.run_onnx(obs)
+                        action = onnx_out[0].flatten().astype(np.float32)
+
+                        # Update reference data for next step
+                        ref_joint_pos = onnx_out[1].astype(np.float32)
+                        ref_joint_vel = onnx_out[2].astype(np.float32)
+                        ref_body_pos_w = onnx_out[3].astype(np.float32)
+                        ref_body_quat_w = onnx_out[4].astype(np.float32)
+
+                        self.time_step += 1
+
+                        # Loop motion clip if finished
+                        total_steps = getattr(cfg, 'motion_total_steps', None)
+                        if total_steps and self.time_step >= total_steps:
+                            print("\n[Motion] Clip finished, looping from start.")
+                            self.time_step = 0
+
+                    # ---- Shared: update last_action and target pose ----
                     self.last_action = action.copy()
-                    self.time_step += 1
-
-                    # Loop motion clip if finished
-                    total_steps = getattr(cfg, 'motion_total_steps', None)
-                    if total_steps and self.time_step >= total_steps:
-                        print("[Motion] Clip finished, looping from start.")
-                        self.time_step = 0
 
                     # Compute target joint positions (Isaac order -> MuJoCo order)
                     target_isaac = action * cfg.action_scale + cfg.default_joint_pos
@@ -388,16 +469,30 @@ class MimicSim2SimController:
                     real_t = time.time() - start_time
                     hz = motiontime / real_t if real_t > 0 else 0
                     sim_t = motiontime * self.sim_dt
-                    total = getattr(cfg, 'motion_total_steps', '?')
-                    print(f"[Sim] t={sim_t:.1f}s | step={self.time_step}/{total} | "
-                          f"height={self.data.qpos[2]:.3f}m | {hz:.0f} Hz")
+                    total = getattr(cfg, 'motion_total_steps', None)
+                    if self._policy_type == 'tracking' and total:
+                        bar_width = 40
+                        filled = int(bar_width * self.time_step / total)
+                        bar = '█' * filled + '░' * (bar_width - filled)
+                        pct = self.time_step / total * 100
+                        print(f"\r[Motion] [{bar}] {pct:5.1f}%  step={self.time_step}/{total} | "
+                              f"t={sim_t:.1f}s | height={self.data.qpos[2]:.3f}m | {hz:.0f} Hz",
+                              end='', flush=True)
+                    elif self._policy_type == 'tracking':
+                        print(f"\r[Sim] t={sim_t:.1f}s | step={self.time_step} | "
+                              f"height={self.data.qpos[2]:.3f}m | {hz:.0f} Hz | mode=tracking",
+                              end='', flush=True)
+                    else:
+                        print(f"\r[Sim] t={sim_t:.1f}s | height={self.data.qpos[2]:.3f}m | "
+                              f"{hz:.0f} Hz | mode=flat-stabilize",
+                              end='', flush=True)
 
 
 # ==================== Main ====================
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Sim2Sim for G1 Motion Tracking")
-    parser.add_argument('--model', type=str, default='policy.onnx', help='ONNX model filename')
+    parser.add_argument('--model', type=str, default='g1_jump.onnx', help='ONNX model filename')
     parser.add_argument('--config', type=str, default='g1_mimic.yaml', help='Config YAML filename')
     args = parser.parse_args()
 
@@ -409,17 +504,20 @@ if __name__ == '__main__':
         return os.path.join(script_dir, 'config', name)
 
     mimic_config = resolve_config(args.config)
+    flat_config = resolve_config('g1_walk.yaml')
 
     # ---- Policy registry (gamepad switching: RB + A/B/X/Y) ----
+    # Slot 1 (startup): flat walk policy for standing stabilization
+    # Slot 2 (RB+B):    main tracking/mimic policy
     policy_registry = {
-        1: (mimic_config, args.model),                                          # RB+A: main policy
-        2: (resolve_config('g1_mimic_2.yaml'), 'policy_mimic_2.onnx'),          # RB+B: placeholder
-        3: (resolve_config('g1_mimic_3.yaml'), 'policy_mimic_3.onnx'),          # RB+X: placeholder
-        4: (resolve_config('g1_mimic_4.yaml'), 'policy_mimic_4.onnx'),          # RB+Y: placeholder
+        1: (flat_config, 'g1_flat_1.onnx'),                                     # RB+A: flat stabilize
+        2: (mimic_config, args.model),                                          # RB+B: main mimic policy
+        3: (resolve_config('g1_mimic.yaml'), 'g1_jump.onnx'),          # RB+X: placeholder
+        4: (resolve_config('g1_mimic.yaml'), 'g1_dance.onnx'),          # RB+Y: placeholder
     }
 
-    # 1. Initialize controller
-    controller = MimicSim2SimController(mimic_config, args.model)
+    # 1. Initialize controller with flat policy (stable standing first)
+    controller = MimicSim2SimController(flat_config, 'g1_flat_1.onnx')
     controller._active_policy_idx = 1
 
     # 2. Initialize gamepad (gamesir)
@@ -435,8 +533,9 @@ if __name__ == '__main__':
 
     print("\n" + "=" * 70)
     print("  Motion Tracking Sim2Sim (MuJoCo)")
-    print("  RB + A  : Main mimic policy")
-    print("  RB + B  : Policy 2 (placeholder)")
+    print("  Starts with flat walk policy (g1_flat_1.onnx) for stabilization")
+    print("  RB + A  : Flat walk policy (stand / stabilize)")
+    print("  RB + B  : Main mimic / tracking policy")
     print("  RB + X  : Policy 3 (placeholder)")
     print("  RB + Y  : Policy 4 (placeholder)")
     print("  Start   : Exit")

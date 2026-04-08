@@ -12,7 +12,7 @@ Usage:
 import time
 import numpy as np
 import argparse
-import torch
+import onnxruntime as ort
 import sys
 import os
 from collections import deque
@@ -140,7 +140,7 @@ class Sim2SimController:
 
         # 6. 加载 Policy
         print(f"Loading policy: {self.policy_path}")
-        self.policy = torch.jit.load(self.policy_path, map_location='cpu')
+        self._load_onnx(self.policy_path)
         
         # 7. 初始化缓冲区与增益 (直接从 config 读取)
         self.obs_history = deque([np.zeros(96, dtype=np.float32)] * c.history_length, maxlen=c.history_length)
@@ -148,17 +148,22 @@ class Sim2SimController:
         self.kp = c.kps[c.isaac_to_mujoco_map]
         self.kd = c.kds[c.isaac_to_mujoco_map]
         self.last_action = np.zeros(self.num_joints, dtype=np.float32)
-        
+
         # 8. 初始姿态对齐 (Isaac -> MuJoCo)
         # 使用你配置里的 map 数组进行重排
         self.default_qpos_mj = c.default_joint_pos[c.isaac_to_mujoco_map]
         self.target_qpos_mj = self.default_qpos_mj.copy()
-        
+
         self.data.qpos[self.joint_qpos_addrs] = self.default_qpos_mj
-        self.data.qpos[2] = getattr(c, 'init_height', 0.90) # 优先从配置读高度
+        self.data.qpos[2] = getattr(c, 'init_height', 0.90)  # 优先从配置读高度
         mujoco.mj_step(self.model, self.data)
-        
+
         print("Sim2Sim controller initialized")
+
+    def _load_onnx(self, path):
+        self.ort_session = ort.InferenceSession(path, providers=['CPUExecutionProvider'])
+        self.ort_input_names = [inp.name for inp in self.ort_session.get_inputs()]
+        self.ort_output_names = [out.name for out in self.ort_session.get_outputs()]
 
     # -------- 策略热切换 --------
 
@@ -189,7 +194,7 @@ class Sim2SimController:
 
         self.config = new_cfg
         c = new_cfg
-        self.policy = torch.jit.load(policy_path, map_location='cpu')
+        self._load_onnx(policy_path)
         self.policy_decimation = int(c.control_dt / c.sim_dt)
         self.kp = c.kps[c.isaac_to_mujoco_map]
         self.kd = c.kds[c.isaac_to_mujoco_map]
@@ -309,14 +314,13 @@ class Sim2SimController:
 
                     # Final batch preparation for policy inference
                     obs_batch = obs_input[np.newaxis, :].astype(np.float32)
-                        
-                    # Isaac Order: Forward pass through the neural network
-                    with torch.no_grad():
-                        obs_tensor = torch.from_numpy(obs_batch)
-                        action_tensor = self.policy(obs_tensor)
-                        if isinstance(action_tensor, tuple):
-                            action_tensor = action_tensor[0]
-                        action = action_tensor.cpu().numpy().flatten().astype(np.float32)
+
+                    # ONNX inference
+                    outputs = self.ort_session.run(
+                        self.ort_output_names,
+                        {self.ort_input_names[0]: obs_batch},
+                    )
+                    action = outputs[0].flatten().astype(np.float32)
                         
                     # Parse 29D action: position offsets
                     self.last_action = action.copy()
@@ -356,7 +360,7 @@ class Sim2SimController:
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--model', type=str, default='g1_walk.pt')
+    parser.add_argument('--model', type=str, default='g1_flat_1.onnx')
     parser.add_argument('--config', type=str, default='g1_walk.yaml')
     args = parser.parse_args()
 
@@ -375,10 +379,10 @@ if __name__ == '__main__':
     # value: (config_yaml_path, policy_model_name)
     # policy1/policy2/policy3 配置文件尚未创建，切换时会自动跳过
     policy_registry = {
-        1: (walk_config,                              args.model),      # RB+A → 行走策略
-        2: (resolve_config('policy1.yaml'),           'policy1.pt'),    # RB+B → 策略 1 (占位符)
-        3: (resolve_config('policy2.yaml'),           'policy2.pt'),    # RB+X → 策略 2 (占位符)
-        4: (resolve_config('policy3.yaml'),           'policy3.pt'),    # RB+Y → 策略 3 (占位符)
+        1: (walk_config,                              args.model),           # RB+A → 行走策略
+        2: (resolve_config('policy1.yaml'),           'policy1.onnx'),       # RB+B → 策略 1 (占位符)
+        3: (resolve_config('policy2.yaml'),           'policy2.onnx'),       # RB+X → 策略 2 (占位符)
+        4: (resolve_config('policy3.yaml'),           'policy3.onnx'),       # RB+Y → 策略 3 (占位符)
     }
 
     # 1. 初始化 Controller，默认加载行走策略

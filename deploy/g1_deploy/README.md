@@ -6,31 +6,67 @@ Unitree G1 (29 DOF) 强化学习策略部署，支持 Sim2Sim (MuJoCo) 和 Sim2R
 
 ## Sim2Sim (MuJoCo)
 
-在 MuJoCo 中验证策略，使用 Unitree 官方手柄 (USB) 控制。
+在 MuJoCo 中验证策略，使用 GameSir 手柄 (USB) 控制。
 
-### Installization
+### 安装依赖
 
 ```bash
 conda activate env_isaaclab1
-pip install torch numpy scipy pyyaml mujoco pygame
+pip install onnxruntime numpy scipy pyyaml mujoco pygame
 ```
 
-### Startup
+### 启动 — Walk / 速度控制策略
 
 ```bash
-python sim2sim_walk.py --model g1_flat_1.pt --config g1_walk.yaml
+cd deploy/g1_deploy
+python sim2sim_walk.py --config g1_walk.yaml
 ```
 
-### Gamesir 
+### 启动 — Motion Tracking / 动作模仿策略
 
-| 操作         | 功能              |
-| ------------ | ----------------- |
-| 左摇杆 上/下 | vx 前进/后退      |
-| 左摇杆 左/右 | vy 横移           |
-| 右摇杆 左/右 | vyaw 转向         |
-| RB + A       | Walk 策略         |
-| RB + B/X/Y   | Policy 1/2/3 占位 |
-| Start        | 退出              |
+```bash
+python deploy/g1_deploy/sim2sim_mimic.py --config g1_mimic.yaml
+```
+
+脚本启动时默认加载 **`g1_flat_1.onnx`（flat walk 站立稳定策略）**，待机器人站稳后按 **RB + B** 切换至 tracking 策略开始播放动作。
+
+### GameSir 手柄操作
+
+#### Walk 策略（`sim2sim_walk.py`）
+
+| 操作           | 功能                       |
+| -------------- | -------------------------- |
+| 左摇杆 上/下   | vx 前进/后退               |
+| 左摇杆 左/右   | vy 横移                    |
+| 右摇杆 左/右   | vyaw 转向                  |
+| **RB + A**     | Walk 策略（主策略）        |
+| **RB + B/X/Y** | Policy 1/2/3（占位符）     |
+| **Start**      | 退出                       |
+
+#### Tracking 策略（`sim2sim_mimic.py`）
+
+| 操作         | 功能                                         |
+| ------------ | -------------------------------------------- |
+| **RB + A**   | 切换至 Flat walk 策略（站立稳定）            |
+| **RB + B**   | 切换至主 Mimic / Tracking 策略（动作播放）   |
+| **RB + X**   | Policy 3（占位符）                           |
+| **RB + Y**   | Policy 4（占位符）                           |
+| **Start**    | 退出                                         |
+
+> 切换 policy 时终端会换行并打印 `[PolicySwitch] Active policy: N (tracking/flat)`。
+
+### 切换 Policy
+
+`policy_registry` 在脚本底部定义，修改对应的 YAML 配置路径和 ONNX 文件名即可注册新的策略：
+
+```python
+policy_registry = {
+    1: (flat_config,    'g1_flat_1.onnx'),   # RB+A
+    2: (mimic_config,   'policy.onnx'),      # RB+B
+    3: ('config/g1_mimic_2.yaml', 'policy_2.onnx'),  # RB+X
+    4: ('config/g1_mimic_3.yaml', 'policy_3.onnx'),  # RB+Y
+}
+```
 
 ---
 
