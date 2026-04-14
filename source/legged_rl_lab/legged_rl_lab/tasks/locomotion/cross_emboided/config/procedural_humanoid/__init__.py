@@ -14,7 +14,7 @@ from . import agents
 
 
 # Use custom environment class for procedural robots
-_PROCEDURAL_ENV_ENTRY_POINT = "legged_rl_lab.tasks.locomotion.cross_emboided.mdp.procedural_obs:ProceduralRobotEnv"
+_PROCEDURAL_ENV_ENTRY_POINT = "legged_rl_lab.tasks.locomotion.cross_emboided.mdp.procedural_obs:ProceduralHumanoidRobotEnv"
 
 
 gym.register(
@@ -22,7 +22,7 @@ gym.register(
     entry_point=_PROCEDURAL_ENV_ENTRY_POINT,
     disable_env_checker=True,
     kwargs={
-        "env_cfg_entry_point": f"{__name__}.procedural_env_cfg:ProceduralHumanoidFlatEnvCfg",
+        "env_cfg_entry_point": f"{__name__}.humanoid_env_cfg:ProceduralHumanoidFlatEnvCfg",
         "rsl_rl_cfg_entry_point": f"{agents.__name__}.rsl_rl_ppo_cfg:ProceduralHumanoidFlatPPORunnerCfg",
     },
 )
@@ -33,7 +33,7 @@ gym.register(
     entry_point=_PROCEDURAL_ENV_ENTRY_POINT,
     disable_env_checker=True,
     kwargs={
-        "env_cfg_entry_point": f"{__name__}.procedural_env_cfg:ProceduralHumanoidFlatEnvCfg_PLAY",
+        "env_cfg_entry_point": f"{__name__}.humanoid_env_cfg:ProceduralHumanoidFlatEnvCfg_PLAY",
         "rsl_rl_cfg_entry_point": f"{agents.__name__}.rsl_rl_ppo_cfg:ProceduralHumanoidFlatPPORunnerCfg",
     },
 )
@@ -44,7 +44,7 @@ gym.register(
     entry_point=_PROCEDURAL_ENV_ENTRY_POINT,
     disable_env_checker=True,
     kwargs={
-        "env_cfg_entry_point": f"{__name__}.procedural_env_cfg:ProceduralHumanoidRoughEnvCfg",
+        "env_cfg_entry_point": f"{__name__}.humanoid_env_cfg:ProceduralHumanoidRoughEnvCfg",
         "rsl_rl_cfg_entry_point": f"{agents.__name__}.rsl_rl_ppo_cfg:ProceduralHumanoidRoughPPORunnerCfg",
     },
 )
@@ -55,7 +55,7 @@ gym.register(
     entry_point=_PROCEDURAL_ENV_ENTRY_POINT,
     disable_env_checker=True,
     kwargs={
-        "env_cfg_entry_point": f"{__name__}.procedural_env_cfg:ProceduralHumanoidRoughEnvCfg_PLAY",
+        "env_cfg_entry_point": f"{__name__}.humanoid_env_cfg:ProceduralHumanoidRoughEnvCfg_PLAY",
         "rsl_rl_cfg_entry_point": f"{agents.__name__}.rsl_rl_ppo_cfg:ProceduralHumanoidRoughPPORunnerCfg",
     },
 )

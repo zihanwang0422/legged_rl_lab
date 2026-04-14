@@ -116,7 +116,7 @@ class Controller:
         if config.msg_type == "hg":
             self.low_cmd = unitree_hg_msg_dds__LowCmd_()
             self.low_state = unitree_hg_msg_dds__LowState_()
-            self.mode_pr_ = MotorMode.PR
+            self.mode_pr_ = MotorMode.PR  #用串联PR模式
 
             self.lowcmd_publisher_ = ChannelPublisher(config.lowcmd_topic, LowCmdHG)
             self.lowcmd_publisher_.Init()

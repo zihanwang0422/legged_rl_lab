@@ -258,3 +258,121 @@ class ProceduralQuadWheelCfg(SpawnerCfg):
 
     wheel_width_range: tuple[float, float] = (0.03, 0.06)
     """Range for the wheel width in meters."""
+
+
+# ============================================================
+# Mixed Biped + Quadruped Spawner
+# ============================================================
+
+
+def spawn_mixed(
+    prim_path: str,
+    cfg: "ProceduralMixedCfg",
+    translation: tuple[float, float, float] | None = None,
+    orientation: tuple[float, float, float, float] | None = None,
+):
+    """Spawn a mix of procedural bipeds and quadrupeds.
+
+    The first ``int(N * humanoid_ratio)`` envs get a biped; the remaining envs
+    get a quadruped.
+    """
+    from pxr import UsdGeom
+
+    stage = get_current_stage()
+
+    # ── Create biped builder from nested cfg ──
+    b = cfg.biped_cfg
+    biped_builder = BipedBuilder(
+        torso_link_length_range=b.torso_link_length_range,
+        torso_link_width_range=b.torso_link_width_range,
+        torso_link_height_range=b.torso_link_height_range,
+        pelvis_height_range=b.pelvis_height_range,
+        pelvis_radius_coeff_range=b.pelvis_radius_coeff_range,
+        hip_spacing_range=b.hip_spacing_range,
+        hip_pitch_link_length_range=b.hip_pitch_link_length_range,
+        hip_pitch_link_radius_range=b.hip_pitch_link_radius_range,
+        hip_roll_link_length_range=b.hip_roll_link_length_range,
+        hip_roll_link_radius_range=b.hip_roll_link_radius_range,
+        hip_pitch_link_initroll_range=b.hip_pitch_link_initroll_range,
+        hip_yaw_link_radius_range=b.hip_yaw_link_radius_range,
+        leg_length_range=b.leg_length_range,
+        shin_ratio_range=b.shin_ratio_range,
+        ankle_roll_link_length_range=b.ankle_roll_link_length_range,
+        ankle_roll_link_width_range=b.ankle_roll_link_width_range,
+        ankle_roll_link_height_range=b.ankle_roll_link_height_range,
+        head_radius_range=b.head_radius_range,
+        arm_length_range=b.arm_length_range,
+        forearm_ratio_range=b.forearm_ratio_range,
+        upper_arm_radius_range=b.upper_arm_radius_range,
+        torso_link_mass_range=b.torso_link_mass_range,
+        hip_pitch_link_mass_range=b.hip_pitch_link_mass_range,
+        hip_roll_link_mass_range=b.hip_roll_link_mass_range,
+        hip_yaw_link_mass_coeff_range=b.hip_yaw_link_mass_coeff_range,
+        knee_link_radius_coeff_range=b.knee_link_radius_coeff_range,
+        knee_link_mass_coeff_range=b.knee_link_mass_coeff_range,
+        ankle_roll_link_mass_range=b.ankle_roll_link_mass_range,
+        head_mass_coeff_range=b.head_mass_coeff_range,
+        upper_arm_mass_coeff_range=b.upper_arm_mass_coeff_range,
+        forearm_radius_coeff_range=b.forearm_radius_coeff_range,
+        forearm_mass_coeff_range=b.forearm_mass_coeff_range,
+    )
+
+    # ── Create quadruped builder from nested cfg ──
+    q = cfg.quadruped_cfg
+    quadruped_builder = QuadrupedBuilder(
+        base_length_range=q.base_length_range,
+        base_width_range=q.base_width_range,
+        base_height_range=q.base_height_range,
+        leg_length_range=q.leg_length_range,
+        calf_length_ratio=q.calf_length_ratio,
+    )
+
+    root_path, asset_path = prim_path.rsplit("/", 1)
+    source_prim_paths = find_matching_prim_paths(root_path)
+    prim_paths = [f"{sp}/{asset_path}" for sp in source_prim_paths]
+
+    n = len(prim_paths)
+    n_humanoid = int(n * cfg.humanoid_ratio)
+
+    # First n_humanoid envs → biped
+    for i in range(n_humanoid):
+        param = biped_builder.sample_params(seed=i)
+        prim = biped_builder.spawn(stage, prim_paths[i], param)
+        schemas.modify_articulation_root_properties(prim_paths[i], cfg.articulation_props)
+        if cfg.activate_contact_sensors:
+            schemas.activate_contact_sensors(prim_paths[i], stage=stage)
+
+    # Remaining envs → quadruped
+    for i in range(n_humanoid, n):
+        param = quadruped_builder.sample_params(seed=i - n_humanoid)
+        prim = quadruped_builder.spawn(stage, prim_paths[i], param)
+        _, _, standing_height = QuadrupedBuilder._compute_standing_pose(param)
+        xformable = UsdGeom.Xformable(prim)
+        xformable.AddTranslateOp().Set((0.0, 0.0, standing_height))
+        schemas.modify_articulation_root_properties(prim_paths[i], cfg.articulation_props)
+        if cfg.activate_contact_sensors:
+            schemas.activate_contact_sensors(prim_paths[i], stage=stage)
+
+    return prim
+
+
+@configclass
+class ProceduralMixedCfg(SpawnerCfg):
+    """Spawn a heterogeneous mix of procedural bipeds and quadrupeds."""
+
+    func: Callable = spawn_mixed
+
+    activate_contact_sensors: bool = True
+    articulation_props: schemas.ArticulationRootPropertiesCfg | None = None
+    visible: bool = True
+    semantic_tags: list[tuple[str, str]] | None = None
+    copy_from_source: bool = False
+
+    humanoid_ratio: float = 0.5
+    """Fraction of environments that are bipeds (rest are quadrupeds)."""
+
+    biped_cfg: ProceduralBipedCfg = ProceduralBipedCfg()
+    """Configuration ranges for the biped builder."""
+
+    quadruped_cfg: ProceduralQuadrupedCfg = ProceduralQuadrupedCfg()
+    """Configuration ranges for the quadruped builder."""

@@ -1,6 +1,6 @@
 gamepad_type_sim2sim: "gamesir"
 policy_type: flat
-xml_path: "./assets/scene_terrain.xml"
+xml_path: "./assets/scene_29dof.xml"
 
 control_dt: 0.02
 sim_dt: 0.005

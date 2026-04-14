@@ -492,7 +492,7 @@ class MimicSim2SimController:
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Sim2Sim for G1 Motion Tracking")
-    parser.add_argument('--model', type=str, default='g1_jump.onnx', help='ONNX model filename')
+    parser.add_argument('--model', type=str, default='g1_dance.onnx', help='ONNX model filename')
     parser.add_argument('--config', type=str, default='g1_mimic.yaml', help='Config YAML filename')
     args = parser.parse_args()
 

@@ -1,7 +1,11 @@
 # Copyright (c) 2024-2025 zihan wang
 # SPDX-License-Identifier: Apache-2.0
 
-"""Procedural / morphology helpers for cross-embodied locomotion tasks.
+"""Procedural / morphology helpers for single-embodiment locomotion tasks.
+
+This module provides observation terms and environment-init helpers for
+**single-embodiment** procedural robots (humanoid-only or quadruped-only).
+Cross-embodied (mixed biped+quad) logic lives in ``cross_procedural_mdp``.
 
 Public API
 ----------
@@ -12,19 +16,22 @@ Observation terms (use in ObsTerm):
 Env-init helpers (call once from __init__ after super()):
     modify_procedural_articulations(env)   – adjust joint limits via builder
     setup_morphology_params(env)           – generic: QuadrupedBuilder / BipedBuilder
+    setup_humanoid_morphology_params(env)  – biped-only (11-dim)
+    setup_quadruped_morphology_params(env) – quad-only  (11-dim)
     setup_cross_embodied_morphology_params(env) – G1+Go2 specific (3-dim)
+
+Environment classes:
+    ProceduralRobotEnv          – generic (tries quad then biped)
+    ProceduralHumanoidRobotEnv  – biped-only
+    ProceduralQuadrupedRobotEnv – quad-only
 """
 
 from __future__ import annotations
 
 import math
-from typing import TYPE_CHECKING
 
 import torch
 from isaaclab.envs import ManagerBasedRLEnv
-
-if TYPE_CHECKING:
-    pass
 
 
 # ---------------------------------------------------------------------------
@@ -51,8 +58,9 @@ def morphology_params(env: ManagerBasedRLEnv) -> torch.Tensor:
 
     Shape: ``(num_envs, morph_dim)``.
     """
-    if hasattr(env, "morphology_params_tensor"):
-        return env.morphology_params_tensor
+    tensor = getattr(env, "morphology_params_tensor", None)
+    if tensor is not None:
+        return tensor
     morph_dim = getattr(env, "morphology_params_dim", 7)
     return torch.zeros(env.num_envs, morph_dim, device=env.device)
 
@@ -65,7 +73,6 @@ def morphology_params(env: ManagerBasedRLEnv) -> torch.Tensor:
 def modify_procedural_articulations(env: ManagerBasedRLEnv) -> None:
     """Adjust joint limits / default positions via metamorphosis builders.
 
-    Mirrors ``ProceduralRobotEnv._modify_procedural_articulations``.
     Call once from ``__init__`` after ``super().__init__()``.
     """
     if "robot" not in env.scene.articulations:
@@ -162,6 +169,87 @@ def setup_morphology_params(env: ManagerBasedRLEnv) -> None:
     env.morphology_params_tensor = torch.zeros(env.num_envs, 7, device=env.device)
 
 
+def setup_humanoid_morphology_params(env: ManagerBasedRLEnv) -> None:
+    """Set ``env.morphology_params_tensor`` for **biped-only** procedural envs.
+
+    Produces an 11-dim vector per environment::
+
+        [robot_type=+1.0 | biped_params(10)]
+    """
+    morph_dim = 11
+    tensor = torch.zeros(env.num_envs, morph_dim, device=env.device)
+    tensor[:, 0] = 1.0  # robot_type = biped
+
+    try:
+        from metamorphosis.builder import BipedBuilder
+        builder = BipedBuilder.get_instance()
+        if builder is not None and len(builder.params) > 0:
+            n = len(builder.params)
+            params_list = [
+                [
+                    p.torso_link_length, p.torso_link_width, p.torso_link_height,
+                    p.pelvis_height, p.hip_spacing,
+                    p.hip_pitch_link_length, p.hip_roll_link_length, p.hip_yaw_link_length,
+                    p.knee_link_length, p.ankle_roll_link_length,
+                ]
+                for p in builder.params
+            ]
+            raw = torch.tensor(params_list, device=env.device, dtype=torch.float32)
+            mean = torch.tensor(
+                [[0.13, 0.22, 0.11, 0.065, 0.20, 0.045, 0.045, 0.30, 0.31, 0.215]],
+                device=env.device,
+            )
+            std = torch.tensor(
+                [[0.03, 0.04, 0.03, 0.015, 0.04, 0.015, 0.015, 0.08, 0.09, 0.035]],
+                device=env.device,
+            )
+            tensor[:n, 1:11] = (raw - mean) / std
+            print(f"[INFO] Humanoid morphology params set (shape {tensor.shape})")
+    except (ImportError, RuntimeError, KeyError):
+        pass
+
+    env.morphology_params_tensor = tensor
+    env.morphology_params_dim = morph_dim
+    env.is_humanoid_env = torch.ones(env.num_envs, dtype=torch.bool, device=env.device)
+
+
+def setup_quadruped_morphology_params(env: ManagerBasedRLEnv) -> None:
+    """Set ``env.morphology_params_tensor`` for **quadruped-only** procedural envs.
+
+    Produces an 11-dim vector per environment::
+
+        [robot_type=-1.0 | quad_params(7) | zeros(3)]
+    """
+    morph_dim = 11
+    tensor = torch.zeros(env.num_envs, morph_dim, device=env.device)
+    tensor[:, 0] = -1.0  # robot_type = quadruped
+
+    try:
+        from metamorphosis.builder import QuadrupedBuilder
+        builder = QuadrupedBuilder.get_instance()
+        if builder is not None and len(builder.params) > 0:
+            n = len(builder.params)
+            params_list = [
+                [
+                    p.base_length, p.base_width, p.base_height,
+                    p.thigh_length, p.calf_length, p.thigh_radius,
+                    float(p.parallel_abduction),
+                ]
+                for p in builder.params
+            ]
+            raw = torch.tensor(params_list, device=env.device, dtype=torch.float32)
+            mean = torch.tensor([[0.75, 0.35, 0.20, 0.50, 0.50, 0.04, 0.5]], device=env.device)
+            std  = torch.tensor([[0.25, 0.05, 0.05, 0.30, 0.30, 0.01, 0.5]], device=env.device)
+            tensor[:n, 1:8] = (raw - mean) / std
+            print(f"[INFO] Quadruped morphology params set (shape {tensor.shape})")
+    except (ImportError, RuntimeError, KeyError):
+        pass
+
+    env.morphology_params_tensor = tensor
+    env.morphology_params_dim = morph_dim
+    env.is_humanoid_env = torch.zeros(env.num_envs, dtype=torch.bool, device=env.device)
+
+
 def setup_cross_embodied_morphology_params(env: ManagerBasedRLEnv) -> None:
     """Set ``env.morphology_params_tensor`` for the fixed G1+Go2 cross-embodied env.
 
@@ -187,7 +275,7 @@ def setup_cross_embodied_morphology_params(env: ManagerBasedRLEnv) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Procedural robot environment
+# Single-embodiment procedural robot environments
 # ---------------------------------------------------------------------------
 
 
@@ -205,3 +293,33 @@ class ProceduralRobotEnv(ManagerBasedRLEnv):
         super().__init__(cfg, render_mode, **kwargs)
         modify_procedural_articulations(self)
         setup_morphology_params(self)
+
+
+class ProceduralHumanoidRobotEnv(ManagerBasedRLEnv):
+    """Procedural env for biped-only (humanoid) training.
+
+    After ``super().__init__()``:
+    1. Adjusts articulation joint limits via :class:`BipedBuilder`.
+    2. Populates 11-dim morphology params (robot_type=+1 + biped body dims)
+       and sets ``is_humanoid_env = True`` for all envs.
+    """
+
+    def __init__(self, cfg, render_mode: str | None = None, **kwargs):
+        super().__init__(cfg, render_mode, **kwargs)
+        modify_procedural_articulations(self)
+        setup_humanoid_morphology_params(self)
+
+
+class ProceduralQuadrupedRobotEnv(ManagerBasedRLEnv):
+    """Procedural env for quadruped-only training.
+
+    After ``super().__init__()``:
+    1. Adjusts articulation joint limits via :class:`QuadrupedBuilder`.
+    2. Populates 11-dim morphology params (robot_type=-1 + quad body dims
+       zero-padded to align with the humanoid format).
+    """
+
+    def __init__(self, cfg, render_mode: str | None = None, **kwargs):
+        super().__init__(cfg, render_mode, **kwargs)
+        modify_procedural_articulations(self)
+        setup_quadruped_morphology_params(self)

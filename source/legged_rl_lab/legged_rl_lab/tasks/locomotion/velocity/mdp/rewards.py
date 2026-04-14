@@ -68,6 +68,29 @@ def feet_air_time_positive_biped(env, command_name: str, threshold: float, senso
     return reward
 
 
+def double_flight_penalty(
+    env: ManagerBasedRLEnv,
+    sensor_cfg: SceneEntityCfg,
+    command_name: str = "base_velocity",
+) -> torch.Tensor:
+    """Penalize both feet being off the ground simultaneously (double-flight phase).
+
+    Returns 1.0 whenever *all* tracked feet are in the air at the same time
+    and the velocity command is non-trivial, 0.0 otherwise.  Use with a
+    negative reward weight to discourage bunny-hopping.
+    """
+    contact_sensor: ContactSensor = env.scene.sensors[sensor_cfg.name]
+    contact_time = contact_sensor.data.current_contact_time[:, sensor_cfg.body_ids]
+    in_contact = contact_time > 0.0  # (N, n_feet)
+    # Double flight: no foot in contact
+    both_off = torch.sum(in_contact.int(), dim=1) == 0  # (N,)
+    # Only penalize when there is a velocity command
+    cmd_active = torch.norm(
+        env.command_manager.get_command(command_name)[:, :2], dim=1
+    ) > 0.1
+    return (both_off & cmd_active).float()
+
+
 def feet_slide(env, sensor_cfg: SceneEntityCfg, asset_cfg: SceneEntityCfg = SceneEntityCfg("robot")) -> torch.Tensor:
     """Penalize feet sliding.
 

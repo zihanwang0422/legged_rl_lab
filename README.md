@@ -202,17 +202,26 @@ python scripts/rsl_rl/play_cross_embodied_shared.py \
 <summary><b>Procedural Quadruped</b></summary>
 
 ```bash
-#Train
+# Flat – Train
 python scripts/rsl_rl/train.py \
     --task LeggedRLLab-Isaac-CrossEmboided-Flat-Procedural-Quadruped-v0 \
     --num_envs 4096 \
     --headless
-```
 
-```bash
-#Play
+# Flat – Play
 python scripts/rsl_rl/play.py \
     --task LeggedRLLab-Isaac-CrossEmboided-Flat-Procedural-Quadruped-Play-v0 \
+    --num_envs 32
+
+# Rough – Train
+python scripts/rsl_rl/train.py \
+    --task LeggedRLLab-Isaac-CrossEmboided-Rough-Procedural-Quadruped-v0 \
+    --num_envs 4096 \
+    --headless
+
+# Rough – Play
+python scripts/rsl_rl/play.py \
+    --task LeggedRLLab-Isaac-CrossEmboided-Rough-Procedural-Quadruped-Play-v0 \
     --num_envs 32
 ```
 
@@ -222,17 +231,118 @@ python scripts/rsl_rl/play.py \
 <summary><b>Procedural Humanoid</b></summary>
 
 ```bash
-#Train
+# Flat – Train
 python scripts/rsl_rl/train.py \
     --task LeggedRLLab-Isaac-CrossEmboided-Flat-Procedural-Humanoid-v0 \
     --num_envs 4096 \
     --headless
-```
 
-```bash
-#Play
+# Flat – Play
 python scripts/rsl_rl/play.py \
     --task LeggedRLLab-Isaac-CrossEmboided-Flat-Procedural-Humanoid-Play-v0 \
+    --num_envs 32
+
+# Rough – Train
+python scripts/rsl_rl/train.py \
+    --task LeggedRLLab-Isaac-CrossEmboided-Rough-Procedural-Humanoid-v0 \
+    --num_envs 4096 \
+    --headless
+
+# Rough – Play
+python scripts/rsl_rl/play.py \
+    --task LeggedRLLab-Isaac-CrossEmboided-Rough-Procedural-Humanoid-Play-v0 \
+    --num_envs 32
+```
+
+</details>
+
+<details>
+<summary><b>Procedural Mixed (Humanoid + Quadruped)</b></summary>
+
+Trains a **single policy** across procedurally generated bipeds and quadrupeds simultaneously.
+Three pluggable obs-encoder back-ends are available:
+
+| Encoder | Flat Train Task | Rough Train Task |
+|---------|----------------|-----------------|
+| Mask (default) | `…-Flat-Procedural-Mixed-v0` | `…-Rough-Procedural-Mixed-v0` |
+| Transformer | `…-Flat-Procedural-Mixed-Transformer-v0` | `…-Rough-Procedural-Mixed-Transformer-v0` |
+| GCN | `…-Flat-Procedural-Mixed-GCN-v0` | `…-Rough-Procedural-Mixed-GCN-v0` |
+
+Architecture note: encoder lives in `mdp/cross_procedural_mdp.py`; all three procedural env
+types (`ProceduralHumanoidRobotEnv`, `ProceduralQuadrupedRobotEnv`, `ProceduralMixedRobotEnv`)
+inherit from `CrossProceduralEnv` which provides the unified morphology-params interface.
+
+```bash
+# ── Flat – Mask (default) ────────────────────────────────────────────────
+# Train
+python scripts/rsl_rl/train.py \
+    --task LeggedRLLab-Isaac-CrossEmboided-Flat-Procedural-Mixed-v0 \
+    --num_envs 4096 \
+    --headless
+
+# Play
+python scripts/rsl_rl/play.py \
+    --task LeggedRLLab-Isaac-CrossEmboided-Flat-Procedural-Mixed-Play-v0 \
+    --num_envs 32
+
+# ── Flat – Transformer ───────────────────────────────────────────────────
+# Train
+python scripts/rsl_rl/train.py \
+    --task LeggedRLLab-Isaac-CrossEmboided-Flat-Procedural-Mixed-Transformer-v0 \
+    --num_envs 4096 \
+    --headless
+
+# Play
+python scripts/rsl_rl/play.py \
+    --task LeggedRLLab-Isaac-CrossEmboided-Flat-Procedural-Mixed-Play-v0 \
+    --num_envs 32
+
+# ── Flat – GCN ───────────────────────────────────────────────────────────
+# Train
+python scripts/rsl_rl/train.py \
+    --task LeggedRLLab-Isaac-CrossEmboided-Flat-Procedural-Mixed-GCN-v0 \
+    --num_envs 4096 \
+    --headless
+
+# Play
+python scripts/rsl_rl/play.py \
+    --task LeggedRLLab-Isaac-CrossEmboided-Flat-Procedural-Mixed-GCN-Play-v0 \
+    --num_envs 32
+
+# ── Rough – Mask (default) ───────────────────────────────────────────────
+# Train
+python scripts/rsl_rl/train.py \
+    --task LeggedRLLab-Isaac-CrossEmboided-Rough-Procedural-Mixed-v0 \
+    --num_envs 4096 \
+    --headless
+
+# Play
+python scripts/rsl_rl/play.py \
+    --task LeggedRLLab-Isaac-CrossEmboided-Rough-Procedural-Mixed-Play-v0 \
+    --num_envs 32
+
+# ── Rough – Transformer ──────────────────────────────────────────────────
+# Train
+python scripts/rsl_rl/train.py \
+    --task LeggedRLLab-Isaac-CrossEmboided-Rough-Procedural-Mixed-Transformer-v0 \
+    --num_envs 4096 \
+    --headless
+
+# Play
+python scripts/rsl_rl/play.py \
+    --task LeggedRLLab-Isaac-CrossEmboided-Rough-Procedural-Mixed-Play-v0 \
+    --num_envs 32
+
+# ── Rough – GCN ──────────────────────────────────────────────────────────
+# Train
+python scripts/rsl_rl/train.py \
+    --task LeggedRLLab-Isaac-CrossEmboided-Rough-Procedural-Mixed-GCN-v0 \
+    --num_envs 4096 \
+    --headless
+    
+# Play
+python scripts/rsl_rl/play.py \
+    --task LeggedRLLab-Isaac-CrossEmboided-Rough-Procedural-Mixed-GCN-Play-v0 \
     --num_envs 32
 ```
 
