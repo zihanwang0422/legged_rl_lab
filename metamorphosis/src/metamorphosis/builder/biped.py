@@ -436,7 +436,7 @@ class BipedBuilder(BuilderBase):
                 name=f"{side}_knee_joint",
                 type=mujoco.mjtJoint.mjJNT_HINGE,
             )
-            knee_joint_j.axis = [0, 1, 0]  # Y-axis (pitch)
+            knee_joint_j.axis = [0, 0, 1]  # z-axis (yaw)
             knee_joint_j.range = [-0.087267, 2.8798]
             knee_joint_j.armature = 0.025101925
             kl_ixx = param.knee_link_mass * (3 * param.knee_link_radius**2 + param.knee_link_length**2) / 12
