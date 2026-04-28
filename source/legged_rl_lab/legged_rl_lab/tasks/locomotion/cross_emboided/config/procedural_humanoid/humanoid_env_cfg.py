@@ -190,13 +190,22 @@ class ProceduralHumanoidFlatEnvCfg(CrossEmbodiedLocomotionEnvCfg):
         )
 
         # ====Rewards: posture / deviation====
-        # hip_roll 劈叉专项强惩罚：防止机器人靠髋外展走"劈叉步"
+        # hip_roll 劈叉专项强惩罚：防止机器人靠髋外展走"侧向劈叉步"
         self.rewards.hip_roll_deviation = RewTerm(
             func=mdp.joint_deviation_l1,
             weight=-15.0,
             params={"asset_cfg": SceneEntityCfg(
                 "robot",
                 joint_names=[".*_hip_roll_joint"],
+            )},
+        )
+        # hip_pitch 前后劈叉惩罚：防止两腿前后永久劈叉; 正常迈步偏差约0.3rad可接受
+        self.rewards.hip_pitch_deviation = RewTerm(
+            func=mdp.joint_deviation_l1,
+            weight=-2.0,
+            params={"asset_cfg": SceneEntityCfg(
+                "robot",
+                joint_names=[".*_hip_pitch_joint"],
             )},
         )
         self.rewards.joint_deviation_legs = RewTerm(
@@ -364,13 +373,22 @@ class ProceduralHumanoidRoughEnvCfg(CrossEmbodiedLocomotionEnvCfg):
         )
 
         # ====Rewards: posture / deviation====
-        # hip_roll 劈叉专项强惩罚：防止机器人靠髋外展走"劈叉步"
+        # hip_roll 劈叉专项强惩罚：防止机器人靠髋外展走"侧向劈叉步"
         self.rewards.hip_roll_deviation = RewTerm(
             func=mdp.joint_deviation_l1,
             weight=-15.0,
             params={"asset_cfg": SceneEntityCfg(
                 "robot",
                 joint_names=[".*_hip_roll_joint"],
+            )},
+        )
+        # hip_pitch 前后劈叉惩罚：防止两腿前后永久劈叉; 正常迈步偏差约0.3rad可接受
+        self.rewards.hip_pitch_deviation = RewTerm(
+            func=mdp.joint_deviation_l1,
+            weight=-2.0,
+            params={"asset_cfg": SceneEntityCfg(
+                "robot",
+                joint_names=[".*_hip_pitch_joint"],
             )},
         )
         self.rewards.joint_deviation_legs = RewTerm(
