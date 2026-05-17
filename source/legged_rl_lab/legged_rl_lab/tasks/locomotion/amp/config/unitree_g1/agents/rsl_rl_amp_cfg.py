@@ -20,6 +20,7 @@ class UnitreeG1AMPFlatPPORunnerCfg(RslRlOnPolicyRunnerCfg):
     max_iterations = 20000
     save_interval = 200
     experiment_name = "unitree_g1_amp_flat"
+    obs_groups = {"actor": ["policy"], "critic": ["critic"]}
 
     policy = RslRlPpoActorCriticCfg(
         # TienKung uses scalar init_std=1.0 — gives broad exploration across
@@ -52,34 +53,18 @@ class UnitreeG1AMPFlatPPORunnerCfg(RslRlOnPolicyRunnerCfg):
         desired_kl=0.01,
         max_grad_norm=1.0,
         amp_cfg={
-            # Design-3 single-window discriminator:
-            #   per-frame = 29+29+1+6+18 = 83
-            #   history_length = 2, input dim to disc = 166
-            "amp_discriminator_hidden_dims": [512, 256],
-            "amp_discriminator_activation": "relu",
-            # Discriminator gets its own low LR to prevent saturation — legged_lab
-            # uses 1e-4, well below policy LR of 1e-3.
+            # Pair-style AMP aligned with TienKung-Lab:
+            # policy / expert each provide a single-frame AMP feature vector,
+            # and the discriminator sees explicit transition pairs
+            # ``[s_t, s_{t+1}]``.
+            "amp_discr_hidden_dims": [1024, 512, 256],
             "amp_learning_rate": 1e-4,
-            # Buffer holds single-window observations (not pairs).  100 iters
-            # worth of rollout steps — legged_lab uses disc_obs_buffer_size=100
-            # for similar effect.
             "amp_replay_buffer_size": 200000,
-            # 30% of blended reward is task; 70% is style.  With style_reward
-            # now being ``× dt``-scaled (see discriminator.predict_reward), the
-            # per-step style magnitude is comparable to per-step task magnitude.
-            "amp_task_reward_lerp": 0.3,
-            # R1 grad penalty λ = 10 (legged_lab / IsaacLab default).
+            "amp_num_preload_transitions": 200000,
+            "amp_reward_coef": 0.3,
+            "amp_task_reward_lerp": 0.7,
             "amp_disc_gradient_penalty_coef": 10.0,
-            "amp_disc_logit_reg_coef": 0.0,
-            "amp_disc_weight_decay": 0.0005,
-            # Style reward scale in "per-second" units.  Actual per-step style
-            # reward = scale × dt × clamp(..., 0, 1).  With dt=1/30 and scale=5,
-            # per-step style ≤ 5/30 ≈ 0.17 — comparable to per-step task ~0.5.
-            "amp_reward_scale": 5.0,
-            # Label smoothing on disc targets (±0.9 instead of ±1.0).  Caps
-            # disc accuracy at ~95% so the gradient through the style reward
-            # doesn't collapse to 0 when the disc would otherwise saturate
-            # against an under-trained policy.
-            "amp_disc_label_smoothing": 0.1,
+            "amp_disc_weight_decay": 0.001,
+            "amp_disc_head_weight_decay": 0.1,
         },
     )

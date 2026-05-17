@@ -349,9 +349,9 @@ python scripts/rsl_rl/play.py \
 
 </details>
 
-## 🏃 Mimic
+### 🏃 Mimic
 
-### Datasets
+#### Datasets
 
 Place the following datasets in the corresponding directories:
 
@@ -369,24 +369,31 @@ source/legged_rl_lab/legged_rl_lab/data/motion/
 - LAFAN1 retargeted data: [LAFAN1_Retargeting_Dataset](https://huggingface.co/datasets/lvhaidong/LAFAN1_Retargeting_Dataset)
 - AMASS retargeted data: [AMASS_Retargeted_for_G1](https://huggingface.co/datasets/ember-lab-berkeley/AMASS_Retargeted_for_G1)
 
-### AMP (Adversarial Motion Priors)
-
-The motion data path is configured directly in the env config (`amp_flat_env_cfg.py`) and points to a
-**walks-only subset** of LAFAN1 (`g1_walk_only_npz`: 6 clips — walk1/walk2 subjects).
-Run/sprint clips are intentionally excluded: mixing walk (~1 m/s) with sprint (~4 m/s) lets the
-discriminator trivially separate expert from policy from the first iteration, collapsing the style
-reward to zero before the policy has any chance to learn.
-
-The env also uses **Reference State Initialization (RSI)**: at each reset the robot is spawned from
-a near-stable reference frame (low base velocity + upright posture) instead of the default pose,
-which breaks the "stand in place" local optimum that otherwise dominates early training.
+#### AMP (Adversarial Motion Priors)
 
 ```bash
-# Train — G1 humanoid, flat terrain, AMP + RSI (recommended: 1500+ iterations)
+# Train — G1 humanoid, flat terrain, AMP + RSI
+# Default expert motion: a single validated walk clip
 python scripts/amp/train.py \
     --task LeggedRLLab-Isaac-AMP-Flat-Unitree-G1-v0 \
     --num_envs 4096 \
     --headless
+
+# Train on one specific motion file
+python scripts/amp/train.py \
+    --task LeggedRLLab-Isaac-AMP-Flat-Unitree-G1-v0 \
+    --num_envs 4096 \
+    --headless \
+    --motion_file source/legged_rl_lab/legged_rl_lab/data/motion/LAFAN1_Retargeting_Dataset/g1/walk1_subject1.npz
+
+# Train on a directory of motions
+# The loader scans the directory recursively, so keep this folder clean and
+# prefer a walk-only NPZ subset instead of mixing old / incompatible files.
+python scripts/amp/train.py \
+    --task LeggedRLLab-Isaac-AMP-Flat-Unitree-G1-v0 \
+    --num_envs 4096 \
+    --headless \
+    --motion_file /path/to/g1_walk_npz_dir
 
 # Resume from a checkpoint
 python scripts/amp/train.py \
@@ -400,10 +407,11 @@ python scripts/amp/train.py \
 # Play / visualise
 python scripts/amp/play.py \
     --task LeggedRLLab-Isaac-AMP-Flat-Unitree-G1-Play-v0 \
-    --num_envs 50
+    --num_envs 50 \
+    --motion_file source/legged_rl_lab/legged_rl_lab/data/motion/LAFAN1_Retargeting_Dataset/g1/walk1_subject1.npz
 ```
 
-### Motion Tracking
+#### Motion Tracking
 
 [<img src="media/mimic_lafan.gif" width="300px">](gifs/walkrough.gif)
 

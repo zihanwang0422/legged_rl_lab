@@ -3,7 +3,6 @@
 
 """AMP-specific ManagerBasedRLEnv and VecEnv wrapper."""
 
-from .amp_env import AMPManagerBasedRLEnv
-from .amp_env_wrapper import AmpRslRlVecEnvWrapper
+from .amp_env import AMPManagerBasedRLEnv, AmpRslRlVecEnvWrapper
 
 __all__ = ["AMPManagerBasedRLEnv", "AmpRslRlVecEnvWrapper"]

@@ -125,9 +125,10 @@ class ObservationsCfg:
     Following IsaacLab's official G1AmpEnv design:
       - policy: yaw-removed base pose + commands + raw joint state + actions
       - critic: same as policy + base_lin_vel + key_body_pos_b (privileged)
-      - amp:    Design-3 features (89 dim/frame for G1) — joint_pos +
-                joint_vel + root_height + root_tan_norm + root_lin_vel_b +
-                root_ang_vel_b + key_body_pos_b.  history_length=2.
+      - amp:    Single-frame Design-3 features used by pair-style AMP:
+                joint_pos + joint_vel + root_height + root_tan_norm +
+                key_body_pos_b.  Consecutive frames are paired explicitly
+                inside the AMP algorithm as ``(s_t, s_{t+1})``.
     """
 
     @configclass
@@ -159,6 +160,7 @@ class ObservationsCfg:
     @configclass
     class CriticCfg(ObsGroup):
         """Observations for critic group (privileged)."""
+
         # observation terms (order preserved)
         base_lin_vel = ObsTerm(func=mdp.base_lin_vel)
         base_ang_vel = ObsTerm(func=mdp.base_ang_vel)
@@ -206,18 +208,18 @@ class ObservationsCfg:
         quantities (joint state + key body positions + root height/orientation)
         are well-aligned between physics and mocap.
 
-        history_length=2, flatten=True ⇒ env outputs (B, 166) flat tensor.
+        history_length=1 ⇒ env outputs one feature frame per step.  The AMP
+        algorithm then explicitly builds ``(s_t, s_{t+1})`` transition pairs,
+        matching TienKung-Lab's discriminator design.
 
         .. important::
-           A *single* combined ObsTerm is used here so that the group-level
-           history flattening produces a frame-major layout
-           ``[features_{t-1}, features_t]``.  If we instead used five
-           separate terms, IsaacLab buffers each term's history independently
-           and the flat output becomes feature-major
-           ``[jpos_{t-1}, jpos_t, jvel_{t-1}, jvel_t, ...]`` — which does
-           NOT match motion_loader's expert sampling
-           ``cat([frame_t, frame_{t+1}], dim=-1)`` and causes the
-           discriminator to saturate at 100% accuracy on day one.
+           A *single* combined ObsTerm is still important even with
+           ``history_length=1``.  It guarantees the env, replay buffer, and
+           expert loader all agree on one frame-major feature vector
+           ``[joint_pos, joint_vel, root_height, root_tan_norm, key_body_pos]``.
+           If we split AMP into multiple independent terms again, it becomes
+           far too easy to accidentally rebuild transition pairs in a
+           feature-major order and hand the discriminator a trivial cue.
         """
         # Single combined term — its layout matches motion_loader's per-frame
         # output exactly.  ``key_body_pos_b`` body_names are wired up in the
@@ -228,7 +230,7 @@ class ObservationsCfg:
         )
 
         def __post_init__(self):
-            self.history_length = 2
+            self.history_length = 1
             self.enable_corruption = False
             self.concatenate_terms = True
 

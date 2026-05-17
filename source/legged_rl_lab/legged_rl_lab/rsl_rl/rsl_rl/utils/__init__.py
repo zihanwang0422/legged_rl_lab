@@ -5,6 +5,7 @@
 
 """Helper functions."""
 
+from .amp import AMPLoader, Normalizer
 from .utils import (
     check_nan,
     get_param,
@@ -17,6 +18,8 @@ from .utils import (
 )
 
 __all__ = [
+    "AMPLoader",
+    "Normalizer",
     "check_nan",
     "get_param",
     "resolve_callable",

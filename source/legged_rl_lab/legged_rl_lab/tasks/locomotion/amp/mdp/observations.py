@@ -4,13 +4,12 @@
 """AMP-specific observation functions.
 
 These observations are used as input to the AMP discriminator.
-Following IsaacLab's official G1AmpEnv (Design 3) — per-frame AMP obs is::
+Following the TienKung-aligned pair-style setup, each per-frame AMP feature is::
 
     joint_pos(num_dof) + joint_vel(num_dof) +
-    root_height(1) + root_tan_norm(6) + root_lin_vel_b(3) + root_ang_vel_b(3) +
-    key_body_pos_b(num_keys * 3)
+    root_height(1) + root_tan_norm(6) + key_body_pos_b(num_keys * 3)
 
-For G1 with 29 DOF and 6 key bodies (feet + wrists + shoulders): 89 dims/frame.
+For G1 with 29 DOF and 6 key bodies (feet + wrists + shoulders): 83 dims/frame.
 """
 
 from __future__ import annotations
@@ -142,21 +141,13 @@ def amp_full_features(
     For G1 with 29 DOF + 6 key bodies → 83 dims/frame.
 
     .. important::
-       This is a *single* observation term so that when the AMP
-       ObservationGroup applies ``history_length=2`` with
-       ``flatten_history_dim=True``, the resulting flat layout is::
-
-           [features_{t-1} (83) , features_t (83)]
-
-       which matches motion_loader's expert sampling
-       ``[features_t (83) , features_{t+1} (83)]``.
-
-       If we used five separate terms, IsaacLab would buffer each term's
-       history *independently* and the flat output becomes
-       ``[jpos_{t-1}, jpos_t, jvel_{t-1}, jvel_t, ...]`` — a feature-major
-       layout that does NOT match the expert's frame-major layout.  The
-       discriminator then trivially distinguishes the two and saturates
-       at 100% accuracy, providing no useful style gradient.
+       This remains a *single* observation term so the AMP pipeline always
+       deals in frame-major feature vectors.  In the current pair-style AMP
+       setup the env emits one frame per step, and the algorithm explicitly
+       forms transition pairs ``(features_t, features_{t+1})`` for both
+       policy and expert data.  Keeping everything inside one term avoids
+       feature-major reordering bugs such as
+       ``[jpos_t, jvel_t, jpos_{t+1}, jvel_{t+1}, ...]``.
     """
     jpos = amp_joint_pos(env)                                # (N, num_dof)
     jvel = amp_joint_vel(env)                                # (N, num_dof)

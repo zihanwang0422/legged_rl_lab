@@ -49,7 +49,10 @@ parser.add_argument(
     "--distributed", action="store_true", default=False, help="Run training with multiple GPUs or nodes."
 )
 parser.add_argument(
-    "--motion_file", type=str, default=None, help="Path to reference motion data file or directory."
+    "--motion_file",
+    type=str,
+    default=None,
+    help="Path to reference motion file or directory. Directories are searched recursively.",
 )
 # append RSL-RL cli arguments
 cli_args.add_rsl_rl_args(parser)
@@ -102,7 +105,6 @@ from isaaclab_tasks.utils import get_checkpoint_path
 from isaaclab_tasks.utils.hydra import hydra_task_config
 
 from legged_rl_lab.envs import AmpRslRlVecEnvWrapper
-from legged_rl_lab.managers import MotionLoader
 
 logger = logging.getLogger(__name__)
 
@@ -182,39 +184,18 @@ def amp_learn(runner: OnPolicyRunner, num_learning_iterations: int, init_at_rand
                     dones.to(device),
                 )
 
-                # 3. Single-window AMP processing.
-                # We use the env's pre-reset AMP obs (extras["amp_obs"]) so the
-                # discriminator sees the actual physics state, not post-reset
-                # artifacts.  Style reward = D(amp_obs) × dt.
-                if has_amp:
-                    if "amp_obs" in extras and extras["amp_obs"] is not None:
-                        amp_obs = extras["amp_obs"].to(device)
-                    elif "amp" in obs.keys():
-                        amp_obs = obs["amp"].clone()
-                    else:
-                        amp_obs = None
+                # 3. AMP / PPO step processing
+                alg.process_env_step(obs, rewards, dones, extras)
 
-                    if amp_obs is not None:
-                        # Style reward × env step_dt
-                        style_rewards = alg.compute_style_reward(amp_obs, dt=env.unwrapped_env.cfg.sim.dt * env.unwrapped_env.cfg.decimation)
-                        # Blend task + style
-                        blended_rewards = alg.blend_rewards(rewards, style_rewards)
-                        # Track for logging
-                        ep_task_rewards += rewards
-                        ep_style_rewards += style_rewards.view(-1)
-                        # Insert single window into replay buffer
-                        alg.process_amp_transition(amp_obs)
-                        # Process env step with blended rewards
-                        alg.process_env_step(obs, blended_rewards, dones, extras)
-                    else:
-                        alg.process_env_step(obs, rewards, dones, extras)
-                else:
-                    # No AMP, standard PPO
-                    alg.process_env_step(obs, rewards, dones, extras)
+                logged_rewards = rewards
+                if has_amp and alg.latest_blended_rewards is not None:
+                    ep_task_rewards += alg.latest_task_rewards
+                    ep_style_rewards += alg.latest_style_rewards
+                    logged_rewards = alg.latest_blended_rewards
 
                 # Logging
                 intrinsic_rewards = alg.intrinsic_rewards if cfg["algorithm"]["rnd_cfg"] else None
-                runner.logger.process_env_step(rewards, dones, extras, intrinsic_rewards)
+                runner.logger.process_env_step(logged_rewards, dones, extras, intrinsic_rewards)
 
             stop = time.time()
             collect_time = stop - start
@@ -359,20 +340,12 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
     runner = OnPolicyRunner(env, agent_dict, log_dir=log_dir, device=agent_cfg.device)
     runner.add_git_repo_to_log(__file__)
 
-    # Load reference motion data and set on algorithm
+    # AMPPPO constructs and owns the expert motion loader internally via
+    # ``construct_algorithm()``.  Keep this message for visibility, but do not
+    # use the removed ``set_reference_data()`` path.
     motion_path = getattr(env_cfg, "amp_motion_files", "")
-    robot_type = getattr(env_cfg, "robot_type", "g1")
-    amp_history_length = getattr(
-        getattr(getattr(env_cfg, "observations", None), "amp", None),
-        "history_length",
-        2,
-    )
     if motion_path and os.path.exists(motion_path):
         print(f"[INFO] Loading reference motion data from: {motion_path}")
-        motion_loader = MotionLoader(device=agent_cfg.device, robot=robot_type)
-        reference_data = motion_loader.load(motion_path)
-        print(f"[INFO] Loaded {motion_loader.num_frames} frames, obs_dim={motion_loader.obs_dim}, history_length={amp_history_length}")
-        runner.alg.set_reference_data(reference_data, history_length=amp_history_length)
     else:
         print(f"[WARNING] No reference motion data found at: {motion_path}")
         print("[WARNING] AMP will train without style reward (task reward only).")

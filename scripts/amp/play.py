@@ -32,7 +32,12 @@ parser.add_argument(
 )
 parser.add_argument("--num_envs", type=int, default=None, help="Number of environments to simulate.")
 parser.add_argument("--task", type=str, default=None, help="Name of the task.")
-parser.add_argument("--motion_file", type=str, default=None, help="Path to motion file or directory.")
+parser.add_argument(
+    "--motion_file",
+    type=str,
+    default=None,
+    help="Path to reference motion file or directory. Directories are searched recursively.",
+)
 parser.add_argument(
     "--agent", type=str, default="rsl_rl_cfg_entry_point", help="RL agent configuration entry point key."
 )

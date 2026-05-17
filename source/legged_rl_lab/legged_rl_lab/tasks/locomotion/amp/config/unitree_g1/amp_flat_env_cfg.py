@@ -192,16 +192,14 @@ class UnitreeG1AMPFlatEnvCfg(LocomotionAMPRoughEnvCfg):
         self.commands.base_velocity.ranges.ang_vel_z = (-1.0, 1.0)
 
         # ----------------------------- AMP Motion Data -----------------------------
-        # Walks-only subset.  Mixing walks with runs/sprints (1 m/s vs 4 m/s)
-        # gives the discriminator a target distribution that a freshly-initialised
-        # policy can't possibly match — disc saturates at >99% accuracy and the
-        # style reward collapses to zero.  Starting from walks only keeps the
-        # expert distribution narrow enough that the policy's gait learning has
-        # a chance to catch up before the disc wins.
+        # Default to one validated walk clip.  A directory path will load every
+        # supported motion file under it recursively, so we keep the built-in
+        # default narrow and predictable here.  For broader training, override
+        # this from the CLI with ``--motion_file <walk_only_dir_or_npz>``.
         self.robot_type = "g1"
         self.amp_motion_files = os.path.join(
             LEGGED_RL_LAB_ROOT_DIR,
-            "data", "motion", "LAFAN1_Retargeting_Dataset", "g1_walk_only_npz",
+            "data", "motion", "LAFAN1_Retargeting_Dataset", "g1", "walk1_subject1.npz",
         )
 
 @configclass
