@@ -26,14 +26,18 @@ class UnitreeG1AMPFlatEnvCfg(LocomotionAMPRoughEnvCfg):
     foot_link_name = ".*_ankle_roll_link"
 
     # Key bodies for AMP / critic obs.  Order matters — must match the
-    # body indices in motion_loader's G1 profile.
+    # body indices in motion_loader's G1 profile and the reference AMP design.
     key_body_names = (
+        "left_shoulder_pitch_link",
+        "right_shoulder_pitch_link",
+        "left_elbow_link",
+        "right_elbow_link",
+        "left_hip_yaw_link",
+        "right_hip_yaw_link",
+        "left_rubber_hand",
+        "right_rubber_hand",
         "left_ankle_roll_link",
         "right_ankle_roll_link",
-        "left_wrist_yaw_link",
-        "right_wrist_yaw_link",
-        "left_shoulder_roll_link",
-        "right_shoulder_roll_link",
     )
 
     def __post_init__(self):
@@ -61,7 +65,7 @@ class UnitreeG1AMPFlatEnvCfg(LocomotionAMPRoughEnvCfg):
 
         # ----------------------------- Observations -----------------------------
         self.observations.policy.base_ang_vel.scale = 0.25
-        self.observations.policy.root_local_rot_tan_norm.scale = 1.0
+        self.observations.policy.projected_gravity.scale = 1.0
         self.observations.policy.joint_pos.scale = 1.0
         self.observations.policy.joint_vel.scale = 0.05
 
@@ -105,9 +109,9 @@ class UnitreeG1AMPFlatEnvCfg(LocomotionAMPRoughEnvCfg):
                 # ~12% of LAFAN1 walk frames satisfy these — about 5500
                 # near-stable frames, plenty for RSI sampling diversity
                 # without spawning mid-stride with one foot airborne.
-                "max_lin_vel_xy": 0.5,
-                "max_ang_vel": 1.0,
-                "min_root_height": 0.65,
+                "max_lin_vel_xy": 1.5,
+                "max_ang_vel": 1.5,
+                "min_root_height": 0.60,
             },
         )
 
@@ -120,9 +124,9 @@ class UnitreeG1AMPFlatEnvCfg(LocomotionAMPRoughEnvCfg):
         # previous run (500 iter) converged to a "stand in place" local minimum
         # where track_lin_vel ≈ 0.34 but error_vel_xy ≈ 1.17 (i.e. policy just
         # ignores the command).  Stronger task gradient is needed to break out.
-        self.rewards.track_lin_vel_xy_exp.weight = 2.0
+        self.rewards.track_lin_vel_xy_exp.weight = 8.0
         self.rewards.track_lin_vel_xy_exp.func = mdp.track_lin_vel_xy_yaw_frame_exp
-        self.rewards.track_ang_vel_z_exp.weight = 1.5
+        self.rewards.track_ang_vel_z_exp.weight = 3.0
         self.rewards.track_ang_vel_z_exp.func = mdp.track_ang_vel_z_world_exp
 
         # Root penalties (legged_lab values)
@@ -131,7 +135,7 @@ class UnitreeG1AMPFlatEnvCfg(LocomotionAMPRoughEnvCfg):
         # legged_lab uses -1.0; we keep -1.0 too — combined with the strong
         # termination penalty, the policy learns to stay upright instead of
         # using flat_orientation as the only "don't fall" signal.
-        self.rewards.flat_orientation_l2.weight = -1.0
+        self.rewards.flat_orientation_l2.weight = -2.0
 
         # Joint penalties (legged_lab values)
         self.rewards.joint_torques_l2.weight = -2.0e-6
@@ -140,7 +144,7 @@ class UnitreeG1AMPFlatEnvCfg(LocomotionAMPRoughEnvCfg):
         )
         self.rewards.joint_acc_l2.weight = -1.0e-7
 
-        self.rewards.action_rate_l2.weight = -0.005
+        self.rewards.action_rate_l2.weight = -0.001
 
         # Contact rewards
         self.rewards.feet_air_time.weight = 0.5
@@ -155,7 +159,39 @@ class UnitreeG1AMPFlatEnvCfg(LocomotionAMPRoughEnvCfg):
         # time the episode terminates from anything except time_out.
         from isaaclab.managers import RewardTermCfg as RewTerm
         self.rewards.termination_penalty = RewTerm(
-            func=mdp.is_terminated, weight=-50.0
+            func=mdp.is_terminated, weight=-200.0
+        )
+
+        # Joint deviation penalties (TienKung-style) — keeps arms in natural
+        # position (prevents drooping) and hips/waist from flailing.
+        self.rewards.joint_deviation_arms = RewTerm(
+            func=mdp.joint_deviation_l1,
+            weight=-0.2,
+            params={
+                "asset_cfg": SceneEntityCfg(
+                    "robot",
+                    joint_names=[
+                        ".*_shoulder_roll_joint",
+                        ".*_shoulder_yaw_joint",
+                        ".*_elbow_joint",
+                        ".*_wrist_.*",
+                    ],
+                )
+            },
+        )
+        self.rewards.joint_deviation_hip = RewTerm(
+            func=mdp.joint_deviation_l1,
+            weight=-0.1,
+            params={
+                "asset_cfg": SceneEntityCfg(
+                    "robot",
+                    joint_names=[
+                        ".*_hip_yaw_joint",
+                        ".*_hip_roll_joint",
+                        "waist_.*",
+                    ],
+                )
+            },
         )
 
         # ----------------------------- Terminations (legged_lab G1 style) -----------------------------

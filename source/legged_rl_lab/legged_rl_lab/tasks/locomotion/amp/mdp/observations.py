@@ -96,16 +96,16 @@ def amp_root_tan_norm(env: ManagerBasedRLEnv, asset_cfg: SceneEntityCfg = SceneE
     return torch.cat([tan, norm], dim=-1)  # (N, 6)
 
 
-def amp_base_lin_vel(env: ManagerBasedRLEnv, asset_cfg: SceneEntityCfg = SceneEntityCfg("robot")) -> torch.Tensor:
-    """Base linear velocity in base frame."""
+def amp_base_lin_vel_w(env: ManagerBasedRLEnv, asset_cfg: SceneEntityCfg = SceneEntityCfg("robot")) -> torch.Tensor:
+    """Base linear velocity in world frame."""
     asset = env.scene[asset_cfg.name]
-    return asset.data.root_lin_vel_b
+    return asset.data.root_lin_vel_w
 
 
-def amp_base_ang_vel(env: ManagerBasedRLEnv, asset_cfg: SceneEntityCfg = SceneEntityCfg("robot")) -> torch.Tensor:
-    """Base angular velocity in base frame."""
+def amp_base_ang_vel_w(env: ManagerBasedRLEnv, asset_cfg: SceneEntityCfg = SceneEntityCfg("robot")) -> torch.Tensor:
+    """Base angular velocity in world frame."""
     asset = env.scene[asset_cfg.name]
-    return asset.data.root_ang_vel_b
+    return asset.data.root_ang_vel_w
 
 
 def amp_key_body_pos_b(
@@ -135,26 +135,17 @@ def amp_full_features(
 
     Layout (must match motion_loader's per-frame layout exactly)::
 
-        joint_pos(num_dof) | joint_vel(num_dof) | root_height(1) |
-        root_tan_norm(6) | key_body_pos_b(num_keys * 3)
+        joint_pos(num_dof) | joint_vel(num_dof) | key_body_pos_b(num_keys * 3)
 
-    For G1 with 29 DOF + 6 key bodies → 83 dims/frame.
-
-    .. important::
-       This remains a *single* observation term so the AMP pipeline always
-       deals in frame-major feature vectors.  In the current pair-style AMP
-       setup the env emits one frame per step, and the algorithm explicitly
-       forms transition pairs ``(features_t, features_{t+1})`` for both
-       policy and expert data.  Keeping everything inside one term avoids
-       feature-major reordering bugs such as
-       ``[jpos_t, jvel_t, jpos_{t+1}, jvel_{t+1}, ...]``.
+    For G1 with 29 DOF + 10 key bodies → 88 dims/frame.
+    Root height, orientation, and velocities are excluded — pose-level
+    quantities are well-aligned between PhysX and mocap; root-level signals
+    are noisy and can cause discriminator saturation.
     """
     jpos = amp_joint_pos(env)                                # (N, num_dof)
     jvel = amp_joint_vel(env)                                # (N, num_dof)
-    rh = amp_root_height(env)                                # (N, 1)
-    rtn = amp_root_tan_norm(env)                             # (N, 6)
     kbp = amp_key_body_pos_b(env, asset_cfg=asset_cfg)       # (N, num_keys * 3)
-    return torch.cat([jpos, jvel, rh, rtn, kbp], dim=-1)
+    return torch.cat([jpos, jvel, kbp], dim=-1)
 
 
 # ---------------------------------------------------------------------------

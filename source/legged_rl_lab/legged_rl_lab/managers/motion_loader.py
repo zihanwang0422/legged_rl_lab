@@ -55,12 +55,16 @@ _ROBOT_PROFILES: dict[str, dict] = {
         # Key body names for Design-3 AMP features.  Order must match the
         # env AMP observation order (see UnitreeG1AMPFlatEnvCfg.key_body_names).
         "key_body_names": (
+            "left_shoulder_pitch_link",
+            "right_shoulder_pitch_link",
+            "left_elbow_link",
+            "right_elbow_link",
+            "left_hip_yaw_link",
+            "right_hip_yaw_link",
+            "left_rubber_hand",
+            "right_rubber_hand",
             "left_ankle_roll_link",
             "right_ankle_roll_link",
-            "left_wrist_yaw_link",
-            "right_wrist_yaw_link",
-            "left_shoulder_roll_link",
-            "right_shoulder_roll_link",
         ),
         # Fallback indices if NPZ has no body_names (e.g. old files).
         "foot_body_indices": [],
@@ -430,21 +434,16 @@ class MotionLoader:
                 dof_vel = dof_vel[:, reorder_map]
                 logger.debug(f"Reordered joints from MuJoCo to IsaacLab BFS order")
 
-        # ---- TienKung-style AMP features (83 dims for G1 with 6 key bodies) ----
-        # Order MUST match AMPCfg in amp_env_cfg.py:
-        #   joint_pos | joint_vel | root_height | root_tan_norm | key_body_pos_b
-        #
-        # NOTE: base linear/angular velocity DELIBERATELY EXCLUDED — these are
-        # PhysX-integrated on policy side vs finite-diff on expert side, the
-        # distribution gap is the main reason AMP discs saturate.
+        # ---- TienKung-style AMP features: joint_pos | joint_vel | key_body_pos_b ----
+        # Order MUST match AMPCfg in amp_env_cfg.py.
+        # Root height, orientation, and velocity are excluded — pose-only
+        # features are better aligned between PhysX and mocap and avoid
+        # discriminator saturation.
         jpos = dof_pos
         jvel = dof_vel
 
         root_quat = body_rot[:, 0, :]            # (N, 4) [w,x,y,z]
         root_pos = body_pos[:, 0, :]             # (N, 3)
-
-        root_height = root_pos[:, 2:3]                                       # (N, 1)
-        root_tan_norm = _quat_to_tangent_normal_np(root_quat)                # (N, 6)
 
         # key body positions in base frame
         key_indices = (
@@ -465,8 +464,6 @@ class MotionLoader:
         feature_blocks = [
             jpos,
             jvel,
-            root_height,
-            root_tan_norm,
             key_body_pos_b,
         ]
         amp_obs_np = np.concatenate(feature_blocks, axis=1)

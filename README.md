@@ -424,7 +424,7 @@ python scripts/amp/play.py \
 ```bash
 # Step 1 — Convert retargeted CSV to NPZ (runs FK via Isaac Sim to compute full body states)
 python scripts/csv_to_npz.py \
-  --input_file <path/to/csv/file> \
+  --input_file source/legged_rl_lab/legged_rl_lab/data/motion/LAFAN1_Retargeting_Dataset/g1/walk1_subject1.csv \
   --input_fps 30 \
   --headless
 ```
@@ -432,7 +432,7 @@ python scripts/csv_to_npz.py \
 ```bash
 # Step 2 — (Optional) Replay NPZ in Isaac Sim to verify
 python scripts/replay_npz.py \
-    --file </path/to/npz/file>
+    --file source/legged_rl_lab/legged_rl_lab/data/motion/LAFAN1_Retargeting_Dataset/g1/walk1_subject1.npz
 ```
 
 ```bash

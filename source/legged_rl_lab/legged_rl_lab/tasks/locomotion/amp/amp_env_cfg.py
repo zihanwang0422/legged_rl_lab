@@ -137,16 +137,11 @@ class ObservationsCfg:
 
         # observation terms (order preserved)
         base_ang_vel = ObsTerm(func=mdp.base_ang_vel, noise=Unoise(n_min=-0.2, n_max=0.2))
-        root_local_rot_tan_norm = ObsTerm(
-            func=mdp.root_local_rot_tan_norm,
-            noise=Unoise(n_min=-0.05, n_max=0.05),
-        )
+        projected_gravity = ObsTerm(func=mdp.projected_gravity, noise=Unoise(n_min=-0.05, n_max=0.05))
         velocity_commands = ObsTerm(func=mdp.generated_commands, params={"command_name": "base_velocity"})
-        joint_pos = ObsTerm(func=mdp.amp_joint_pos, noise=Unoise(n_min=-0.01, n_max=0.01))
+        joint_pos = ObsTerm(func=mdp.joint_pos_rel, noise=Unoise(n_min=-0.01, n_max=0.01))
         joint_vel = ObsTerm(func=mdp.joint_vel, noise=Unoise(n_min=-1.5, n_max=1.5))
         actions = ObsTerm(func=mdp.last_action)
-        # TienKung-style gait phase clock.  Gives policy an explicit step-timing
-        # prior — sin/cos of left/right leg phase + duty ratios (6 dims).
         gait_phase = ObsTerm(func=mdp.gait_phase_obs)
 
         def __post_init__(self):
@@ -164,23 +159,15 @@ class ObservationsCfg:
         # observation terms (order preserved)
         base_lin_vel = ObsTerm(func=mdp.base_lin_vel)
         base_ang_vel = ObsTerm(func=mdp.base_ang_vel)
-        root_local_rot_tan_norm = ObsTerm(func=mdp.root_local_rot_tan_norm)
+        projected_gravity = ObsTerm(func=mdp.projected_gravity)
         velocity_commands = ObsTerm(func=mdp.generated_commands, params={"command_name": "base_velocity"})
-        joint_pos = ObsTerm(func=mdp.amp_joint_pos)
+        joint_pos = ObsTerm(func=mdp.joint_pos_rel)
         joint_vel = ObsTerm(func=mdp.joint_vel)
         actions = ObsTerm(func=mdp.last_action)
-        # Gait phase clock (also given to critic)
         gait_phase = ObsTerm(func=mdp.gait_phase_obs)
-        # Key body positions in base frame — privileged spatial info for the
-        # value function (legged_lab also adds this to critic).
         key_body_pos_b = ObsTerm(
             func=mdp.amp_key_body_pos_b,
             params={"asset_cfg": SceneEntityCfg("robot", body_names=())},
-        )
-        height_scan = ObsTerm(
-            func=mdp.height_scan,
-            params={"sensor_cfg": SceneEntityCfg("height_scanner")},
-            clip=(-1.0, 1.0),
         )
 
         def __post_init__(self):

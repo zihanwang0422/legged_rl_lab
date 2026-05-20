@@ -57,19 +57,16 @@ class UnitreeG1AMPFlatPPORunnerCfg(RslRlOnPolicyRunnerCfg):
             # policy / expert each provide a single-frame AMP feature vector,
             # and the discriminator sees explicit transition pairs
             # ``[s_t, s_{t+1}]``.
-            "amp_discr_hidden_dims": [1024, 512, 256],
-            "amp_learning_rate": 1e-4,
-            "amp_replay_buffer_size": 200000,
+            "amp_discr_hidden_dims": [1024, 512],
+            "amp_learning_rate": 1e-5,
+            "amp_replay_buffer_size": 1000000,
             "amp_num_preload_transitions": 200000,
-            # Style reward coefficient — scale of the discriminator-based
-            # style reward. 0.5 gives style ~50% influence at lerp=0.5,
-            # enough to shape posture without drowning task signal.
-            "amp_reward_coef": 0.5,
-            # Blend ratio: (1-lerp)*style + lerp*task.  0.5 = equal weighting
-            # between AMP style and task reward.  Lowering from 0.7 to give
-            # discriminator more influence over upright posture.
-            "amp_task_reward_lerp": 0.5,
-            "amp_disc_gradient_penalty_coef": 10.0,
+            # Style reward coefficient — 0.3 matches TienKung reference (lower
+            # means task reward dominates, preventing "freeze for style" failure).
+            "amp_reward_coef": 0.3,
+            # Blend ratio: 0.7 = 70% task + 30% style (TienKung default).
+            "amp_task_reward_lerp": 0.7,
+            "amp_disc_gradient_penalty_coef": 5.0,
             "amp_disc_weight_decay": 0.001,
             "amp_disc_head_weight_decay": 0.1,
         },
