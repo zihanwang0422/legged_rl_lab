@@ -94,18 +94,6 @@ source/legged_rl_lab/legged_rl_lab/data/motion/**/meta_data
 source/legged_rl_lab/legged_rl_lab/data/motion/**/robot_description
 source/legged_rl_lab/legged_rl_lab/data/motion/**/h1
 source/legged_rl_lab/legged_rl_lab/data/motion/**/h1_2
-source/legged_rl_lab/legged_rl_lab/data/robots/**/*.urdf
-source/legged_rl_lab/legged_rl_lab/data/robots/**/*.xacro
-source/legged_rl_lab/legged_rl_lab/data/robots/**/*.dae
-source/legged_rl_lab/legged_rl_lab/data/robots/**/*.obj
-source/legged_rl_lab/legged_rl_lab/data/robots/**/*.mtl
-source/legged_rl_lab/legged_rl_lab/data/robots/**/*.png
-source/legged_rl_lab/legged_rl_lab/data/robots/**/*.jpg
-source/legged_rl_lab/legged_rl_lab/data/robots/**/*.jpeg
-source/legged_rl_lab/legged_rl_lab/data/robots/**/*.yaml
-source/legged_rl_lab/legged_rl_lab/data/robots/**/*.json
-source/legged_rl_lab/legged_rl_lab/data/robots/**/*.bin
-source/legged_rl_lab/legged_rl_lab/data/robots/**/*.xml
 
 # Local development copy of rsl_rl: keep in workspace but don't track
 # (removed — kept as part of repo now)
