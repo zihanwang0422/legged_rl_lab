@@ -25,7 +25,7 @@ gym.register(
     disable_env_checker=True,
     kwargs={
         "env_cfg_entry_point": f"{__name__}.amp_flat_env_cfg:UnitreeG1AMPFlatEnvCfg",
-        "skrl_cfg_entry_point": f"{agents.__name__}:skrl_amp_ppo_cfg.yaml",
+        "skrl_amp_cfg_entry_point": f"{agents.__name__}:skrl_amp_ppo_cfg.yaml",
     },
 )
 
