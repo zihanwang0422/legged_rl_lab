@@ -301,7 +301,24 @@ class UnitreeG1AMPFlatEnvCfg(LocomotionAMPRoughEnvCfg):
                     joint_names=[
                         ".*_hip_yaw_joint",
                         ".*_hip_roll_joint",
-                        "waist_.*",
+                    ],
+                )
+            },
+        )
+        # Waist (yaw/roll/pitch) — strong penalty.  When this was bundled with
+        # the hip term at weight -0.1, the policy let the waist pitch drift
+        # backwards into a "lean-back" posture.  Pull it out and weight it
+        # ~5× heavier so the torso stays upright.
+        self.rewards.joint_deviation_waist = RewTerm(
+            func=mdp.joint_deviation_l1,
+            weight=-0.5,
+            params={
+                "asset_cfg": SceneEntityCfg(
+                    "robot",
+                    joint_names=[
+                        "waist_yaw_joint",
+                        "waist_roll_joint",
+                        "waist_pitch_joint",
                     ],
                 )
             },
