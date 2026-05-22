@@ -24,7 +24,11 @@ class UnitreeG1AMPFlatPPORunnerCfg(RslRlOnPolicyRunnerCfg):
 
     policy = RslRlPpoActorCriticCfg(
         noise_std_type="scalar",
-        init_noise_std=0.5,
+        # Higher init noise + entropy bonus to fight the "stand-still hop"
+        # local optimum.  With init_noise_std=0.5 and entropy_coef=0.001 the
+        # action_std collapsed to ~0.16 by iter 5k, leaving the policy unable
+        # to explore the alternating-stance gait.
+        init_noise_std=1.0,
         actor_obs_normalization=True,
         critic_obs_normalization=True,
         actor_hidden_dims=[512, 256, 128],
@@ -37,7 +41,7 @@ class UnitreeG1AMPFlatPPORunnerCfg(RslRlOnPolicyRunnerCfg):
         value_loss_coef=1.0,
         use_clipped_value_loss=True,
         clip_param=0.2,
-        entropy_coef=0.001,
+        entropy_coef=0.01,
         num_learning_epochs=5,
         num_mini_batches=4,
         learning_rate=1.0e-3,

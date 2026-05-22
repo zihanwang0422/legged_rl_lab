@@ -423,6 +423,29 @@ python scripts/skrl/train.py \
     --max_iterations 20000
 ```
 
+```bash
+# Play — auto-loads the latest checkpoint under
+# logs/skrl/unitree_g1_amp_flat_skrl/<run>/checkpoints/
+python scripts/skrl/play.py \
+    --task LeggedRLLab-Isaac-AMP-Flat-Unitree-G1-skrl-v0 \
+    --algorithm AMP \
+    --num_envs 50
+
+# Play — load a specific checkpoint by absolute path
+python scripts/skrl/play.py \
+    --task LeggedRLLab-Isaac-AMP-Flat-Unitree-G1-skrl-v0 \
+    --algorithm AMP \
+    --num_envs 50 \
+    --checkpoint logs/skrl/unitree_g1_amp_flat_skrl/<run_folder>/checkpoints/agent_24000.pt
+
+# Play — load a checkpoint copied to the local ckpt/ directory
+python scripts/skrl/play.py \
+    --task LeggedRLLab-Isaac-AMP-Flat-Unitree-G1-skrl-v0 \
+    --algorithm AMP \
+    --num_envs 50 \
+    --ckpt agent_24000.pt
+```
+
 #### Motion Tracking
 
 [<img src="media/mimic_lafan.gif" width="300px">](gifs/walkrough.gif)
