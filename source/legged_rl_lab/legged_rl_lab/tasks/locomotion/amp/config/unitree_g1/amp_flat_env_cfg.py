@@ -200,6 +200,8 @@ class UnitreeG1AMPFlatEnvCfg(LocomotionAMPRoughEnvCfg):
                 "offset_r": _offset_r,
                 "air_ratio": _gait_air_ratio,
                 "force_sigma": 200.0,
+                "command_name": "base_velocity",
+                "command_threshold": 0.1,
             },
         )
         self.rewards.gait_spd_perio = RewTerm(
@@ -212,6 +214,8 @@ class UnitreeG1AMPFlatEnvCfg(LocomotionAMPRoughEnvCfg):
                 "offset_r": _offset_r,
                 "air_ratio": _gait_air_ratio,
                 "speed_sigma": 0.5,
+                "command_name": "base_velocity",
+                "command_threshold": 0.1,
             },
         )
         self.rewards.gait_support_perio = RewTerm(
@@ -224,15 +228,11 @@ class UnitreeG1AMPFlatEnvCfg(LocomotionAMPRoughEnvCfg):
                 "offset_r": _offset_r,
                 "air_ratio": _gait_air_ratio,
                 "force_sigma": 150.0,
+                "command_name": "base_velocity",
+                "command_threshold": 0.1,
             },
         )
 
-        # Foot clearance — bumped weight to 4.0 and target to 0.12m so the
-        # antive linear-clip reward is in the same league as the velocity
-        # tracker (8.0).  At iter 10k with weight=1.5 / target=0.10 the
-        # reward was only 0.02, i.e. the foot was barely 1.6cm off the ground;
-        # the policy had no incentive to lift higher because tracking already
-        # paid 7.2 / 8.0.
         self.rewards.feet_clearance = RewTerm(
             func=mdp.feet_clearance,
             weight=4.0,
@@ -244,6 +244,8 @@ class UnitreeG1AMPFlatEnvCfg(LocomotionAMPRoughEnvCfg):
                 "air_ratio": _gait_air_ratio,
                 "target_height": 0.15,
                 "height_sigma": 0.025,
+                "command_name": "base_velocity",
+                "command_threshold": 0.1,
             },
         )
 

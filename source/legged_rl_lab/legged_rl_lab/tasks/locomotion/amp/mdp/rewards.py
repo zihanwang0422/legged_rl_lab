@@ -74,6 +74,18 @@ def _gait_clock(
 # Periodic foot rewards (TienKung-Lab style, exp shaping)
 # ---------------------------------------------------------------------------
 
+def _command_gate(
+    env: "ManagerBasedRLEnv",
+    command_name: str | None,
+    command_threshold: float,
+) -> torch.Tensor:
+    """Return per-env mask: 1 when command is above threshold, 0 otherwise."""
+    if command_name is None:
+        return torch.ones(env.num_envs, device=env.device)
+    cmd = env.command_manager.get_command(command_name)
+    return (torch.norm(cmd[:, :2], dim=1) + torch.abs(cmd[:, 2]) > command_threshold).float()
+
+
 def gait_feet_frc_perio(
     env: "ManagerBasedRLEnv",
     sensor_cfg: SceneEntityCfg = SceneEntityCfg("contact_forces"),
@@ -83,6 +95,8 @@ def gait_feet_frc_perio(
     air_ratio: float = 0.4,
     force_sigma: float = 200.0,
     delta_t: float = 0.02,
+    command_name: str | None = None,
+    command_threshold: float = 0.1,
 ) -> torch.Tensor:
     """Penalise contact force during swing phase.
 
@@ -94,7 +108,6 @@ def gait_feet_frc_perio(
     """
     sensor = env.scene[sensor_cfg.name]
     forces = torch.norm(sensor.data.net_forces_w[:, sensor_cfg.body_ids, :3], dim=-1)
-    # forces: (num_envs, 2)
 
     phase_l = _gait_phase(env, offset=offset_l, cycle=cycle)
     phase_r = _gait_phase(env, offset=offset_r, cycle=cycle)
@@ -103,7 +116,7 @@ def gait_feet_frc_perio(
 
     shaped_l = torch.clamp(1.0 - forces[:, 0] / force_sigma, min=0.0, max=1.0)
     shaped_r = torch.clamp(1.0 - forces[:, 1] / force_sigma, min=0.0, max=1.0)
-    return 0.5 * (I_frc_l * shaped_l + I_frc_r * shaped_r)
+    return 0.5 * (I_frc_l * shaped_l + I_frc_r * shaped_r) * _command_gate(env, command_name, command_threshold)
 
 
 def gait_feet_spd_perio(
@@ -115,6 +128,8 @@ def gait_feet_spd_perio(
     air_ratio: float = 0.4,
     speed_sigma: float = 0.5,
     delta_t: float = 0.02,
+    command_name: str | None = None,
+    command_threshold: float = 0.1,
 ) -> torch.Tensor:
     """Penalise foot speed during stance phase.
 
@@ -133,7 +148,7 @@ def gait_feet_spd_perio(
 
     shaped_l = torch.clamp(1.0 - foot_speeds[:, 0] / speed_sigma, min=0.0, max=1.0)
     shaped_r = torch.clamp(1.0 - foot_speeds[:, 1] / speed_sigma, min=0.0, max=1.0)
-    return 0.5 * (I_spd_l * shaped_l + I_spd_r * shaped_r)
+    return 0.5 * (I_spd_l * shaped_l + I_spd_r * shaped_r) * _command_gate(env, command_name, command_threshold)
 
 
 def gait_feet_frc_support_perio(
@@ -145,6 +160,8 @@ def gait_feet_frc_support_perio(
     air_ratio: float = 0.4,
     force_sigma: float = 1.0e4,
     delta_t: float = 0.02,
+    command_name: str | None = None,
+    command_threshold: float = 0.1,
 ) -> torch.Tensor:
     """Reward firm support force during stance phase.
 
@@ -163,7 +180,7 @@ def gait_feet_frc_support_perio(
 
     shaped_l = torch.clamp(forces[:, 0] / force_sigma, min=0.0, max=1.0)
     shaped_r = torch.clamp(forces[:, 1] / force_sigma, min=0.0, max=1.0)
-    return 0.5 * (I_spd_l * shaped_l + I_spd_r * shaped_r)
+    return 0.5 * (I_spd_l * shaped_l + I_spd_r * shaped_r) * _command_gate(env, command_name, command_threshold)
 
 
 # ---------------------------------------------------------------------------
@@ -180,6 +197,8 @@ def feet_clearance(
     target_height: float = 0.12,
     height_sigma: float = 0.025,
     delta_t: float = 0.02,
+    command_name: str | None = None,
+    command_threshold: float = 0.1,
 ) -> torch.Tensor:
     """Reward target foot-clearance during swing.
 
@@ -201,7 +220,7 @@ def feet_clearance(
 
     shaped_l = torch.clamp(foot_z[:, 0] / target_height, min=0.0, max=1.0)
     shaped_r = torch.clamp(foot_z[:, 1] / target_height, min=0.0, max=1.0)
-    return 0.5 * (I_frc_l * shaped_l + I_frc_r * shaped_r)
+    return 0.5 * (I_frc_l * shaped_l + I_frc_r * shaped_r) * _command_gate(env, command_name, command_threshold)
 
 
 def feet_y_distance(
