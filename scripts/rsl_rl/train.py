@@ -84,7 +84,7 @@ import torch
 torch.backends.cuda.preferred_linalg_library("cusolver")
 from datetime import datetime
 
-from rsl_rl.runners import DistillationRunner, OnPolicyRunner
+from rsl_rl.runners import DistillationRunner, OnPolicyRunner, TsDepthRunner
 from legged_rl_lab.tasks.tracking.utils.my_on_policy_runner import MotionOnPolicyRunner
 
 from isaaclab.envs import (
@@ -199,6 +199,8 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
     # save resume path before creating a new log_dir
     if agent_cfg.resume or agent_cfg.algorithm.class_name == "Distillation":
         resume_path = get_checkpoint_path(log_root_path, agent_cfg.load_run, agent_cfg.load_checkpoint)
+        if getattr(agent_cfg.algorithm, "distillation", False) and not agent_cfg.algorithm.teacher_checkpoint_path:
+            agent_cfg.algorithm.teacher_checkpoint_path = resume_path
 
     # wrap for video recording
     if args_cli.video:
@@ -222,6 +224,8 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
         runner = runner_cls(env, agent_cfg.to_dict(), log_dir=log_dir, device=agent_cfg.device)
     elif agent_cfg.class_name == "DistillationRunner":
         runner = DistillationRunner(env, agent_cfg.to_dict(), log_dir=log_dir, device=agent_cfg.device)
+    elif agent_cfg.class_name == "TsDepthRunner":
+        runner = TsDepthRunner(env, agent_cfg.to_dict(), log_dir=log_dir, device=agent_cfg.device)
     else:
         raise ValueError(f"Unsupported runner class: {agent_cfg.class_name}")
     # write git state to logs

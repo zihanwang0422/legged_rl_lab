@@ -349,6 +349,59 @@ python scripts/rsl_rl/play.py \
 
 </details>
 
+### 🧗 Parkour
+
+<details>
+<summary><b>Depth</b></summary>
+
+#### Depth
+
+Teacher-student depth policy for parkour locomotion. The task is available for G1 and Go2, and uses the local `legged_rl_lab` robot assets plus the TS-Depth visual RSL-RL runner.
+
+```bash
+# G1 — Train
+python scripts/rsl_rl/train.py \
+  --task LeggedRLLab-Isaac-Parkour-Depth-Unitree-G1-v0 \
+  --num_envs 4096 \
+  --headless
+
+# G1 — Play
+python scripts/rsl_rl/play.py \
+  --task LeggedRLLab-Isaac-Parkour-Depth-Unitree-G1-Play-v0 \
+  --num_envs 50
+```
+
+```bash
+# Go2 — Train
+python scripts/rsl_rl/train.py \
+  --task LeggedRLLab-Isaac-Parkour-Depth-Unitree-Go2-v0 \
+  --num_envs 4096 \
+  --headless
+
+# Go2 — Play
+python scripts/rsl_rl/play.py \
+  --task LeggedRLLab-Isaac-Parkour-Depth-Unitree-Go2-Play-v0 \
+  --num_envs 50
+```
+
+```bash
+# Distill from a phase-1 TS-Depth checkpoint
+python scripts/rsl_rl/train.py \
+  --task LeggedRLLab-Isaac-Parkour-Depth-Unitree-Go2-Distill-v0 \
+  --num_envs 4096 \
+  --headless \
+  --resume \
+  --load_run <run_folder> \
+  --checkpoint model_xxx.pt
+
+# Export the student depth policy
+python scripts/rsl_rl/export_ts_depth_policy.py \
+  --checkpoint logs/rsl_rl/go2_parkour_depth/<run_folder>/model_xxx.pt \
+  --onnx
+```
+
+</details>
+
 ### 🏃 Mimic
 
 #### Datasets
@@ -369,7 +422,9 @@ source/legged_rl_lab/legged_rl_lab/data/motion/
 - LAFAN1 retargeted data: [LAFAN1_Retargeting_Dataset](https://huggingface.co/datasets/lvhaidong/LAFAN1_Retargeting_Dataset)
 - AMASS retargeted data: [AMASS_Retargeted_for_G1](https://huggingface.co/datasets/ember-lab-berkeley/AMASS_Retargeted_for_G1)
 
-#### AMP (Adversarial Motion Priors)
+
+<details>
+<summary><b>AMP</b></summary>
 
 ```bash
 # Train — G1 humanoid, flat terrain, AMP + RSI
@@ -446,7 +501,12 @@ python scripts/skrl/play.py \
     --ckpt agent_24000.pt
 ```
 
-#### Motion Tracking
+</details>
+
+
+
+<details>
+<summary><b>Motion Tracking</b></summary>
 
 [<img src="media/mimic_lafan.gif" width="300px">](gifs/walkrough.gif)
 
@@ -499,6 +559,8 @@ python scripts/rsl_rl/play.py \
   --checkpoint logs/rsl_rl/g1_flat/2026-04-02_02-32-52/model_11000.pt
 
 ```
+
+</details>
 
 
 ---

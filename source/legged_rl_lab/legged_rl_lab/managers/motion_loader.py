@@ -13,8 +13,7 @@ Supports multiple source formats:
    Keys: ``fps``, ``dof_names``, ``dof_positions``, ``dof_velocities``,
    ``body_positions``, ``body_rotations``, ``body_linear_velocities``,
    ``body_angular_velocities``.
-   The loader extracts AMP features:
-     joint_pos_rel | joint_vel | base_lin_vel_b | base_ang_vel_b | foot_pos_b
+   The loader extracts AMP features according to the robot profile.
 
 3. **LAFAN1 Retargeting Dataset CSV** (.csv) — 30 FPS, per-robot column layout
    Each row: ``[x, y, z, qx, qy, qz, qw,  joint_0 … joint_N-1]``
@@ -23,9 +22,8 @@ Supports multiple source formats:
 
 4. **Directory** — loads all supported files recursively and concatenates.
 
-AMP observation layout (matches ``AMPCfg`` in amp_env_cfg.py):
-  joint_pos_rel (num_dof) | joint_vel (num_dof) |
-  base_lin_vel (3) | base_ang_vel (3) | foot_positions_base (num_foot_links * 3)
+G1 AMP observation layout:
+  body_pos_b | body_ori_b | body_lin_vel_b | body_ang_vel_b
 """
 
 from __future__ import annotations
@@ -52,20 +50,27 @@ _ROBOT_PROFILES: dict[str, dict] = {
         # Substring patterns matched against ``body_names`` loaded from the NPZ
         # to resolve foot body indices at runtime.  Order = [left, right].
         "foot_body_names": ("left_ankle_roll_link", "right_ankle_roll_link"),
-        # Key body names for Design-3 AMP features.  Order must match the
+        "amp_feature_layout": "body_kinematics",
+        "anchor_body_name": "torso_link",
+        "anchor_body_index": 10,
+        # Body names for MJLab-style AMP features. Order must match the
         # env AMP observation order (see UnitreeG1AMPFlatEnvCfg.key_body_names).
         "key_body_names": (
-            "left_shoulder_pitch_link",
-            "right_shoulder_pitch_link",
-            "left_elbow_link",
-            "right_elbow_link",
-            "left_hip_yaw_link",
-            "right_hip_yaw_link",
-            "left_rubber_hand",
-            "right_rubber_hand",
+            "pelvis",
+            "left_hip_roll_link",
+            "left_knee_link",
             "left_ankle_roll_link",
+            "right_hip_roll_link",
+            "right_knee_link",
             "right_ankle_roll_link",
+            "left_shoulder_roll_link",
+            "left_elbow_link",
+            "left_wrist_yaw_link",
+            "right_shoulder_roll_link",
+            "right_elbow_link",
+            "right_wrist_yaw_link",
         ),
+        "key_body_indices": [0, 5, 11, 21, 6, 12, 22, 19, 25, 31, 20, 26, 32],
         # Fallback indices if NPZ has no body_names (e.g. old files).
         "foot_body_indices": [],
         # G1 29-DOF default standing posture (matches UNITREE_G1_29DOF_CFG BFS order)
@@ -151,73 +156,48 @@ def _quat_rotate_inverse_np(q: np.ndarray, v: np.ndarray) -> np.ndarray:
     return v + 2.0 * (q_w * uv + uuv)
 
 
-def _quat_rotate_np(q: np.ndarray, v: np.ndarray) -> np.ndarray:
-    """Rotate vector ``v`` by quaternion ``q`` (forward rotation, not inverse).
-
-    Used to convert body-frame angular velocity to world-frame.
-
-    Args:
-        q: ``(N, 4)`` quaternions in ``[w, x, y, z]`` order.
-        v: ``(N, 3)`` vectors.
-
-    Returns:
-        ``(N, 3)`` rotated vectors.
-    """
-    q_w = q[:, 0:1]
-    q_xyz = q[:, 1:4]            # not negated — forward rotation
-    uv = np.cross(q_xyz, v)
-    uuv = np.cross(q_xyz, uv)
-    return v + 2.0 * (q_w * uv + uuv)
+def _quat_conjugate_np(q: np.ndarray) -> np.ndarray:
+    """Quaternion conjugate for ``[w, x, y, z]`` quaternions."""
+    out = q.copy()
+    out[:, 1:4] *= -1.0
+    return out
 
 
-def _finite_diff(x: np.ndarray, fps: float) -> np.ndarray:
-    """Central/forward finite difference along axis 0."""
-    vel = np.empty_like(x)
-    vel[:-1] = (x[1:] - x[:-1]) * fps
-    vel[-1] = vel[-2]           # repeat last frame
-    return vel
+def _quat_mul_np(q1: np.ndarray, q2: np.ndarray) -> np.ndarray:
+    """Quaternion product for ``[w, x, y, z]`` quaternions."""
+    w1, x1, y1, z1 = np.split(q1, 4, axis=-1)
+    w2, x2, y2, z2 = np.split(q2, 4, axis=-1)
+    return np.concatenate(
+        [
+            w1 * w2 - x1 * x2 - y1 * y2 - z1 * z2,
+            w1 * x2 + x1 * w2 + y1 * z2 - z1 * y2,
+            w1 * y2 - x1 * z2 + y1 * w2 + z1 * x2,
+            w1 * z2 + x1 * y2 - y1 * x2 + z1 * w2,
+        ],
+        axis=-1,
+    )
 
 
-def _quat_to_tangent_normal_np(q: np.ndarray) -> np.ndarray:
-    """Rotate unit x-axis and z-axis by quaternion q, concatenate as (N, 6).
+def _matrix_from_quat_np(q: np.ndarray) -> np.ndarray:
+    """Convert ``[w, x, y, z]`` quaternions to rotation matrices."""
+    q = q / np.clip(np.linalg.norm(q, axis=-1, keepdims=True), 1e-8, None)
+    w, x, y, z = np.moveaxis(q, -1, 0)
 
-    Matches :func:`legged_rl_lab.tasks.locomotion.amp.mdp.observations.amp_root_tan_norm`
-    — IsaacLab G1AmpEnv's ``quaternion_to_tangent_and_normal``.
+    xx, yy, zz = x * x, y * y, z * z
+    xy, xz, yz = x * y, x * z, y * z
+    wx, wy, wz = w * x, w * y, w * z
 
-    Args:
-        q: ``(N, 4)`` quaternions in ``[w, x, y, z]``.
-    Returns:
-        ``(N, 6)`` — tangent(3) + normal(3) in world frame.
-    """
-    tan_ref = np.zeros_like(q[:, :3])
-    tan_ref[:, 0] = 1.0
-    norm_ref = np.zeros_like(q[:, :3])
-    norm_ref[:, 2] = 1.0
-    tan = _quat_rotate_np(q, tan_ref)
-    norm = _quat_rotate_np(q, norm_ref)
-    return np.concatenate([tan, norm], axis=-1)
-
-
-def _ang_vel_from_quats(q: np.ndarray, fps: float) -> np.ndarray:
-    """Estimate angular velocity (world frame) from consecutive quaternions.
-
-    Uses: ω ≈ 2 * q_conj ⊗ dq/dt  (imaginary part only)
-    Args:
-        q: ``(N, 4)`` quaternions ``[w, x, y, z]``.
-    Returns:
-        ``(N, 3)`` angular velocity in *local* frame.
-    """
-    dq = np.empty_like(q)
-    dq[:-1] = (q[1:] - q[:-1]) * fps
-    dq[-1] = dq[-2]
-    # q_conj ⊗ dq: imaginary part → angular velocity in body frame
-    q_w = q[:, 0:1]
-    q_xyz = q[:, 1:4]
-    dq_w = dq[:, 0:1]
-    dq_xyz = dq[:, 1:4]
-    # imaginary part of (q_conj ⊗ dq): 2*(q_w*dq_xyz - dq_w*q_xyz - q_xyz×dq_xyz)
-    ang_vel = 2.0 * (q_w * dq_xyz - dq_w * q_xyz + np.cross(-q_xyz, dq_xyz))
-    return ang_vel.astype(np.float32)
+    mat = np.empty(q.shape[:-1] + (3, 3), dtype=np.float32)
+    mat[..., 0, 0] = 1.0 - 2.0 * (yy + zz)
+    mat[..., 0, 1] = 2.0 * (xy - wz)
+    mat[..., 0, 2] = 2.0 * (xz + wy)
+    mat[..., 1, 0] = 2.0 * (xy + wz)
+    mat[..., 1, 1] = 1.0 - 2.0 * (xx + zz)
+    mat[..., 1, 2] = 2.0 * (yz - wx)
+    mat[..., 2, 0] = 2.0 * (xz - wy)
+    mat[..., 2, 1] = 2.0 * (yz + wx)
+    mat[..., 2, 2] = 1.0 - 2.0 * (xx + yy)
+    return mat
 
 
 # ---------------------------------------------------------------------------
@@ -359,10 +339,7 @@ class MotionLoader:
            difference, matching the distribution the policy sees at training
            time.  DOFs are already in BFS order (no reorder applied).
 
-        AMP feature layout::
-
-          joint_pos_rel(num_dof) | joint_vel(num_dof) |
-          base_lin_vel_b(3) | base_ang_vel_b(3) | foot_pos_b(num_feet*3)
+        AMP feature layout is selected by the robot profile.
         """
         d = np.load(path, allow_pickle=True)
         keys = set(d.files)
@@ -377,16 +354,16 @@ class MotionLoader:
             body_ang = d["body_ang_vel_w"].astype(np.float32) # (N, B, 3)
             already_bfs = True
 
-            # Resolve key body indices from body_names so the expert AMP
-            # features match the env's :func:`amp_key_body_pos_b` order.
+            # Resolve body indices from body_names so expert AMP features
+            # match the env observation order.
             self._runtime_key_body_indices = None
             self._runtime_foot_body_indices = None
+            self._runtime_anchor_body_index = None
             if "body_names" in keys:
                 body_names = [
                     s.decode("utf-8") if isinstance(s, bytes) else str(s)
                     for s in d["body_names"]
                 ]
-                # Key bodies for Design-3 AMP features
                 key_patterns = self._profile.get("key_body_names", ())
                 key_idx = []
                 for pat in key_patterns:
@@ -405,6 +382,17 @@ class MotionLoader:
                         f"[MotionLoader] Could not resolve all key bodies "
                         f"{key_patterns} in NPZ body_names — got {key_idx}"
                     )
+                anchor_name = self._profile.get("anchor_body_name", None)
+                if anchor_name is not None:
+                    for i, name in enumerate(body_names):
+                        if anchor_name == name or anchor_name in name:
+                            self._runtime_anchor_body_index = i
+                            break
+                    if self._runtime_anchor_body_index is None:
+                        logger.warning(
+                            f"[MotionLoader] Could not resolve anchor body "
+                            f"{anchor_name} in NPZ body_names"
+                        )
                 # Foot bodies (legacy / RSI use)
                 foot_patterns = self._profile.get("foot_body_names", ())
                 foot_idx = []
@@ -434,38 +422,72 @@ class MotionLoader:
                 dof_vel = dof_vel[:, reorder_map]
                 logger.debug(f"Reordered joints from MuJoCo to IsaacLab BFS order")
 
-        # ---- TienKung-style AMP features: joint_pos | joint_vel | key_body_pos_b ----
-        # Order MUST match AMPCfg in amp_env_cfg.py.
-        # Root height, orientation, and velocity are excluded — pose-only
-        # features are better aligned between PhysX and mocap and avoid
-        # discriminator saturation.
-        jpos = dof_pos
-        jvel = dof_vel
-
         root_quat = body_rot[:, 0, :]            # (N, 4) [w,x,y,z]
         root_pos = body_pos[:, 0, :]             # (N, 3)
 
-        # key body positions in base frame
+        layout = self._profile.get("amp_feature_layout", "joint_key_body")
         key_indices = (
             getattr(self, "_runtime_key_body_indices", None)
             or self._profile.get("key_body_indices", [])
         )
-        key_pos_parts = []
-        for idx in key_indices:
-            rel_w = body_pos[:, idx, :] - root_pos                           # (N, 3) world
-            pos_b = _quat_rotate_inverse_np(root_quat, rel_w)                # (N, 3) base
-            key_pos_parts.append(pos_b)
-        key_body_pos_b = (
-            np.concatenate(key_pos_parts, axis=1)
-            if key_pos_parts
-            else np.zeros((dof_pos.shape[0], 0), dtype=np.float32)
-        )
 
-        feature_blocks = [
-            jpos,
-            jvel,
-            key_body_pos_b,
-        ]
+        if layout == "body_kinematics":
+            anchor_idx = getattr(self, "_runtime_anchor_body_index", None)
+            if anchor_idx is None:
+                anchor_idx = self._profile.get("anchor_body_index", 0)
+
+            num_bodies = len(key_indices)
+            anchor_pos = body_pos[:, anchor_idx, :]
+            anchor_quat = body_rot[:, anchor_idx, :]
+            anchor_quat_rep = np.repeat(anchor_quat, num_bodies, axis=0)
+
+            body_pos_sel = body_pos[:, key_indices, :]
+            body_quat_sel = body_rot[:, key_indices, :]
+            body_lin_sel = body_lin[:, key_indices, :]
+            body_ang_sel = body_ang[:, key_indices, :]
+
+            rel_w = body_pos_sel - anchor_pos[:, None, :]
+            body_pos_b = _quat_rotate_inverse_np(
+                anchor_quat_rep,
+                rel_w.reshape(-1, 3),
+            ).reshape(N, num_bodies * 3)
+
+            body_quat_flat = body_quat_sel.reshape(-1, 4)
+            rel_quat = _quat_mul_np(_quat_conjugate_np(anchor_quat_rep), body_quat_flat)
+            body_ori_b = _matrix_from_quat_np(rel_quat).reshape(N, num_bodies, 3, 3)[..., :2].reshape(N, -1)
+
+            body_lin_vel_b = _quat_rotate_inverse_np(
+                body_quat_flat,
+                body_lin_sel.reshape(-1, 3),
+            ).reshape(N, num_bodies * 3)
+            body_ang_vel_b = _quat_rotate_inverse_np(
+                body_quat_flat,
+                body_ang_sel.reshape(-1, 3),
+            ).reshape(N, num_bodies * 3)
+
+            feature_blocks = [
+                body_pos_b,
+                body_ori_b,
+                body_lin_vel_b,
+                body_ang_vel_b,
+            ]
+        else:
+            key_pos_parts = []
+            for idx in key_indices:
+                rel_w = body_pos[:, idx, :] - root_pos
+                pos_b = _quat_rotate_inverse_np(root_quat, rel_w)
+                key_pos_parts.append(pos_b)
+            key_body_pos_b = (
+                np.concatenate(key_pos_parts, axis=1)
+                if key_pos_parts
+                else np.zeros((dof_pos.shape[0], 0), dtype=np.float32)
+            )
+            feature_blocks = [
+                dof_pos,
+                dof_vel,
+                key_body_pos_b,
+            ]
+
         amp_obs_np = np.concatenate(feature_blocks, axis=1)
         tensor = torch.from_numpy(amp_obs_np).to(self.device)
         self.data = tensor
@@ -486,10 +508,9 @@ class MotionLoader:
         """Load LAFAN1-style CSV.
 
         .. error::
-            Direct CSV loading is **not supported** for the new Design-3
-            AMP feature layout — CSV lacks body positions / quaternions
-            needed for ``root_height``, ``root_tan_norm`` and
-            ``key_body_pos_b``.  Preprocess CSV → NPZ first via
+            Direct CSV loading is **not supported** for the AMP feature
+            layout — CSV lacks body positions / quaternions needed for
+            body-level discriminator features. Preprocess CSV → NPZ first via
             ``scripts/csv_to_npz.py``.
         """
         raise RuntimeError(

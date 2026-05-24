@@ -59,8 +59,9 @@ class UnitreeG1AMPFlatPPORunnerCfg(RslRlOnPolicyRunnerCfg):
             "amp_learning_rate": 1e-5,
             "amp_replay_buffer_size": 1000000,
             "amp_num_preload_transitions": 200000,
-            "amp_reward_coef": 0.3,
-            "amp_task_reward_lerp": 0.7,
+            # AMP-dominant body-level style reward.
+            "amp_reward_coef": 1.0,
+            "amp_task_reward_lerp": 0.3,
             "amp_disc_gradient_penalty_coef": 5.0,
             "amp_disc_weight_decay": 0.001,
             "amp_disc_head_weight_decay": 0.1,

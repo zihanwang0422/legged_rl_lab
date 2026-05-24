@@ -122,13 +122,10 @@ class ActionsCfg:
 class ObservationsCfg:
     """Observation specifications for the MDP.
 
-    Following IsaacLab's official G1AmpEnv design:
-      - policy: yaw-removed base pose + commands + raw joint state + actions
-      - critic: same as policy + base_lin_vel + key_body_pos_b (privileged)
-      - amp:    Single-frame Design-3 features used by pair-style AMP:
-                joint_pos + joint_vel + root_height + root_tan_norm +
-                key_body_pos_b.  Consecutive frames are paired explicitly
-                inside the AMP algorithm as ``(s_t, s_{t+1})``.
+    This base AMP config stays robot-agnostic:
+      - policy: base angular velocity + gravity + commands + joint state + actions
+      - critic: policy terms + base linear velocity + body pose terms
+      - amp: body-level kinematic terms for the discriminator.
     """
 
     @configclass
@@ -142,7 +139,6 @@ class ObservationsCfg:
         joint_pos = ObsTerm(func=mdp.joint_pos_rel, noise=Unoise(n_min=-0.01, n_max=0.01))
         joint_vel = ObsTerm(func=mdp.joint_vel, noise=Unoise(n_min=-1.5, n_max=1.5))
         actions = ObsTerm(func=mdp.last_action)
-        gait_phase = ObsTerm(func=mdp.gait_phase_obs)
 
         def __post_init__(self):
             self.history_length = 5
@@ -164,10 +160,19 @@ class ObservationsCfg:
         joint_pos = ObsTerm(func=mdp.joint_pos_rel)
         joint_vel = ObsTerm(func=mdp.joint_vel)
         actions = ObsTerm(func=mdp.last_action)
-        gait_phase = ObsTerm(func=mdp.gait_phase_obs)
-        key_body_pos_b = ObsTerm(
-            func=mdp.amp_key_body_pos_b,
-            params={"asset_cfg": SceneEntityCfg("robot", body_names=())},
+        body_pos_b = ObsTerm(
+            func=mdp.robot_body_pos_b,
+            params={
+                "anchor_cfg": SceneEntityCfg("robot", body_names=()),
+                "body_cfg": SceneEntityCfg("robot", body_names=()),
+            },
+        )
+        body_ori_b = ObsTerm(
+            func=mdp.robot_body_ori_b,
+            params={
+                "anchor_cfg": SceneEntityCfg("robot", body_names=()),
+                "body_cfg": SceneEntityCfg("robot", body_names=()),
+            },
         )
 
         def __post_init__(self):
@@ -180,40 +185,35 @@ class ObservationsCfg:
 
     @configclass
     class AMPCfg(ObsGroup):
-        """Discriminator observations (TienKung-style, no base velocity).
+        """Discriminator observations."""
 
-        Per-frame layout (83 dims for G1 with 6 key bodies)::
-
-            joint_pos(num_dof) + joint_vel(num_dof)
-            + root_height(1) + root_tan_norm(6)
-            + key_body_pos_b(num_keys * 3)
-
-        TienKung-Lab REMOVES base linear/angular velocity from disc obs because
-        these are PhysX-integrated on the policy side and finite-difference on
-        the expert (mocap) side — the resulting distribution gap is the single
-        biggest reason AMP discriminators saturate at 1.0.  Pose-level
-        quantities (joint state + key body positions + root height/orientation)
-        are well-aligned between physics and mocap.
-
-        history_length=1 ⇒ env outputs one feature frame per step.  The AMP
-        algorithm then explicitly builds ``(s_t, s_{t+1})`` transition pairs,
-        matching TienKung-Lab's discriminator design.
-
-        .. important::
-           A *single* combined ObsTerm is still important even with
-           ``history_length=1``.  It guarantees the env, replay buffer, and
-           expert loader all agree on one frame-major feature vector
-           ``[joint_pos, joint_vel, root_height, root_tan_norm, key_body_pos]``.
-           If we split AMP into multiple independent terms again, it becomes
-           far too easy to accidentally rebuild transition pairs in a
-           feature-major order and hand the discriminator a trivial cue.
-        """
-        # Single combined term — its layout matches motion_loader's per-frame
-        # output exactly.  ``key_body_pos_b`` body_names are wired up in the
-        # robot-specific config (e.g. UnitreeG1AMPFlatEnvCfg.__post_init__).
-        features = ObsTerm(
-            func=mdp.amp_full_features,
-            params={"asset_cfg": SceneEntityCfg("robot", body_names=())},
+        body_pos_b = ObsTerm(
+            func=mdp.robot_body_pos_b,
+            params={
+                "anchor_cfg": SceneEntityCfg("robot", body_names=()),
+                "body_cfg": SceneEntityCfg("robot", body_names=()),
+            },
+        )
+        body_ori_b = ObsTerm(
+            func=mdp.robot_body_ori_b,
+            params={
+                "anchor_cfg": SceneEntityCfg("robot", body_names=()),
+                "body_cfg": SceneEntityCfg("robot", body_names=()),
+            },
+        )
+        body_lin_vel_b = ObsTerm(
+            func=mdp.robot_body_lin_vel_b,
+            params={
+                "anchor_cfg": SceneEntityCfg("robot", body_names=()),
+                "body_cfg": SceneEntityCfg("robot", body_names=()),
+            },
+        )
+        body_ang_vel_b = ObsTerm(
+            func=mdp.robot_body_ang_vel_b,
+            params={
+                "anchor_cfg": SceneEntityCfg("robot", body_names=()),
+                "body_cfg": SceneEntityCfg("robot", body_names=()),
+            },
         )
 
         def __post_init__(self):
