@@ -186,6 +186,58 @@ class UnitreeG1AMPFlatEnvCfg(LocomotionAMPRoughEnvCfg):
             },
         )
 
+        # rewards: mdp.foot_clearance_reward_humanoid
+        self.rewards.feet_clearance = RewTerm(
+            func=mdp.foot_clearance_reward_humanoid,
+            weight=1.0,
+            params={
+                "std": 0.05,
+                "tanh_mult": 2.0,
+                "target_height": 0.1,
+                "asset_cfg": _foot_asset,
+            },
+        )
+
+        # rewards: mdp.joint_deviation_l1 (arms)
+        self.rewards.joint_deviation_arms = RewTerm(
+            func=mdp.joint_deviation_l1,
+            weight=-5.0,
+            params={
+                "asset_cfg": SceneEntityCfg(
+                    "robot",
+                    joint_names=[
+                        ".*_shoulder_.*_joint",
+                        ".*_elbow_joint",
+                        ".*_wrist_.*",
+                    ],
+                )
+            },
+        )
+
+        # rewards: mdp.joint_deviation_l1 (waist) — keep torso upright
+        self.rewards.joint_deviation_waist = RewTerm(
+            func=mdp.joint_deviation_l1,
+            weight=-1.0,
+            params={
+                "asset_cfg": SceneEntityCfg(
+                    "robot",
+                    joint_names=["waist.*"],
+                )
+            },
+        )
+
+        # rewards: mdp.joint_deviation_l1 (legs) — prevent hip_roll/hip_yaw splay
+        self.rewards.joint_deviation_legs = RewTerm(
+            func=mdp.joint_deviation_l1,
+            weight=-1.0,
+            params={
+                "asset_cfg": SceneEntityCfg(
+                    "robot",
+                    joint_names=[".*_hip_roll_joint", ".*_hip_yaw_joint"],
+                )
+            },
+        )
+
         # rewards: mdp.is_terminated
         self.rewards.is_terminated = RewTerm(
             func=mdp.is_terminated, weight=-200.0
