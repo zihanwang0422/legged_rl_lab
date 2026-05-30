@@ -128,19 +128,19 @@ class UnitreeG1AMPFlatEnvCfg(LocomotionAMPRoughEnvCfg):
         self.rewards.track_ang_vel_z_exp = None
         self.rewards.track_anchor_linear_velocity = RewTerm(
             func=mdp.track_anchor_linear_velocity,
-            weight=1.0,
+            weight=3.0,
             params={
                 "command_name": "base_velocity",
-                "std": 1.0,
+                "std": 0.5,
                 "anchor_cfg": anchor_body_cfg,
             },
         )
         self.rewards.track_anchor_angular_velocity = RewTerm(
             func=mdp.track_anchor_angular_velocity,
-            weight=1.0,
+            weight=1.5,
             params={
                 "command_name": "base_velocity",
-                "std": math.pi,
+                "std": 0.5,
                 "anchor_cfg": anchor_body_cfg,
             },
         )
@@ -167,13 +167,21 @@ class UnitreeG1AMPFlatEnvCfg(LocomotionAMPRoughEnvCfg):
         self.rewards.joint_torques_l2 = None
         self.rewards.joint_acc_l2.weight = -2.5e-7
         self.rewards.joint_pos_limits = RewTerm(func=mdp.joint_pos_limits, weight=-10.0)
-        self.rewards.action_rate_l2.weight = -0.01
+        self.rewards.action_rate_l2.weight = -0.005
 
         _foot_sensor = SceneEntityCfg("contact_forces", body_names=self.foot_link_name)
         _foot_asset = SceneEntityCfg("robot", body_names=self.foot_link_name)
 
-        # rewards: mdp.feet_slip
-        self.rewards.feet_air_time = None
+        # rewards: mdp.feet_air_time_positive_biped / mdp.feet_slip
+        self.rewards.feet_air_time = RewTerm(
+            func=mdp.feet_air_time_positive_biped,
+            weight=0.5,
+            params={
+                "sensor_cfg": _foot_sensor,
+                "command_name": "base_velocity",
+                "threshold": 0.45,
+            },
+        )
         self.rewards.feet_slip = RewTerm(
             func=mdp.feet_slip,
             weight=-0.25,
@@ -189,19 +197,27 @@ class UnitreeG1AMPFlatEnvCfg(LocomotionAMPRoughEnvCfg):
         # rewards: mdp.foot_clearance_reward_humanoid
         self.rewards.feet_clearance = RewTerm(
             func=mdp.foot_clearance_reward_humanoid,
-            weight=1.0,
+            weight=5.0,
             params={
-                "std": 0.05,
-                "tanh_mult": 2.0,
-                "target_height": 0.1,
+                "std": 0.035,
+                "tanh_mult": 4.0,
+                "target_height": 0.12,
                 "asset_cfg": _foot_asset,
+            },
+        )
+        self.rewards.double_flight_penalty = RewTerm(
+            func=mdp.double_flight_penalty,
+            weight=-0.5,
+            params={
+                "sensor_cfg": _foot_sensor,
+                "command_name": "base_velocity",
             },
         )
 
         # rewards: mdp.joint_deviation_l1 (arms)
         self.rewards.joint_deviation_arms = RewTerm(
             func=mdp.joint_deviation_l1,
-            weight=-5.0,
+            weight=-0.2,
             params={
                 "asset_cfg": SceneEntityCfg(
                     "robot",
@@ -229,7 +245,7 @@ class UnitreeG1AMPFlatEnvCfg(LocomotionAMPRoughEnvCfg):
         # rewards: mdp.joint_deviation_l1 (legs) — prevent hip_roll/hip_yaw splay
         self.rewards.joint_deviation_legs = RewTerm(
             func=mdp.joint_deviation_l1,
-            weight=-1.0,
+            weight=-0.5,
             params={
                 "asset_cfg": SceneEntityCfg(
                     "robot",
