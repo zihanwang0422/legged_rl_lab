@@ -443,10 +443,11 @@ python scripts/amp/train.py \
 # The loader scans the directory recursively, so keep this folder clean and
 # prefer a walk-only NPZ subset instead of mixing old / incompatible files.
 python scripts/amp/train.py \
-    --task LeggedRLLab-Isaac-AMP-Flat-Unitree-G1-v0 \
-    --num_envs 4096 \
-    --headless \
-    --motion_file /path/to/g1_walk_npz_dir
+  --task LeggedRLLab-Isaac-AMP-Flat-Unitree-G1-v0 \
+  --motion_file source/legged_rl_lab/legged_rl_lab/data/motion/LAFAN1_Retargeting_Dataset/g1_amp_run_walk_fall_getup \
+  --num_envs 4096 \
+  --headless \
+  --max_iterations 20000
 
 # Resume from a checkpoint
 python scripts/amp/train.py \
@@ -461,7 +462,7 @@ python scripts/amp/train.py \
 python scripts/amp/play.py \
     --task LeggedRLLab-Isaac-AMP-Flat-Unitree-G1-Play-v0 \
     --num_envs 50 \
-    --motion_file source/legged_rl_lab/legged_rl_lab/data/motion/LAFAN1_Retargeting_Dataset/g1/walk1_subject1.npz
+    --motion_file source/legged_rl_lab/legged_rl_lab/data/motion/LAFAN1_Retargeting_Dataset/g1_amp_run_walk_fall_getup \
 ```
 
 **skrl AMP** (alternative AMP implementation with 3-way discriminator loss):
