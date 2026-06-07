@@ -95,3 +95,47 @@ def update_rsl_rl_cfg(agent_cfg: RslRlOnPolicyRunnerCfg, args_cli: argparse.Name
         agent_cfg.experiment_name = task_name.lower().replace("-", "_").removesuffix("_play")
 
     return agent_cfg
+
+
+def convert_policy_cfg_to_actor_critic(agent_dict: dict) -> dict:
+    """Convert IsaacLab-style ``policy`` cfg to this repo's split actor/critic cfg."""
+    if "policy" not in agent_dict or ("actor" in agent_dict and "critic" in agent_dict):
+        return agent_dict
+
+    policy_cfg = dict(agent_dict.pop("policy"))
+    policy_class = policy_cfg.get("class_name", "ActorCritic")
+    attention_policy_classes = {"ActorCriticEncoder", "AttentionTerrainModel"}
+    model_class = "AttentionTerrainModel" if policy_class in attention_policy_classes else "MLPModel"
+
+    common_model_cfg = {
+        "activation": policy_cfg.get("activation", "elu"),
+    }
+    if model_class == "AttentionTerrainModel":
+        common_model_cfg.update(
+            {
+                "map_scan_dim": policy_cfg.get("map_scan_dim", (33, 21, 3)),
+                "mha_dim": policy_cfg.get("mha_dim", 64),
+                "num_heads": policy_cfg.get("num_heads", 16),
+                "cnn_downsample": policy_cfg.get("cnn_downsample", True),
+                "attach_global": policy_cfg.get("attach_global", False),
+            }
+        )
+
+    agent_dict["actor"] = {
+        "class_name": model_class,
+        "hidden_dims": policy_cfg.get("actor_hidden_dims", [512, 256, 128]),
+        "obs_normalization": policy_cfg.get("actor_obs_normalization", False),
+        "distribution_cfg": {
+            "class_name": "GaussianDistribution",
+            "std_type": policy_cfg.get("noise_std_type", "scalar"),
+            "init_std": policy_cfg.get("init_noise_std", 1.0),
+        },
+        **common_model_cfg,
+    }
+    agent_dict["critic"] = {
+        "class_name": model_class,
+        "hidden_dims": policy_cfg.get("critic_hidden_dims", [512, 256, 128]),
+        "obs_normalization": policy_cfg.get("critic_obs_normalization", False),
+        **common_model_cfg,
+    }
+    return agent_dict

@@ -8,7 +8,14 @@
 """Launch Isaac Sim Simulator first."""
 
 import argparse
+import os
 import sys
+
+RSL_RL_PATH = os.path.abspath(
+    os.path.join(os.path.dirname(__file__), "../../source/legged_rl_lab/legged_rl_lab/rsl_rl")
+)
+if RSL_RL_PATH not in sys.path:
+    sys.path.insert(0, RSL_RL_PATH)
 
 from isaaclab.app import AppLauncher
 
@@ -56,7 +63,6 @@ simulation_app = app_launcher.app
 """Rest everything follows."""
 
 import gymnasium as gym
-import os
 import time
 import torch
 
@@ -152,12 +158,15 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
 
     print(f"[INFO]: Loading model checkpoint from: {resume_path}")
     # load previously trained model
+    agent_dict = agent_cfg.to_dict()
     if agent_cfg.class_name == "OnPolicyRunner":
-        runner = OnPolicyRunner(env, agent_cfg.to_dict(), log_dir=None, device=agent_cfg.device)
+        runner = OnPolicyRunner(
+            env, cli_args.convert_policy_cfg_to_actor_critic(agent_dict), log_dir=None, device=agent_cfg.device
+        )
     elif agent_cfg.class_name == "DistillationRunner":
-        runner = DistillationRunner(env, agent_cfg.to_dict(), log_dir=None, device=agent_cfg.device)
+        runner = DistillationRunner(env, agent_dict, log_dir=None, device=agent_cfg.device)
     elif agent_cfg.class_name == "TsDepthRunner":
-        runner = TsDepthRunner(env, agent_cfg.to_dict(), log_dir=None, device=agent_cfg.device)
+        runner = TsDepthRunner(env, agent_dict, log_dir=None, device=agent_cfg.device)
     else:
         raise ValueError(f"Unsupported runner class: {agent_cfg.class_name}")
     runner.load(resume_path)
@@ -191,14 +200,20 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
         # version 2.3 onwards
         policy_nn = runner.alg.policy
     except AttributeError:
-        # version 2.2 and below
-        policy_nn = runner.alg.actor_critic
+        try:
+            # version 2.2 and below
+            policy_nn = runner.alg.actor_critic
+        except AttributeError:
+            # current split actor/critic stack
+            policy_nn = runner.alg.actor
 
     # extract the normalizer
     if hasattr(policy_nn, "actor_obs_normalizer"):
         normalizer = policy_nn.actor_obs_normalizer
     elif hasattr(policy_nn, "student_obs_normalizer"):
         normalizer = policy_nn.student_obs_normalizer
+    elif hasattr(policy_nn, "obs_normalizer"):
+        normalizer = policy_nn.obs_normalizer
     else:
         normalizer = None
 
@@ -209,6 +224,9 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
             env.unwrapped, policy_nn, normalizer=normalizer, path=export_model_dir, filename="policy.onnx"
         )
         attach_onnx_metadata(env.unwrapped, log_dir, export_model_dir)
+    elif hasattr(policy_nn, "as_jit") and hasattr(policy_nn, "as_onnx"):
+        runner.export_policy_to_jit(export_model_dir, filename="policy.pt")
+        runner.export_policy_to_onnx(export_model_dir, filename="policy.onnx")
     else:
         export_policy_as_jit(policy_nn, normalizer=normalizer, path=export_model_dir, filename="policy.pt")
         export_policy_as_onnx(policy_nn, normalizer=normalizer, path=export_model_dir, filename="policy.onnx")

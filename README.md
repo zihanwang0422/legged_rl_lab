@@ -33,6 +33,7 @@ isaacsim
 * Install the project
 ```bash
 python -m pip install -e source/legged_rl_lab
+python -m pip install -e source/legged_rl_lab/legged_rl_lab/rsl_rl
 ```
 
 * List the tasks available in the project
@@ -354,36 +355,49 @@ python scripts/rsl_rl/play.py \
 <details>
 <summary><b>Depth</b></summary>
 
-#### Depth
+#### TS-Depth Teacher
 
 ```bash
-# G1 — Train
+# G1 — phase 1 teacher / privileged-latent training
 python scripts/rsl_rl/train.py \
   --task LeggedRLLab-Isaac-Parkour-Depth-Unitree-G1-v0 \
   --num_envs 4096 \
   --headless
 
-# G1 — Play
+# G1 — teacher play
 python scripts/rsl_rl/play.py \
   --task LeggedRLLab-Isaac-Parkour-Depth-Unitree-G1-Play-v0 \
   --num_envs 50
 ```
 
 ```bash
-# Go2 — Train
+# Go2 — phase 1 teacher / privileged-latent training
 python scripts/rsl_rl/train.py \
   --task LeggedRLLab-Isaac-Parkour-Depth-Unitree-Go2-v0 \
   --num_envs 4096 \
   --headless
 
-# Go2 — Play
+# Go2 — teacher play
 python scripts/rsl_rl/play.py \
   --task LeggedRLLab-Isaac-Parkour-Depth-Unitree-Go2-Play-v0 \
   --num_envs 50
 ```
 
+#### TS-Depth Student
+
+Use the phase-1 checkpoint as the teacher source. With `--resume`, the distill config automatically uses that checkpoint as `algorithm.teacher_checkpoint_path`.
+
 ```bash
-# Distill from a phase-1 TS-Depth checkpoint
+# G1 — phase 2 student distillation
+python scripts/rsl_rl/train.py \
+  --task LeggedRLLab-Isaac-Parkour-Depth-Unitree-G1-Distill-v0 \
+  --num_envs 4096 \
+  --headless \
+  --resume \
+  --load_run <teacher_run_folder> \
+  --checkpoint model_xxx.pt
+
+# Go2 — phase 2 student distillation
 python scripts/rsl_rl/train.py \
   --task LeggedRLLab-Isaac-Parkour-Depth-Unitree-Go2-Distill-v0 \
   --num_envs 4096 \
@@ -392,10 +406,43 @@ python scripts/rsl_rl/train.py \
   --load_run <run_folder> \
   --checkpoint model_xxx.pt
 
-# Export the student depth policy
+# Export the student depth policy from the distillation run
 python scripts/rsl_rl/export_ts_depth_policy.py \
-  --checkpoint logs/rsl_rl/go2_parkour_depth/<run_folder>/model_xxx.pt \
+  --checkpoint logs/rsl_rl/go2_parkour_depth_distill/<student_run_folder>/model_xxx.pt \
   --onnx
+```
+
+</details>
+
+<details>
+<summary><b>Attention</b></summary>
+
+#### AME Attention
+
+This task uses an AME-style CNN + multi-head attention encoder over a 17x11x3 local terrain map. Training uses a reduced parkour terrain set with up/down stairs and AME custom stakes, concentric gaps, and stone bridge obstacles; default rough boxes, random rough, and slopes are not used by this attention task. Play uses the AME single-stakes obstacle layout. It is a normal PPO task, separate from the TS-Depth teacher/student runner.
+
+```bash
+# G1 — train AME attention parkour
+python scripts/rsl_rl/train.py \
+  --task LeggedRLLab-Isaac-Parkour-Attention-Unitree-G1-v0 \
+  --num_envs 256 \
+  --headless
+
+# G1 — play
+python scripts/rsl_rl/play.py \
+  --task LeggedRLLab-Isaac-Parkour-Attention-Unitree-G1-Play-v0 \
+  --num_envs 50
+
+# Go2 — train AME attention parkour
+python scripts/rsl_rl/train.py \
+  --task LeggedRLLab-Isaac-Parkour-Attention-Unitree-Go2-v0 \
+  --num_envs 256 \
+  --headless
+
+# Go2 — play
+python scripts/rsl_rl/play.py \
+  --task LeggedRLLab-Isaac-Parkour-Attention-Unitree-Go2-Play-v0 \
+  --num_envs 50
 ```
 
 </details>

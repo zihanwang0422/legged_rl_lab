@@ -8,7 +8,14 @@
 """Launch Isaac Sim Simulator first."""
 
 import argparse
+import os
 import sys
+
+RSL_RL_PATH = os.path.abspath(
+    os.path.join(os.path.dirname(__file__), "../../source/legged_rl_lab/legged_rl_lab/rsl_rl")
+)
+if RSL_RL_PATH not in sys.path:
+    sys.path.insert(0, RSL_RL_PATH)
 
 from isaaclab.app import AppLauncher
 
@@ -78,7 +85,6 @@ if version.parse(installed_version) < version.parse(RSL_RL_VERSION):
 
 import gymnasium as gym
 import logging
-import os
 import torch
 
 torch.backends.cuda.preferred_linalg_library("cusolver")
@@ -218,14 +224,17 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
     env = RslRlVecEnvWrapper(env, clip_actions=agent_cfg.clip_actions)
 
     # create runner from rsl-rl
+    agent_dict = agent_cfg.to_dict()
     _is_tracking = args_cli.motion_file is not None
     if agent_cfg.class_name == "OnPolicyRunner":
         runner_cls = MotionOnPolicyRunner if _is_tracking else OnPolicyRunner
-        runner = runner_cls(env, agent_cfg.to_dict(), log_dir=log_dir, device=agent_cfg.device)
+        runner = runner_cls(
+            env, cli_args.convert_policy_cfg_to_actor_critic(agent_dict), log_dir=log_dir, device=agent_cfg.device
+        )
     elif agent_cfg.class_name == "DistillationRunner":
-        runner = DistillationRunner(env, agent_cfg.to_dict(), log_dir=log_dir, device=agent_cfg.device)
+        runner = DistillationRunner(env, agent_dict, log_dir=log_dir, device=agent_cfg.device)
     elif agent_cfg.class_name == "TsDepthRunner":
-        runner = TsDepthRunner(env, agent_cfg.to_dict(), log_dir=log_dir, device=agent_cfg.device)
+        runner = TsDepthRunner(env, agent_dict, log_dir=log_dir, device=agent_cfg.device)
     else:
         raise ValueError(f"Unsupported runner class: {agent_cfg.class_name}")
     # write git state to logs
