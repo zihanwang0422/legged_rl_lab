@@ -56,7 +56,7 @@ def elevation_map(
                 )
 
         sensor_coords[..., 2] += torch.randn_like(sensor_coords[..., 2]) * height_noise_std
-    sensor_coords[..., 2] += env._attention_map_height_offset
+        sensor_coords[..., 2] += env._attention_map_height_offset
 
     sensor_coords[..., 2] = sensor_coords[..., 2].clamp(min=height_clip[0], max=height_clip[1])
     return sensor_coords.reshape(num_envs, num_rays * 3)
