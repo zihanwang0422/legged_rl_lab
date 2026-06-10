@@ -171,13 +171,13 @@ class G1AttentionCommandsCfg(AttentionCommandsCfg):
         heading_control_stiffness=0.5,
         debug_vis=True,
         ranges=mdp.UniformVelocityCommandCfg.Ranges(
-            lin_vel_x=(0.0, 1.5),
+            lin_vel_x=(0.12, 0.55),
             lin_vel_y=(0.0, 0.0),
-            ang_vel_z=(-1.0, 1.0),
-            heading=(-math.pi, math.pi),
+            ang_vel_z=(-0.25, 0.25),
+            heading=(0.0, 0.0),
         ),
         limit_ranges=mdp.UniformVelocityCommandCfg.Ranges(
-            lin_vel_x=(0.0, 1.5),
+            lin_vel_x=(0.12, 1.0),
             lin_vel_y=(0.0, 0.0),
             ang_vel_z=(-1.2, 1.2),
             heading=(-math.pi, math.pi),
@@ -272,17 +272,12 @@ class G1AttentionEventCfg(AttentionEventCfg):
 
 @configclass
 class G1AttentionRewardsCfg(AttentionRewardsCfg):
-    tracking_lin_vel = RewTerm(
-        func=mdp.track_lin_vel_xy_yaw_frame_exp,
-        weight=2.0,
-        params={"command_name": "base_velocity", "std": 0.25},
-    )
     termination_penalty = RewTerm(func=mdp.is_terminated, weight=-200.0)
-    alive = None
+    alive = RewTerm(func=mdp.alive, weight=2.0)
     tracking_ang_vel = RewTerm(
         func=mdp.track_ang_vel_z_world_exp,
-        weight=3.0,
-        params={"command_name": "base_velocity", "std": 0.25},
+        weight=2.0,
+        params={"command_name": "base_velocity", "std": 0.5},
     )
     pelvis_orientation = RewTerm(
         func=mdp.body_orientation_l2,
@@ -322,7 +317,7 @@ class G1AttentionRewardsCfg(AttentionRewardsCfg):
     )
     collision = RewTerm(
         func=mdp.undesired_contacts,
-        weight=-1.0,
+        weight=-5.0,
         params={
             "sensor_cfg": SceneEntityCfg("contact_forces", body_names="(?!.*_ankle_roll_link).*"),
             "threshold": 1.0,
@@ -366,13 +361,12 @@ class G1AttentionRewardsCfg(AttentionRewardsCfg):
     )
     feet_slide = RewTerm(
         func=mdp.feet_slide,
-        weight=-0.1,
+        weight=-0.4,
         params={
             "sensor_cfg": SceneEntityCfg("contact_forces", body_names=".*_ankle_roll_link"),
             "asset_cfg": SceneEntityCfg("robot", body_names=".*_ankle_roll_link"),
         },
     )
-    action_smoothness = None
     joint_deviation_ankle = RewTerm(
         func=mdp.joint_deviation_l1_always,
         weight=-0.2,
@@ -425,7 +419,10 @@ class G1AttentionCurriculumCfg(AttentionCurriculumCfg):
         func=mdp.terrain_levels_parkour,
         params={"move_up_distance": 2.0, "move_down_distance": 0.6},
     )
-    lin_vel_cmd_levels = None
+    lin_vel_cmd_levels = CurrTerm(
+        func=mdp.lin_vel_cmd_levels,
+        params={"reward_term_name": "tracking_lin_vel"},
+    )
 
 
 def configure_g1_attention_train_terrain(terrain_generator: Any) -> None:
@@ -608,15 +605,6 @@ class G1AttentionEnvCfg(AttentionEnvCfgMixin, AttentionBaseEnvCfg):
 
         configure_g1_attention_sensors(self.scene, self.decimation * self.sim.dt)
         self.configure_attention_train(G1_HEIGHT_SCANNER_PRIM_PATH)
-
-        # Match the official AME baseline before adding robustness randomization.
-        self.events.push_robot = None
-        self.events.add_base_mass = None
-        self.events.base_com = None
-        self.events.actuator_gains = None
-        self.observations.policy.enable_corruption = False
-        self.observations.terrain_map.enable_corruption = False
-        self.observations.terrain_map.terrain_map.params["noise"] = False
 
     def configure_attention_train(self, height_scanner_prim_path: str) -> None:
         AttentionEnvCfgMixin.configure_attention_train(self, height_scanner_prim_path)
