@@ -171,13 +171,13 @@ class G1AttentionCommandsCfg(AttentionCommandsCfg):
         heading_control_stiffness=0.5,
         debug_vis=True,
         ranges=mdp.UniformVelocityCommandCfg.Ranges(
-            lin_vel_x=(0.12, 0.55),
+            lin_vel_x=(0.20, 0.55),
             lin_vel_y=(0.0, 0.0),
             ang_vel_z=(-0.25, 0.25),
             heading=(0.0, 0.0),
         ),
         limit_ranges=mdp.UniformVelocityCommandCfg.Ranges(
-            lin_vel_x=(0.12, 1.0),
+            lin_vel_x=(0.20, 1.0),
             lin_vel_y=(0.0, 0.0),
             ang_vel_z=(-1.2, 1.2),
             heading=(-math.pi, math.pi),
@@ -286,11 +286,11 @@ class G1AttentionRewardsCfg(AttentionRewardsCfg):
     )
     foot_clearance = RewTerm(
         func=mdp.foot_clearance_target,
-        weight=0.2,
+        weight=0.5,
         params={
             "sensor_cfg": SceneEntityCfg("height_scanner"),
             "asset_cfg": SceneEntityCfg("robot", body_names=list(G1_FOOT_BODIES)),
-            "target_height": 0.08,
+            "target_height": 0.15,
             "foot_offset": 0.022,
             "sigma": 0.01,
         },
@@ -301,7 +301,7 @@ class G1AttentionRewardsCfg(AttentionRewardsCfg):
         params={
             "command_name": "base_velocity",
             "sensor_cfg": SceneEntityCfg("contact_forces", body_names=".*_ankle_roll_link"),
-            "cmd_threshold": 0.2,
+            "cmd_threshold": 0.25,
             "force_threshold": 10.0,
         },
     )
@@ -356,7 +356,7 @@ class G1AttentionRewardsCfg(AttentionRewardsCfg):
         params={
             "command_name": "base_velocity",
             "sensor_cfg": SceneEntityCfg("contact_forces", body_names=".*_ankle_roll_link"),
-            "threshold": 0.4,
+            "threshold": 0.6,
         },
     )
     feet_slide = RewTerm(
@@ -385,7 +385,7 @@ class G1AttentionRewardsCfg(AttentionRewardsCfg):
                 joint_names=["right_hip_pitch_joint", "right_knee_joint", "right_ankle_pitch_joint"],
             ),
             "period": 0.8,
-            "scales": (-0.2, 0.4, -0.2),
+            "scales": (-0.3, 0.7, -0.3),
             "double_support_threshold": 0.1,
             "command_name": "base_velocity",
             "cmd_threshold": 0.1,
@@ -393,7 +393,7 @@ class G1AttentionRewardsCfg(AttentionRewardsCfg):
     )
     gait_phase_contact = RewTerm(
         func=mdp.feet_gait,
-        weight=0.2,
+        weight=0.5,
         params={
             "period": 0.8,
             "offset": [0.0, 0.5],
@@ -417,7 +417,7 @@ class G1AttentionTerminationsCfg(AttentionTerminationsCfg):
 class G1AttentionCurriculumCfg(AttentionCurriculumCfg):
     terrain_levels = CurrTerm(
         func=mdp.terrain_levels_parkour,
-        params={"move_up_distance": 1.2, "move_down_distance": 0.4},
+        params={"move_up_distance": 2.5, "move_down_distance": 0.5},
     )
     lin_vel_cmd_levels = CurrTerm(
         func=mdp.lin_vel_cmd_levels,
@@ -436,13 +436,13 @@ def configure_g1_attention_train_terrain(terrain_generator: Any) -> None:
     terrain_generator.use_cache = False
     terrain_generator.sub_terrains = {
         "flat": terrain_gen.HfRandomUniformTerrainCfg(
-            proportion=0.2,
-            noise_range=(-0.01, 0.03),
+            proportion=0.15,
+            noise_range=(-0.02, 0.04),
             noise_step=0.02,
             border_width=0.25,
         ),
         "pyramid_stairs": terrain_gen.MeshPyramidStairsTerrainCfg(
-            proportion=0.08,
+            proportion=0.09,
             step_height_range=(0.05, 0.25),
             step_width=0.3,
             platform_width=3.0,
@@ -450,7 +450,7 @@ def configure_g1_attention_train_terrain(terrain_generator: Any) -> None:
             holes=False,
         ),
         "pyramid_stairs_inv": terrain_gen.MeshInvertedPyramidStairsTerrainCfg(
-            proportion=0.08,
+            proportion=0.09,
             step_height_range=(0.05, 0.25),
             step_width=0.3,
             platform_width=3.0,
@@ -458,7 +458,7 @@ def configure_g1_attention_train_terrain(terrain_generator: Any) -> None:
             holes=False,
         ),
         "stakes1": HfDoubleColumnStakesTerrainCfg(
-            proportion=0.08,
+            proportion=0.09,
             stake_height_max=0.03,
             stake_side_range=(0.20, 0.40),
             stake_gap_range=(0.1, 0.3),
@@ -469,7 +469,7 @@ def configure_g1_attention_train_terrain(terrain_generator: Any) -> None:
             border_width=0.25,
         ),
         "stakes2": HfAlternateColumnStakesTerrainCfg(
-            proportion=0.16,
+            proportion=0.17,
             stake_height_max=0.03,
             stake_side_range=(0.20, 0.40),
             stake_gap_range=(0.05, 0.15),
@@ -480,7 +480,7 @@ def configure_g1_attention_train_terrain(terrain_generator: Any) -> None:
             border_width=0.25,
         ),
         "stakes3": HfAlternateColumnStakesTerrainCfg(
-            proportion=0.16,
+            proportion=0.17,
             stake_height_max=0.03,
             stake_side_range=(0.20, 0.40),
             stake_gap_range=(0.05, 0.25),
@@ -615,7 +615,7 @@ class G1AttentionEnvCfg(AttentionEnvCfgMixin, AttentionBaseEnvCfg):
     def configure_attention_train(self, height_scanner_prim_path: str) -> None:
         AttentionEnvCfgMixin.configure_attention_train(self, height_scanner_prim_path)
 
-        self.scene.terrain.max_init_terrain_level = 5
+        self.scene.terrain.max_init_terrain_level = 3
         if self.scene.terrain.terrain_generator is not None:
             configure_g1_attention_train_terrain(self.scene.terrain.terrain_generator)
 

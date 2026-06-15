@@ -173,6 +173,7 @@ class GaussianDistribution(Distribution):
             std = self.std_param.expand_as(mean)
         elif self.std_type == "log":
             std = torch.exp(self.log_std_param).expand_as(mean)
+        std = torch.clamp(std, min=1e-6)
         self._distribution = Normal(mean, std)
 
     def sample(self) -> torch.Tensor:
@@ -267,6 +268,7 @@ class HeteroscedasticGaussianDistribution(GaussianDistribution):
         elif self.std_type == "log":
             mean, log_std = torch.unbind(mlp_output, dim=-2)
             std = torch.exp(log_std)
+        std = torch.clamp(std, min=1e-6)
         self._distribution = Normal(mean, std)
 
     def deterministic_output(self, mlp_output: torch.Tensor) -> torch.Tensor:
