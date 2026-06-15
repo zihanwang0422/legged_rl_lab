@@ -229,7 +229,7 @@ class G1AttentionEventCfg(AttentionEventCfg):
         mode="interval",
         interval_range_s=(3.0, 3.0),
         params={
-            "velocity_range": {"x": (-0.5, 0.5), "y": (-0.5, 0.5)},
+            "velocity_range": {"x": (-0.3, 0.3), "y": (-0.3, 0.3)},
             "asset_cfg": SceneEntityCfg("robot"),
         },
     )
@@ -361,7 +361,7 @@ class G1AttentionRewardsCfg(AttentionRewardsCfg):
     )
     feet_slide = RewTerm(
         func=mdp.feet_slide,
-        weight=-0.4,
+        weight=-0.8,
         params={
             "sensor_cfg": SceneEntityCfg("contact_forces", body_names=".*_ankle_roll_link"),
             "asset_cfg": SceneEntityCfg("robot", body_names=".*_ankle_roll_link"),
@@ -417,7 +417,7 @@ class G1AttentionTerminationsCfg(AttentionTerminationsCfg):
 class G1AttentionCurriculumCfg(AttentionCurriculumCfg):
     terrain_levels = CurrTerm(
         func=mdp.terrain_levels_parkour,
-        params={"move_up_distance": 2.0, "move_down_distance": 0.6},
+        params={"move_up_distance": 1.2, "move_down_distance": 0.4},
     )
     lin_vel_cmd_levels = CurrTerm(
         func=mdp.lin_vel_cmd_levels,
@@ -435,8 +435,14 @@ def configure_g1_attention_train_terrain(terrain_generator: Any) -> None:
     terrain_generator.slope_threshold = 0.75
     terrain_generator.use_cache = False
     terrain_generator.sub_terrains = {
+        "flat": terrain_gen.HfRandomUniformTerrainCfg(
+            proportion=0.2,
+            noise_range=(-0.01, 0.03),
+            noise_step=0.02,
+            border_width=0.25,
+        ),
         "pyramid_stairs": terrain_gen.MeshPyramidStairsTerrainCfg(
-            proportion=0.1,
+            proportion=0.08,
             step_height_range=(0.05, 0.25),
             step_width=0.3,
             platform_width=3.0,
@@ -444,7 +450,7 @@ def configure_g1_attention_train_terrain(terrain_generator: Any) -> None:
             holes=False,
         ),
         "pyramid_stairs_inv": terrain_gen.MeshInvertedPyramidStairsTerrainCfg(
-            proportion=0.1,
+            proportion=0.08,
             step_height_range=(0.05, 0.25),
             step_width=0.3,
             platform_width=3.0,
@@ -452,7 +458,7 @@ def configure_g1_attention_train_terrain(terrain_generator: Any) -> None:
             holes=False,
         ),
         "stakes1": HfDoubleColumnStakesTerrainCfg(
-            proportion=0.1,
+            proportion=0.08,
             stake_height_max=0.03,
             stake_side_range=(0.20, 0.40),
             stake_gap_range=(0.1, 0.3),
@@ -463,7 +469,7 @@ def configure_g1_attention_train_terrain(terrain_generator: Any) -> None:
             border_width=0.25,
         ),
         "stakes2": HfAlternateColumnStakesTerrainCfg(
-            proportion=0.2,
+            proportion=0.16,
             stake_height_max=0.03,
             stake_side_range=(0.20, 0.40),
             stake_gap_range=(0.05, 0.15),
@@ -474,7 +480,7 @@ def configure_g1_attention_train_terrain(terrain_generator: Any) -> None:
             border_width=0.25,
         ),
         "stakes3": HfAlternateColumnStakesTerrainCfg(
-            proportion=0.2,
+            proportion=0.16,
             stake_height_max=0.03,
             stake_side_range=(0.20, 0.40),
             stake_gap_range=(0.05, 0.25),
@@ -485,7 +491,7 @@ def configure_g1_attention_train_terrain(terrain_generator: Any) -> None:
             border_width=0.25,
         ),
         "hf_gaps": HfConcentricGapTerrainCfg(
-            proportion=0.1,
+            proportion=0.08,
             gap_width_range=(0.2, 0.6),
             platform_width=2.0,
             border_width=0.25,
@@ -494,7 +500,7 @@ def configure_g1_attention_train_terrain(terrain_generator: Any) -> None:
             ground_height_max=0.03,
         ),
         "stonebridge": HfStonesBridgeTerrainCfg(
-            proportion=0.1,
+            proportion=0.08,
             platform_width=2.0,
             border_width=0.25,
             holes_depth=-2.0,
@@ -505,8 +511,8 @@ def configure_g1_attention_train_terrain(terrain_generator: Any) -> None:
             stone_lateral_distance_range=(0.0, 0.0),
         ),
         "rails": terrain_gen.MeshRailsTerrainCfg(
-            proportion=0.1,
-            rail_height_range=(0.25, 0.05),
+            proportion=0.08,
+            rail_height_range=(0.12, 0.03),
             rail_thickness_range=(0.1, 0.3),
             platform_width=2.0,
         ),
