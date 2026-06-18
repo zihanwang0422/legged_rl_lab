@@ -31,10 +31,7 @@ from legged_rl_lab.tasks.parkour.attention.attention_env_cfg import (
     attention_height_scanner_cfg,
 )
 from legged_rl_lab.terrains import (
-    HfAlternateColumnStakesTerrainCfg,
     HfConcentricGapTerrainCfg,
-    HfDoubleColumnStakesTerrainCfg,
-    HfStonesBridgeTerrainCfg,
 )
 import legged_rl_lab.tasks.parkour.attention.mdp as mdp
 
@@ -171,15 +168,15 @@ class G1AttentionCommandsCfg(AttentionCommandsCfg):
         heading_control_stiffness=0.5,
         debug_vis=True,
         ranges=mdp.UniformVelocityCommandCfg.Ranges(
-            lin_vel_x=(0.20, 0.55),
+            lin_vel_x=(0.0, 1.0),
             lin_vel_y=(0.0, 0.0),
-            ang_vel_z=(-0.25, 0.25),
+            ang_vel_z=(-1.0, 1.0),
             heading=(0.0, 0.0),
         ),
         limit_ranges=mdp.UniformVelocityCommandCfg.Ranges(
-            lin_vel_x=(0.20, 1.0),
+            lin_vel_x=(0.0, 1.5),
             lin_vel_y=(0.0, 0.0),
-            ang_vel_z=(-1.2, 1.2),
+            ang_vel_z=(-1.0, 1.0),
             heading=(-math.pi, math.pi),
         ),
     )
@@ -192,9 +189,9 @@ class G1AttentionEventCfg(AttentionEventCfg):
         mode="startup",
         params={
             "asset_cfg": SceneEntityCfg("robot", body_names=".*"),
-            "static_friction_range": (0.2, 1.7),
-            "dynamic_friction_range": (0.2, 1.7),
-            "restitution_range": (0.0, 0.0),
+            "static_friction_range": (0.3, 1.0),
+            "dynamic_friction_range": (0.3, 1.0),
+            "restitution_range": (0.0, 0.1),
             "num_buckets": 64,
         },
     )
@@ -203,7 +200,7 @@ class G1AttentionEventCfg(AttentionEventCfg):
         mode="startup",
         params={
             "asset_cfg": SceneEntityCfg("robot", body_names="torso_link"),
-            "mass_distribution_params": (-1.0, 2.0),
+            "mass_distribution_params": (-1.0, 3.0),
             "operation": "add",
         },
     )
@@ -212,7 +209,7 @@ class G1AttentionEventCfg(AttentionEventCfg):
         mode="startup",
         params={
             "asset_cfg": SceneEntityCfg("robot", body_names="torso_link"),
-            "com_range": {"x": (-0.03, 0.03), "y": (-0.03, 0.03), "z": (-0.03, 0.03)},
+            "com_range": {"x": (-0.05, 0.05), "y": (-0.05, 0.05), "z": (-0.01, 0.01)},
         },
     )
     base_external_force_torque = EventTerm(
@@ -225,37 +222,26 @@ class G1AttentionEventCfg(AttentionEventCfg):
         },
     )
     push_robot = EventTerm(
-        func=mdp.push_by_setting_velocity_record_xy,
+        func=mdp.push_by_setting_velocity,
         mode="interval",
-        interval_range_s=(3.0, 3.0),
+        interval_range_s=(5.0, 10.0),
         params={
-            "velocity_range": {"x": (-0.3, 0.3), "y": (-0.3, 0.3)},
+            "velocity_range": {"x": (-0.5, 0.5), "y": (-0.5, 0.5)},
             "asset_cfg": SceneEntityCfg("robot"),
-        },
-    )
-    actuator_gains = EventTerm(
-        func=mdp.randomize_actuator_gains,
-        mode="startup",
-        params={
-            "asset_cfg": SceneEntityCfg("robot", joint_names=[".*"]),
-            "stiffness_distribution_params": (0.8, 1.2),
-            "damping_distribution_params": (0.8, 1.2),
-            "operation": "scale",
-            "distribution": "uniform",
         },
     )
     reset_base = EventTerm(
         func=mdp.reset_root_state_uniform,
         mode="reset",
         params={
-            "pose_range": {"x": (-0.5, 0.5), "y": (-0.5, 0.5), "yaw": (0.0, 0.0)},
+            "pose_range": {"x": (-0.5, 0.5), "y": (-0.5, 0.5), "yaw": (-3.14, 3.14)},
             "velocity_range": {
-                "x": (-0.5, 0.5),
-                "y": (-0.5, 0.5),
-                "z": (-0.5, 0.5),
-                "roll": (-0.5, 0.5),
-                "pitch": (-0.5, 0.5),
-                "yaw": (-0.5, 0.5),
+                "x": (0.0, 0.0),
+                "y": (0.0, 0.0),
+                "z": (0.0, 0.0),
+                "roll": (0.0, 0.0),
+                "pitch": (0.0, 0.0),
+                "yaw": (0.0, 0.0),
             },
         },
     )
@@ -264,7 +250,7 @@ class G1AttentionEventCfg(AttentionEventCfg):
         mode="reset",
         params={
             "asset_cfg": SceneEntityCfg("robot", joint_names=[".*"]),
-            "position_range": (-0.2, 0.2),
+            "position_range": (-0.1, 0.1),
             "velocity_range": (0.0, 0.0),
         },
     )
@@ -272,37 +258,69 @@ class G1AttentionEventCfg(AttentionEventCfg):
 
 @configclass
 class G1AttentionRewardsCfg(AttentionRewardsCfg):
+    # Disable conflicting/redundant terms from base class
+    lin_vel_z = None              # Penalty would prevent going up stairs
+    ang_vel_xy = None             # Re-defined below
+    orientation = None            # Re-defined below as flat_orientation_l2
+    dof_power = None              # Replaced with dof_torques_l2
+    dof_acc = None                # Re-defined below
+    action_rate = None            # Re-defined below
+    action_smoothness = None      # AME doesn't use this
+    dof_pos_limits = None         # Re-defined below
+
+    # -- task
     termination_penalty = RewTerm(func=mdp.is_terminated, weight=-200.0)
-    alive = RewTerm(func=mdp.alive, weight=2.0)
+    alive = RewTerm(func=mdp.alive, weight=1.0)
+    tracking_lin_vel = RewTerm(
+        func=mdp.track_lin_vel_xy_yaw_frame_exp,
+        weight=1.5,
+        params={"command_name": "base_velocity", "std": 0.25},
+    )
     tracking_ang_vel = RewTerm(
         func=mdp.track_ang_vel_z_world_exp,
         weight=2.0,
-        params={"command_name": "base_velocity", "std": 0.5},
+        params={"command_name": "base_velocity", "std": 0.25},
     )
-    pelvis_orientation = RewTerm(
-        func=mdp.body_orientation_l2,
+    # -- penalties
+    ang_vel_xy_l2 = RewTerm(func=mdp.ang_vel_xy_l2, weight=-0.05)
+    collision = RewTerm(
+        func=mdp.undesired_contacts,
         weight=-1.0,
-        params={"asset_cfg": SceneEntityCfg("robot", body_names="torso_link")},
-    )
-    foot_clearance = RewTerm(
-        func=mdp.foot_clearance_target,
-        weight=0.5,
         params={
-            "sensor_cfg": SceneEntityCfg("height_scanner"),
-            "asset_cfg": SceneEntityCfg("robot", body_names=list(G1_FOOT_BODIES)),
-            "target_height": 0.15,
-            "foot_offset": 0.022,
-            "sigma": 0.01,
+            "sensor_cfg": SceneEntityCfg("contact_forces", body_names="(?!.*_ankle_roll_link).*"),
+            "threshold": 1.0,
         },
     )
-    feet_contact_stand_still = RewTerm(
-        func=mdp.feet_contact_stand_still,
-        weight=0.1,
+    dof_torques_l2 = RewTerm(func=mdp.joint_torques_l2, weight=-1.5e-7)
+    dof_acc_l2 = RewTerm(func=mdp.joint_acc_l2, weight=-1.25e-7)
+    dof_vel_l2 = RewTerm(func=mdp.joint_vel_l2, weight=-0.001)
+    dof_pos_limits_pen = RewTerm(func=mdp.joint_pos_limits, weight=-1.0)
+    dof_torques_limits = RewTerm(func=mdp.applied_torque_limits, weight=-0.01)
+    action_rate_l2 = RewTerm(func=mdp.action_rate_l2, weight=-0.01)
+    flat_orientation = RewTerm(func=mdp.flat_orientation_l2, weight=-1.0)
+    # -- style
+    feet_air_time = RewTerm(
+        func=mdp.feet_air_time_positive_biped,
+        weight=0.25,
         params={
             "command_name": "base_velocity",
             "sensor_cfg": SceneEntityCfg("contact_forces", body_names=".*_ankle_roll_link"),
-            "cmd_threshold": 0.25,
-            "force_threshold": 10.0,
+            "threshold": 0.6,
+        },
+    )
+    feet_air_time_variance = RewTerm(
+        func=mdp.air_time_variance_penalty,
+        weight=-0.1,
+        params={
+            "sensor_cfg": SceneEntityCfg("contact_forces", body_names=".*_ankle_roll_link"),
+        },
+    )
+    feet_slide = RewTerm(
+        func=mdp.feet_slide,
+        weight=-0.1,
+        params={
+            "sensor_cfg": SceneEntityCfg("contact_forces", body_names=".*_ankle_roll_link"),
+            "asset_cfg": SceneEntityCfg("robot", body_names=".*_ankle_roll_link"),
         },
     )
     feet_stumble = RewTerm(
@@ -310,96 +328,51 @@ class G1AttentionRewardsCfg(AttentionRewardsCfg):
         weight=-1.0,
         params={"sensor_cfg": SceneEntityCfg("contact_forces", body_names=".*_ankle_roll_link")},
     )
-    hip_pos = RewTerm(
-        func=mdp.hip_pos_deviation,
-        weight=-0.15,
-        params={"asset_cfg": SceneEntityCfg("robot", joint_names=[".*_hip_yaw_joint", ".*_hip_roll_joint"])},
-    )
-    collision = RewTerm(
-        func=mdp.undesired_contacts,
-        weight=-5.0,
-        params={
-            "sensor_cfg": SceneEntityCfg("contact_forces", body_names="(?!.*_ankle_roll_link).*"),
-            "threshold": 1.0,
-        },
-    )
-    fly = RewTerm(
-        func=mdp.fly,
-        weight=-1.0,
-        params={"sensor_cfg": SceneEntityCfg("contact_forces", body_names=".*_ankle_roll_link"), "threshold": 1.0},
-    )
     feet_too_near = RewTerm(
         func=mdp.feet_too_near,
-        weight=-2.0,
+        weight=-1.0,
         params={"asset_cfg": SceneEntityCfg("robot", body_names=list(G1_FOOT_BODIES)), "threshold": 0.2},
     )
+    # -- coordination
+    joint_coordination = RewTerm(
+        func=mdp.joint_coordination_rel,
+        weight=-0.1,
+        params={
+            "asset_cfg": SceneEntityCfg("robot"),
+            "coord_joints": [
+                ["left_hip_pitch_joint", "right_shoulder_pitch_joint"],
+                ["right_hip_pitch_joint", "left_shoulder_pitch_joint"],
+            ],
+            "coord_signs": [
+                [1.0, 1.0],
+                [1.0, 1.0],
+            ],
+        },
+    )
+    joint_deviation_hip = RewTerm(
+        func=mdp.joint_deviation_l1,
+        weight=-0.1,
+        params={"asset_cfg": SceneEntityCfg("robot", joint_names=[".*_hip_yaw_joint", ".*_hip_roll_joint"])},
+    )
     joint_deviation_arms = RewTerm(
-        func=mdp.joint_deviation_l1_always,
-        weight=-0.2,
+        func=mdp.joint_deviation_l1,
+        weight=-0.1,
         params={
             "asset_cfg": SceneEntityCfg(
                 "robot",
                 joint_names=[
-                    "waist_.*_joint",
-                    ".*_shoulder_roll_joint",
-                    ".*_shoulder_yaw_joint",
-                    ".*_shoulder_pitch_joint",
+                    ".*_shoulder_.*_joint",
                     ".*_elbow_joint",
-                    ".*_wrist_.*_joint",
+                    ".*_wrist_.*",
                 ],
             )
         },
     )
-    feet_air_time = RewTerm(
-        func=mdp.feet_air_time_positive_biped,
-        weight=0.5,
+    joint_deviation_waists = RewTerm(
+        func=mdp.joint_deviation_l1,
+        weight=-1.0,
         params={
-            "command_name": "base_velocity",
-            "sensor_cfg": SceneEntityCfg("contact_forces", body_names=".*_ankle_roll_link"),
-            "threshold": 0.6,
-        },
-    )
-    feet_slide = RewTerm(
-        func=mdp.feet_slide,
-        weight=-0.8,
-        params={
-            "sensor_cfg": SceneEntityCfg("contact_forces", body_names=".*_ankle_roll_link"),
-            "asset_cfg": SceneEntityCfg("robot", body_names=".*_ankle_roll_link"),
-        },
-    )
-    joint_deviation_ankle = RewTerm(
-        func=mdp.joint_deviation_l1_always,
-        weight=-0.2,
-        params={"asset_cfg": SceneEntityCfg("robot", joint_names=".*_ankle_.*_joint")},
-    )
-    leg_ref_joint_pos = RewTerm(
-        func=mdp.leg_ref_joint_pos,
-        weight=0.5,
-        params={
-            "left_cfg": SceneEntityCfg(
-                "robot",
-                joint_names=["left_hip_pitch_joint", "left_knee_joint", "left_ankle_pitch_joint"],
-            ),
-            "right_cfg": SceneEntityCfg(
-                "robot",
-                joint_names=["right_hip_pitch_joint", "right_knee_joint", "right_ankle_pitch_joint"],
-            ),
-            "period": 0.8,
-            "scales": (-0.3, 0.7, -0.3),
-            "double_support_threshold": 0.1,
-            "command_name": "base_velocity",
-            "cmd_threshold": 0.1,
-        },
-    )
-    gait_phase_contact = RewTerm(
-        func=mdp.feet_gait,
-        weight=0.5,
-        params={
-            "period": 0.8,
-            "offset": [0.0, 0.5],
-            "sensor_cfg": SceneEntityCfg("contact_forces", body_names=list(G1_FOOT_BODIES)),
-            "threshold": 0.55,
-            "command_name": "base_velocity",
+            "asset_cfg": SceneEntityCfg("robot", joint_names=["waist.*"]),
         },
     )
 
@@ -408,21 +381,17 @@ class G1AttentionRewardsCfg(AttentionRewardsCfg):
 class G1AttentionTerminationsCfg(AttentionTerminationsCfg):
     base_contact = DoneTerm(
         func=mdp.illegal_contact,
-        params={"sensor_cfg": SceneEntityCfg("contact_forces", body_names="torso_link"), "threshold": 1.0},
+        params={
+            "sensor_cfg": SceneEntityCfg("contact_forces", body_names="torso_link"),
+            "threshold": 1.0,
+        },
     )
     gravity_tilt = DoneTerm(func=mdp.gravity_too_horizontal, params={"threshold": -0.1})
 
 
 @configclass
 class G1AttentionCurriculumCfg(AttentionCurriculumCfg):
-    terrain_levels = CurrTerm(
-        func=mdp.terrain_levels_parkour,
-        params={"move_up_distance": 2.5, "move_down_distance": 0.5},
-    )
-    lin_vel_cmd_levels = CurrTerm(
-        func=mdp.lin_vel_cmd_levels,
-        params={"reward_term_name": "tracking_lin_vel"},
-    )
+    terrain_levels = CurrTerm(func=mdp.terrain_levels_vel)
 
 
 def configure_g1_attention_train_terrain(terrain_generator: Any) -> None:
@@ -435,86 +404,64 @@ def configure_g1_attention_train_terrain(terrain_generator: Any) -> None:
     terrain_generator.slope_threshold = 0.75
     terrain_generator.use_cache = False
     terrain_generator.sub_terrains = {
-        "flat": terrain_gen.HfRandomUniformTerrainCfg(
-            proportion=0.15,
-            noise_range=(-0.02, 0.04),
-            noise_step=0.02,
-            border_width=0.25,
-        ),
         "pyramid_stairs": terrain_gen.MeshPyramidStairsTerrainCfg(
-            proportion=0.09,
-            step_height_range=(0.05, 0.25),
+            proportion=0.1,
+            step_height_range=(0.05, 0.2),
             step_width=0.3,
             platform_width=3.0,
             border_width=1.0,
             holes=False,
         ),
         "pyramid_stairs_inv": terrain_gen.MeshInvertedPyramidStairsTerrainCfg(
-            proportion=0.09,
-            step_height_range=(0.05, 0.25),
+            proportion=0.1,
+            step_height_range=(0.05, 0.2),
             step_width=0.3,
             platform_width=3.0,
             border_width=1.0,
             holes=False,
         ),
-        "stakes1": HfDoubleColumnStakesTerrainCfg(
-            proportion=0.09,
-            stake_height_max=0.03,
-            stake_side_range=(0.20, 0.40),
-            stake_gap_range=(0.1, 0.3),
-            column_gap_range=(0.1, 0.1),
-            column_jitter=0.0,
-            holes_depth=-2.0,
+        "boxes": terrain_gen.MeshRandomGridTerrainCfg(
+            proportion=0.1,
+            grid_width=0.45,
+            grid_height_range=(0.05, 0.2),
+            platform_width=2.0,
+        ),
+        "random_rough": terrain_gen.HfRandomUniformTerrainCfg(
+            proportion=0.15,
+            noise_range=(0.02, 0.10),
+            noise_step=0.02,
+            downsampled_scale=0.1,
+            border_width=0.25,
+        ),
+        "hf_pyramid_slope": terrain_gen.HfPyramidSlopedTerrainCfg(
+            proportion=0.1,
+            slope_range=(0.0, 0.4),
             platform_width=2.0,
             border_width=0.25,
         ),
-        "stakes2": HfAlternateColumnStakesTerrainCfg(
-            proportion=0.17,
-            stake_height_max=0.03,
-            stake_side_range=(0.20, 0.40),
-            stake_gap_range=(0.05, 0.15),
-            column_gap_range=(0.0, 0.2),
-            column_jitter=0.0,
-            holes_depth=-2.0,
+        "hf_pyramid_slope_inv": terrain_gen.HfInvertedPyramidSlopedTerrainCfg(
+            proportion=0.1,
+            slope_range=(0.0, 0.4),
             platform_width=2.0,
             border_width=0.25,
         ),
-        "stakes3": HfAlternateColumnStakesTerrainCfg(
-            proportion=0.17,
-            stake_height_max=0.03,
-            stake_side_range=(0.20, 0.40),
-            stake_gap_range=(0.05, 0.25),
-            column_gap_range=(0.3, 0.2),
-            column_jitter=0.0,
-            holes_depth=-2.0,
+        "hf_steppingstones": terrain_gen.HfSteppingStonesTerrainCfg(
+            proportion=0.2,
+            stone_height_max=0.05,
+            stone_width_range=(0.25, 0.5),
+            stone_distance_range=(0.05, 0.25),
             platform_width=2.0,
+            holes_depth=-2.0,
             border_width=0.25,
         ),
         "hf_gaps": HfConcentricGapTerrainCfg(
-            proportion=0.08,
-            gap_width_range=(0.2, 0.6),
+            proportion=0.15,
+            gap_width_range=(0.1, 0.5),
             platform_width=2.0,
             border_width=0.25,
             gap_depth=-2.0,
             ground_width_range=(0.5, 0.5),
-            ground_height_max=0.03,
-        ),
-        "stonebridge": HfStonesBridgeTerrainCfg(
-            proportion=0.08,
-            platform_width=2.0,
-            border_width=0.25,
-            holes_depth=-2.0,
-            stone_height_max=0.03,
-            stone_width_range=(0.25, 0.35),
-            stone_distance_range=(0.3, 0.5),
-            stone_length_range=(0.6, 1.0),
-            stone_lateral_distance_range=(0.0, 0.0),
-        ),
-        "rails": terrain_gen.MeshRailsTerrainCfg(
-            proportion=0.08,
-            rail_height_range=(0.12, 0.03),
-            rail_thickness_range=(0.1, 0.3),
-            platform_width=2.0,
+            ground_height_max=0.025,
         ),
     }
 
@@ -527,63 +474,39 @@ def configure_g1_attention_play_terrain(terrain_generator: Any) -> None:
     terrain_generator.size = (4.0, 4.0)
     terrain_generator.border_width = 3.0
     terrain_generator.sub_terrains = {
-        "stairs_up": terrain_gen.MeshPyramidStairsTerrainCfg(
+        "stepping_stones_easy": terrain_gen.HfSteppingStonesTerrainCfg(
             proportion=1.0,
-            step_height_range=(0.04, 0.16),
+            stone_height_max=0.03,
+            stone_width_range=(0.3, 0.5),
+            stone_distance_range=(0.05, 0.15),
+            platform_width=1.4,
+            holes_depth=-1.5,
+            border_width=0.25,
+        ),
+        "stepping_stones_hard": terrain_gen.HfSteppingStonesTerrainCfg(
+            proportion=1.0,
+            stone_height_max=0.05,
+            stone_width_range=(0.25, 0.4),
+            stone_distance_range=(0.1, 0.25),
+            platform_width=1.4,
+            holes_depth=-1.5,
+            border_width=0.25,
+        ),
+        "stairs_up_low": terrain_gen.MeshPyramidStairsTerrainCfg(
+            proportion=1.0,
+            step_height_range=(0.05, 0.10),
             step_width=0.35,
             platform_width=1.4,
             border_width=0.4,
             holes=False,
         ),
-        "stairs_down": terrain_gen.MeshInvertedPyramidStairsTerrainCfg(
+        "stairs_up_mid": terrain_gen.MeshPyramidStairsTerrainCfg(
             proportion=1.0,
-            step_height_range=(0.04, 0.16),
-            step_width=0.35,
+            step_height_range=(0.10, 0.16),
+            step_width=0.30,
             platform_width=1.4,
             border_width=0.4,
             holes=False,
-        ),
-        "stakes_easy": HfDoubleColumnStakesTerrainCfg(
-            proportion=1.0,
-            stake_height_max=0.015,
-            stake_side_range=(0.24, 0.36),
-            stake_gap_range=(0.12, 0.26),
-            column_gap_range=(0.1, 0.1),
-            column_jitter=0.0,
-            holes_depth=-1.5,
-            platform_width=1.4,
-            border_width=0.25,
-        ),
-        "stakes_alternate": HfAlternateColumnStakesTerrainCfg(
-            proportion=1.0,
-            stake_height_max=0.0,
-            stake_side_range=(0.24, 0.36),
-            stake_gap_range=(0.10, 0.22),
-            column_gap_range=(0.05, 0.22),
-            column_jitter=0.0,
-            holes_depth=-1.5,
-            platform_width=1.4,
-            border_width=0.25,
-        ),
-        "ame_gaps": HfConcentricGapTerrainCfg(
-            proportion=1.0,
-            gap_width_range=(0.10, 0.32),
-            platform_width=1.4,
-            border_width=0.25,
-            gap_depth=-1.5,
-            ground_width_range=(0.5, 0.5),
-            ground_height_max=0.015,
-        ),
-        "stonebridge": HfStonesBridgeTerrainCfg(
-            proportion=1.0,
-            platform_width=1.4,
-            border_width=0.25,
-            holes_depth=-1.5,
-            stone_height_max=0.015,
-            stone_width_range=(0.28, 0.38),
-            stone_distance_range=(0.22, 0.38),
-            stone_length_range=(0.7, 1.0),
-            stone_lateral_distance_range=(0.0, 0.0),
         ),
     }
 
@@ -615,7 +538,7 @@ class G1AttentionEnvCfg(AttentionEnvCfgMixin, AttentionBaseEnvCfg):
     def configure_attention_train(self, height_scanner_prim_path: str) -> None:
         AttentionEnvCfgMixin.configure_attention_train(self, height_scanner_prim_path)
 
-        self.scene.terrain.max_init_terrain_level = 3
+        self.scene.terrain.max_init_terrain_level = 5
         if self.scene.terrain.terrain_generator is not None:
             configure_g1_attention_train_terrain(self.scene.terrain.terrain_generator)
 
@@ -624,6 +547,12 @@ class G1AttentionEnvCfg(AttentionEnvCfgMixin, AttentionBaseEnvCfg):
 
         self.scene.num_envs = 6
         self.scene.terrain.max_init_terrain_level = None
+
+        # Fixed forward velocity with heading lock — mirrors AME play behavior
+        self.commands.base_velocity.ranges.lin_vel_x = (1.0, 1.0)
+        self.commands.base_velocity.ranges.lin_vel_y = (0.0, 0.0)
+        self.commands.base_velocity.ranges.ang_vel_z = (-1.0, 1.0)
+        self.commands.base_velocity.ranges.heading = (0.0, 0.0)
 
         if self.scene.terrain.terrain_generator is not None:
             configure_g1_attention_play_terrain(self.scene.terrain.terrain_generator)

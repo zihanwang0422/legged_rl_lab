@@ -199,3 +199,57 @@ def dof_power_l1(
     tau = asset.data.applied_torque[:, asset_cfg.joint_ids]
     omega = asset.data.joint_vel[:, asset_cfg.joint_ids]
     return torch.sum(torch.abs(tau * omega), dim=-1)
+
+
+def air_time_variance_penalty(
+    env: ManagerBasedRLEnv,
+    sensor_cfg: SceneEntityCfg,
+) -> torch.Tensor:
+    """Penalize variance in the amount of time each foot spends in the air/on the ground relative to each other."""
+    contact_sensor: ContactSensor = env.scene.sensors[sensor_cfg.name]
+    if contact_sensor.cfg.track_air_time is False:
+        raise RuntimeError("Activate ContactSensor's track_air_time!")
+    last_air_time = contact_sensor.data.last_air_time[:, sensor_cfg.body_ids]
+    last_contact_time = contact_sensor.data.last_contact_time[:, sensor_cfg.body_ids]
+    return torch.var(torch.clip(last_air_time, max=0.5), dim=1) + torch.var(
+        torch.clip(last_contact_time, max=0.5), dim=1
+    )
+
+
+def joint_coordination_rel(
+    env: ManagerBasedRLEnv,
+    asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
+    coord_joints: list[list[str]] | None = None,
+    coord_signs: list[list[float]] | None = None,
+) -> torch.Tensor:
+    """Reward coordinated motion between joint pairs using relative positions and signs.
+
+    Args:
+        coord_joints: List of joint pairs to coordinate.
+        coord_signs: Sign per joint in each pair, e.g. [[1.0, -1.0]].
+    """
+    asset: Articulation = env.scene[asset_cfg.name]
+
+    if coord_joints is None:
+        return torch.zeros(env.num_envs, device=env.device)
+
+    if not hasattr(env, "joint_coord_joints_cache") or env.joint_coord_joints_cache is None:
+        env.joint_coord_joints_cache = [
+            [asset.find_joints(joint_name)[0] for joint_name in joint_pair] for joint_pair in coord_joints
+        ]
+
+    if coord_signs is None:
+        coord_signs = [[1.0, 1.0]] * len(coord_joints)
+
+    reward = torch.zeros(env.num_envs, device=env.device)
+
+    for i, joint_indices in enumerate(env.joint_coord_joints_cache):
+        joint1_idx = joint_indices[0][0]
+        joint2_idx = joint_indices[1][0]
+        joint1_rel = asset.data.joint_pos[:, joint1_idx] - asset.data.default_joint_pos[:, joint1_idx]
+        joint2_rel = asset.data.joint_pos[:, joint2_idx] - asset.data.default_joint_pos[:, joint2_idx]
+        joint1_signed = joint1_rel * coord_signs[i][0]
+        joint2_signed = joint2_rel * coord_signs[i][1]
+        reward += torch.square(joint1_signed - joint2_signed)
+
+    return reward * (1.0 / len(coord_joints))

@@ -41,6 +41,7 @@ parser.add_argument(
     help="Use the pre-trained checkpoint from Nucleus.",
 )
 parser.add_argument("--real-time", action="store_true", default=False, help="Run in real-time, if possible.")
+parser.add_argument("--vis_attention", action="store_true", default=False, help="Visualize attention weights as colored markers (env 0).")
 parser.add_argument("--motion_file", type=str, default=None, help="Path to motion NPZ file (required for Tracking tasks).")
 parser.add_argument("--ckpt", type=str, default=None, help="Name of a checkpoint file under the ckpt/ directory (e.g. 'model.pt').")
 # append RSL-RL cli arguments
@@ -65,6 +66,9 @@ simulation_app = app_launcher.app
 import gymnasium as gym
 import time
 import torch
+
+from isaaclab.markers import VisualizationMarkers, VisualizationMarkersCfg
+import isaaclab.sim as sim_utils
 
 from rsl_rl.runners import DistillationRunner, OnPolicyRunner, TsDepthRunner
 from legged_rl_lab.tasks.tracking.utils.exporter import attach_onnx_metadata, export_motion_policy_as_onnx
@@ -233,7 +237,107 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
 
     dt = env.unwrapped.step_dt
     robot_asset = env.unwrapped.scene["robot"]
-    
+
+    # --- attention viz setup ---
+    attention_visualizer = None
+    identity_quat = None
+    attention_num_bins = 8
+
+    def _infer_scan_grid_shape():
+        if hasattr(policy_nn, "width") and hasattr(policy_nn, "length"):
+            rows = int(getattr(policy_nn, "width"))
+            cols = int(getattr(policy_nn, "length"))
+            if rows > 0 and cols > 0:
+                return rows, cols
+        try:
+            pattern_cfg = env_cfg.scene.height_scanner.pattern_cfg
+            resolution = float(pattern_cfg.resolution)
+            size_x, size_y = pattern_cfg.size
+            cols = int(round(float(size_x) / resolution)) + 1
+            rows = int(round(float(size_y) / resolution)) + 1
+            if rows > 0 and cols > 0:
+                return rows, cols
+        except Exception:
+            return None
+        return None
+
+    scan_grid_shape = _infer_scan_grid_shape()
+
+    def _build_attention_visualizer(device):
+        nonlocal identity_quat
+        colors = []
+        for i in range(attention_num_bins):
+            t = i / max(1, attention_num_bins - 1)
+            colors.append((t, 0.0, 1.0 - t))
+        markers = {
+            f"dot_{i}": sim_utils.SphereCfg(
+                radius=0.02,
+                visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=colors[i]),
+            )
+            for i in range(attention_num_bins)
+        }
+        cfg = VisualizationMarkersCfg(prim_path="/Visuals/attention", markers=markers)
+        identity_quat = torch.tensor([0.0, 0.0, 0.0, 1.0], device=device)
+        return VisualizationMarkers(cfg)
+
+    def _vis_attention_on_terrain(attn, env_obj, step):
+        if attn is None or attn.numel() == 0:
+            return
+        try:
+            height_scanner = env_obj.unwrapped.scene["height_scanner"]
+            if not hasattr(height_scanner.data, "ray_hits_w"):
+                return
+            ray_hits = height_scanner.data.ray_hits_w[0]
+            attn0 = attn[0]
+            if attn0.dim() > 1:
+                attn0 = attn0.reshape(-1)
+            n_attn = int(attn0.shape[0])
+            n_rays = int(ray_hits.shape[0])
+
+            if n_rays == n_attn:
+                selected_hits = ray_hits
+                attn_vals = attn0
+            elif n_rays > n_attn:
+                selected_hits = None
+                if scan_grid_shape is not None:
+                    rows, cols = scan_grid_shape
+                    if rows * cols == n_rays:
+                        ray_hits_grid = ray_hits.reshape(rows, cols, 3)
+                        if hasattr(policy_nn, "cnn_downsample") and bool(getattr(policy_nn, "cnn_downsample")):
+                            ds_hits = ray_hits_grid[::2, ::2, :].reshape(-1, 3)
+                            if ds_hits.shape[0] == n_attn:
+                                selected_hits = ds_hits
+                if selected_hits is None:
+                    sample_idx = torch.linspace(0, n_rays - 1, steps=n_attn, device=ray_hits.device).round().long()
+                    selected_hits = ray_hits[sample_idx]
+                attn_vals = attn0
+            else:
+                selected_hits = ray_hits
+                attn_vals = attn0[:n_rays]
+
+            valid_mask = (selected_hits[:, 2] > -50.0) & (selected_hits[:, 2] < 100.0)
+            if not valid_mask.any():
+                return
+            selected_hits = selected_hits[valid_mask]
+            attn_vals = attn_vals[valid_mask]
+
+            attn_norm = (attn_vals - attn_vals.min()) / (attn_vals.max() - attn_vals.min() + 1e-6)
+            n_vis = selected_hits.shape[0]
+            bins = (attn_norm * (attention_num_bins - 1)).long().clamp(0, attention_num_bins - 1)
+
+            points = selected_hits.clone()
+            points[:, 2] += 0.05
+            scale_factors = attn_norm * (3.0 - 0.5) + 0.5
+            scales = scale_factors.unsqueeze(1).expand(-1, 3)
+
+            orientations = identity_quat.unsqueeze(0).expand(n_vis, -1)
+            attention_visualizer.visualize(points, orientations, marker_indices=bins, scales=scales)
+        except Exception as e:
+            if step % 100 == 0:
+                print(f"[WARN] Attention terrain viz failed: {e}")
+
+    if args_cli.vis_attention:
+        attention_visualizer = _build_attention_visualizer(env.unwrapped.device)
 
     # reset environment
     obs = env.get_observations()
@@ -249,6 +353,11 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
             obs, _, dones, _ = env.step(actions)
             # reset recurrent states for episodes that have terminated
             policy_nn.reset(dones)
+            # visualize attention weights from the last forward pass
+            if args_cli.vis_attention and attention_visualizer is not None:
+                attn_w = getattr(policy_nn, "last_attention_weights", None)
+                if attn_w is not None:
+                    _vis_attention_on_terrain(attn_w, env, timestep)
             
         if args_cli.video:
             timestep += 1
