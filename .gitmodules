@@ -4,3 +4,6 @@
 [submodule "deploy/g1_deploy/unitree_sdk2_python"]
 	path = deploy/g1_deploy/unitree_sdk2_python
 	url = https://github.com/zhw0422/unitree_sdk2_python.git
+[submodule "deploy/g1_deploy/unitree_ros2"]
+	path = deploy/g1_deploy/unitree_ros2
+	url = https://github.com/zhw0422/unitree_ros2.git
