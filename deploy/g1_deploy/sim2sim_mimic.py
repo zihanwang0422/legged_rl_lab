@@ -28,6 +28,7 @@ from types import SimpleNamespace
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'utils'))
 from joystick import create_gamepad_controller
+from sim2sim_walk import KeyboardController
 
 
 # ==================== Math Helpers ====================
@@ -494,6 +495,8 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Sim2Sim for G1 Motion Tracking")
     parser.add_argument('--model', type=str, default='g1_dance.onnx', help='ONNX model filename')
     parser.add_argument('--config', type=str, default='g1_mimic.yaml', help='Config YAML filename')
+    parser.add_argument('--input', choices=['gamepad', 'keyboard'], default='gamepad',
+                        help='Control input device.')
     args = parser.parse_args()
 
     script_dir = os.path.dirname(os.path.abspath(__file__))
@@ -520,25 +523,39 @@ if __name__ == '__main__':
     controller = MimicSim2SimController(flat_config, 'g1_flat_1.onnx')
     controller._active_policy_idx = 1
 
-    # 2. Initialize gamepad (gamesir)
+    # 2. Initialize input device
     cfg = controller.config
-    gamepad = create_gamepad_controller(
-        getattr(cfg, 'gamepad_type_sim2sim', 'gamesir'),
-        vx_range=[-1.0, 1.0],
-        vy_range=[-0.5, 0.5],
-        vyaw_range=[-1.0, 1.0],
-    )
+    if args.input == 'keyboard':
+        gamepad = KeyboardController(
+            vx_range=[-1.0, 1.0],
+            vy_range=[-0.5, 0.5],
+            vyaw_range=[-1.0, 1.0],
+        )
+    else:
+        gamepad = create_gamepad_controller(
+            getattr(cfg, 'gamepad_type_sim2sim', 'gamesir'),
+            vx_range=[-1.0, 1.0],
+            vy_range=[-0.5, 0.5],
+            vyaw_range=[-1.0, 1.0],
+        )
     gamepad.start()
     gamepad.active_policy = 1
 
     print("\n" + "=" * 70)
     print("  Motion Tracking Sim2Sim (MuJoCo)")
     print("  Starts with flat walk policy (g1_flat_1.onnx) for stabilization")
-    print("  RB + A  : Flat walk policy (stand / stabilize)")
-    print("  RB + B  : Main mimic / tracking policy")
-    print("  RB + X  : Policy 3 (placeholder)")
-    print("  RB + Y  : Policy 4 (placeholder)")
-    print("  Start   : Exit")
+    if args.input == 'keyboard':
+        print("  1 : Flat walk policy (stand / stabilize)")
+        print("  2 : Main mimic / tracking policy")
+        print("  3 : g1_jump.onnx")
+        print("  4 : g1_dance.onnx")
+        print("  X or Esc : Exit")
+    else:
+        print("  RB + A  : Flat walk policy (stand / stabilize)")
+        print("  RB + B  : Main mimic / tracking policy")
+        print("  RB + X  : Policy 3 (placeholder)")
+        print("  RB + Y  : Policy 4 (placeholder)")
+        print("  Start   : Exit")
     print("=" * 70 + "\n")
 
     # 3. Run

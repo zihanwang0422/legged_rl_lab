@@ -337,7 +337,7 @@ class G1AttentionRewardsCfg(AttentionRewardsCfg):
     )
     feet_too_near = RewTerm(
         func=mdp.feet_too_near,
-        weight=-1.0,
+        weight=-5.0,
         params={"asset_cfg": SceneEntityCfg("robot", body_names=list(G1_FOOT_BODIES)), "threshold": 0.2},
     )
     # -- coordination

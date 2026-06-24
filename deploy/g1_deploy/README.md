@@ -125,7 +125,16 @@ python deploy/g1_deploy/sim2sim_mimic.py \
   --model g1_jump.onnx
 ```
 
-`sim2sim_mimic.py` starts with `g1_flat_1.onnx` for standing stabilization. After the robot is stable, press **RB + B** to switch to the tracking policy specified by `--model`.
+Keyboard:
+
+```bash
+python deploy/g1_deploy/sim2sim_mimic.py \
+  --config g1_mimic.yaml \
+  --model g1_dance.onnx \
+  --input keyboard
+```
+
+`sim2sim_mimic.py` starts with `g1_flat_1.onnx` for standing stabilization. After the robot is stable, press **RB + B** (gamepad) or **2** (keyboard) to switch to the tracking policy specified by `--model`.
 
 ### Controls
 
@@ -179,6 +188,8 @@ Keyboard:
 
 #### Motion Tracking (`sim2sim_mimic.py`)
 
+Gamepad:
+
 | Input | Function |
 | --- | --- |
 | **RB + A** | Flat walk stabilization policy |
@@ -186,6 +197,16 @@ Keyboard:
 | **RB + X** | `g1_jump.onnx` |
 | **RB + Y** | `g1_dance.onnx` |
 | **Start** | Exit |
+
+Keyboard:
+
+| Input | Function |
+| --- | --- |
+| **1** | Flat walk stabilization policy |
+| **2** | Main mimic/tracking policy specified by `--model` |
+| **3** | `g1_jump.onnx` |
+| **4** | `g1_dance.onnx` |
+| **X** or **Esc** | Exit |
 
 Policy switches are printed in the terminal with messages such as `[PolicySwitch] Active policy: N`.
 
