@@ -7,3 +7,6 @@
 [submodule "deploy/g1_deploy/unitree_ros2"]
 	path = deploy/g1_deploy/unitree_ros2
 	url = https://github.com/zhw0422/unitree_ros2.git
+[submodule "deploy/go1_deploy/unitree_legged_sdk"]
+	path = deploy/go1_deploy/unitree_legged_sdk
+	url = https://github.com/zhw0422/unitree_legged_sdk.git
