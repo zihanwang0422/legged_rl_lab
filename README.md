@@ -417,27 +417,97 @@ python scripts/rsl_rl/export_ts_depth_policy.py \
 <details>
 <summary><b>Attention</b></summary>
 
-#### AME Attention
+#### AME Attention 
 
-This task uses an AME-style CNN + multi-head attention encoder over a 33x21x3 local terrain map, matching the AME paper-style resolution. Training uses the full-size AME parkour terrain preset: 10x20 terrain curriculum, 8m x 8m tiles, 50m border, 0.05m horizontal scale, up/down stairs, AME stakes, concentric gaps, stone bridge, and rails. Play keeps a smaller curated obstacle layout for inspection. It is a normal PPO task, separate from the TS-Depth teacher/student runner.
+
+#### 训练（Train）
 
 ```bash
-# G1 — train AME attention parkour
+# 从头训练 — G1 attention parkour
 python scripts/rsl_rl/train.py \
   --task LeggedRLLab-Isaac-Parkour-Attention-Unitree-G1-v0 \
-  --num_envs 256 \
-  --headless
+  --num_envs 2048 \
+  --headless \
+  --logger tensorboard
 
-# G1 — play
+# 从 checkpoint 恢复训练
+python scripts/rsl_rl/train.py \
+  --task LeggedRLLab-Isaac-Parkour-Attention-Unitree-G1-v0 \
+  --num_envs 2048 \
+  --headless \
+  --logger tensorboard \
+  --resume \
+  --load_run 2026-06-18_18-15-43 \
+  --checkpoint model_57500.pt \
+  --run_name finetune_stones
+```
+
+
+#### Finetune
+
+微调阶段专注于梅花桩（stake）地形的步态训练，强制左右脚交替踩踏。通过设置 `FINETUNE = True` 启用：
+
+```python
+# 在 g1_attention_env_cfg.py 中：
+FINETUNE = True  # 启用微调模式
+```
+
+**微调模式的变化：**
+
+1. **地形混合**：80% 梅花桩（double_column + alternate_column × 2），20% 楼梯/间隙/石桥
+2. **奖励权重增强**：
+   - `feet_air_time`: 0.25 → 0.5（更强的交替步态奖励）
+   - `feet_air_time_variance`: -0.7 → -2.0（更强的不对称惩罚）
+   - `feet_stumble`: -2.0 → -5.0（更强的绊倒惩罚）
+   - `flat_orientation`: -1.0 → -5.0（更强的姿态稳定性）
+   - `joint_coordination`: -0.1 → -0.5（更强的手臂-腿部协调）
+
+```bash
+# 1. 设置 FINETUNE = True（在 g1_attention_env_cfg.py 中）
+# 2. 从预训练 checkpoint 开始微调
+python scripts/rsl_rl/train.py \
+  --task LeggedRLLab-Isaac-Parkour-Attention-Unitree-G1-v0 \
+  --num_envs 2048 \
+  --headless \
+  --logger tensorboard \
+  --resume \
+  --load_run 2026-06-18_18-15-43 \
+  --checkpoint model_57500.pt \
+  --run_name finetune_stones
+
+# 3. 微调完成后，将 FINETUNE 改回 False 再 play
+```
+
+#### Play（可视化评估）
+
+```bash
 python scripts/rsl_rl/play.py \
   --task LeggedRLLab-Isaac-Parkour-Attention-Unitree-G1-Play-v0 \
-  --num_envs 50
+  --num_envs 14 \
+  --ckpt model_54000.pt \
+  --vis_attention \
+  --print_attention_stats \
+  --save_attention_weights
+```
 
+#### Play 地形配置
+
+Play 时使用 `configure_g1_attention_play_terrain()` 配置地形，当前默认使用 `HfAlternateColumnStakesTerrain`（交替梅花桩）：
+- 7 种子地形 × 2 个机器人 = 14 个环境
+- 固定参数：桩高 0.0m，边长 0.2m，桩间距 0.3m，列间距 0.3m，无抖动
+
+如需切换 play 地形，编辑 `g1_attention_env_cfg.py` 中的 `configure_g1_attention_play_terrain()` 函数，取消注释所需的地形类型。
+
+
+#### Go2 训练
+
+```bash
 # Go2 — train AME attention parkour
 python scripts/rsl_rl/train.py \
   --task LeggedRLLab-Isaac-Parkour-Attention-Unitree-Go2-v0 \
-  --num_envs  \
-  --headless
+  --num_envs 2048 \
+  --headless \
+  --logger tensorboard
 
 # Go2 — play
 python scripts/rsl_rl/play.py \

@@ -42,6 +42,9 @@ parser.add_argument(
 )
 parser.add_argument("--real-time", action="store_true", default=False, help="Run in real-time, if possible.")
 parser.add_argument("--vis_attention", action="store_true", default=False, help="Visualize attention weights as colored markers (env 0).")
+parser.add_argument("--save_attention_weights", action="store_true", default=False, help="Save attention weights to .npy file during play.")
+parser.add_argument("--print_attention_stats", action="store_true", default=False, help="Print attention statistics every N steps.")
+parser.add_argument("--attention_print_interval", type=int, default=50, help="Interval for printing attention stats (steps).")
 parser.add_argument("--motion_file", type=str, default=None, help="Path to motion NPZ file (required for Tracking tasks).")
 parser.add_argument("--ckpt", type=str, default=None, help="Name of a checkpoint file under the ckpt/ directory (e.g. 'model.pt').")
 # append RSL-RL cli arguments
@@ -242,6 +245,7 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
     attention_visualizer = None
     identity_quat = None
     attention_num_bins = 8
+    attention_weights_list = []  # for saving to .npy
 
     def _infer_scan_grid_shape():
         if hasattr(policy_nn, "width") and hasattr(policy_nn, "length"):
@@ -262,6 +266,7 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
         return None
 
     scan_grid_shape = _infer_scan_grid_shape()
+    print(f"[INFO] Inferred scan grid shape: {scan_grid_shape}")
 
     def _build_attention_visualizer(device):
         nonlocal identity_quat
@@ -280,6 +285,121 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
         identity_quat = torch.tensor([0.0, 0.0, 0.0, 1.0], device=device)
         return VisualizationMarkers(cfg)
 
+    def _align_attention_to_rays(attn, ray_hits, n_rays):
+        """Align attention features to ray hit points, handling CNN downsampling."""
+        attn0 = attn[0]
+        # Flatten: handle [num_heads, 1, N] or [1, N] shapes
+        if attn0.dim() == 3:
+            # Average across heads for visualization
+            attn0 = attn0.mean(dim=0).squeeze(0)
+        elif attn0.dim() == 2:
+            attn0 = attn0.squeeze(0) if attn0.shape[0] == 1 else attn0.reshape(-1)
+        else:
+            attn0 = attn0.reshape(-1)
+
+        n_attn = int(attn0.shape[0])
+
+        if n_rays == n_attn:
+            selected_hits = ray_hits
+            attn_vals = attn0
+        elif n_rays > n_attn:
+            selected_hits = None
+            if scan_grid_shape is not None:
+                rows, cols = scan_grid_shape
+                if rows * cols == n_rays:
+                    ray_hits_grid = ray_hits.reshape(rows, cols, 3)
+                    if hasattr(policy_nn, "cnn_downsample") and bool(getattr(policy_nn, "cnn_downsample")):
+                        ds_hits = ray_hits_grid[::2, ::2, :].reshape(-1, 3)
+                        if ds_hits.shape[0] == n_attn:
+                            selected_hits = ds_hits
+            if selected_hits is None:
+                sample_idx = torch.linspace(0, n_rays - 1, steps=n_attn, device=ray_hits.device).round().long()
+                selected_hits = ray_hits[sample_idx]
+            attn_vals = attn0
+        else:
+            selected_hits = ray_hits
+            attn_vals = attn0[:n_rays]
+
+        return selected_hits, attn_vals
+
+    def _print_attention_stats(attn, step):
+        """Print attention statistics to console."""
+        if attn is None or attn.numel() == 0:
+            return
+
+        attn_np = attn[0].cpu().numpy()
+        print(f"\n{'─'*60}")
+        print(f"[ATTN] Step {step} ─ Attention Stats")
+        print(f"{'─'*60}")
+
+        # Handle multi-head attention [num_heads, 1, N] or [1, N]
+        if attn_np.ndim == 3 and attn_np.shape[0] > 1:
+            n_heads = attn_np.shape[0]
+            n_features = attn_np.shape[-1]
+
+            # Per-head statistics
+            head_entropies = []
+            head_max_positions = []
+            for h in range(n_heads):
+                head_weights = attn_np[h].flatten()
+                # Entropy (higher = more uniform, lower = more focused)
+                eps = 1e-8
+                entropy = -np.sum(head_weights * np.log(head_weights + eps))
+                max_entropy = np.log(n_features)
+                normalized_entropy = entropy / max_entropy
+                head_entropies.append(normalized_entropy)
+                head_max_positions.append(np.argmax(head_weights))
+
+            # Average across heads
+            attn_mean = attn_np.mean(axis=0).flatten()
+        else:
+            n_heads = 1
+            attn_mean = attn_np.flatten()
+            head_entropies = [0.0]
+            head_max_positions = [np.argmax(attn_mean)]
+
+        # Overall stats
+        print(f"  Heads: {n_heads}, Features: {len(attn_mean)}")
+        print(f"  Mean: {attn_mean.mean():.6f}, Std: {attn_mean.std():.6f}")
+        print(f"  Min: {attn_mean.min():.6f}, Max: {attn_mean.max():.6f}")
+
+        if n_heads > 1:
+            entropies = np.array(head_entropies)
+            print(f"  Head entropy (norm): mean={entropies.mean():.3f}, std={entropies.std():.3f}, "
+                  f"min={entropies.min():.3f}, max={entropies.max():.3f}")
+            print(f"  Focused heads (entropy<0.7): {np.sum(entropies < 0.7)}/{n_heads}")
+
+        # Top-5 attention positions
+        top5 = np.argsort(attn_mean)[-5:][::-1]
+        print(f"  Top-5 positions: {list(top5)}")
+        print(f"  Top-5 values:    {[f'{attn_mean[i]:.6f}' for i in top5]}")
+
+        # Spatial decomposition
+        n_f = len(attn_mean)
+        for h in [17, 33]:
+            w = n_f // h
+            if h * w == n_f:
+                attn_grid = attn_mean.reshape(h, w)
+                left = attn_grid[:, :w//2].mean()
+                right = attn_grid[:, w//2:].mean()
+                front = attn_grid[h//2:, :].mean()
+                back = attn_grid[:h//2, :].mean()
+                print(f"  Spatial ({h}x{w}): left={left:.6f}, right={right:.6f}, "
+                      f"front={front:.6f}, back={back:.6f}")
+                # Column means (left-to-right bias)
+                col_means = attn_grid.mean(axis=0)
+                print(f"  Column means (L→R): {np.array2string(col_means, precision=4, max_line_width=120)}")
+                # Row means (back-to-front bias)
+                row_means = attn_grid.mean(axis=1)
+                print(f"  Row means (B→F): {np.array2string(row_means, precision=4, max_line_width=120)}")
+                break
+
+        # Per-head max positions for multi-head
+        if n_heads > 1:
+            # Show spatial distribution of each head's focus
+            max_pos = np.array(head_max_positions)
+            print(f"  Head focus positions: {list(max_pos)}")
+
     def _vis_attention_on_terrain(attn, env_obj, step):
         if attn is None or attn.numel() == 0:
             return
@@ -288,32 +408,9 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
             if not hasattr(height_scanner.data, "ray_hits_w"):
                 return
             ray_hits = height_scanner.data.ray_hits_w[0]
-            attn0 = attn[0]
-            if attn0.dim() > 1:
-                attn0 = attn0.reshape(-1)
-            n_attn = int(attn0.shape[0])
             n_rays = int(ray_hits.shape[0])
 
-            if n_rays == n_attn:
-                selected_hits = ray_hits
-                attn_vals = attn0
-            elif n_rays > n_attn:
-                selected_hits = None
-                if scan_grid_shape is not None:
-                    rows, cols = scan_grid_shape
-                    if rows * cols == n_rays:
-                        ray_hits_grid = ray_hits.reshape(rows, cols, 3)
-                        if hasattr(policy_nn, "cnn_downsample") and bool(getattr(policy_nn, "cnn_downsample")):
-                            ds_hits = ray_hits_grid[::2, ::2, :].reshape(-1, 3)
-                            if ds_hits.shape[0] == n_attn:
-                                selected_hits = ds_hits
-                if selected_hits is None:
-                    sample_idx = torch.linspace(0, n_rays - 1, steps=n_attn, device=ray_hits.device).round().long()
-                    selected_hits = ray_hits[sample_idx]
-                attn_vals = attn0
-            else:
-                selected_hits = ray_hits
-                attn_vals = attn0[:n_rays]
+            selected_hits, attn_vals = _align_attention_to_rays(attn, ray_hits, n_rays)
 
             valid_mask = (selected_hits[:, 2] > -50.0) & (selected_hits[:, 2] < 100.0)
             if not valid_mask.any():
@@ -338,6 +435,13 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
 
     if args_cli.vis_attention:
         attention_visualizer = _build_attention_visualizer(env.unwrapped.device)
+        print("[INFO] Attention visualization ENABLED — colored spheres on terrain")
+
+    if args_cli.print_attention_stats:
+        print(f"[INFO] Attention stats printing ENABLED — every {args_cli.attention_print_interval} steps")
+
+    if args_cli.save_attention_weights:
+        print("[INFO] Attention weight saving ENABLED")
 
     # reset environment
     obs = env.get_observations()
@@ -353,12 +457,23 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
             obs, _, dones, _ = env.step(actions)
             # reset recurrent states for episodes that have terminated
             policy_nn.reset(dones)
-            # visualize attention weights from the last forward pass
-            if args_cli.vis_attention and attention_visualizer is not None:
-                attn_w = getattr(policy_nn, "last_attention_weights", None)
-                if attn_w is not None:
-                    _vis_attention_on_terrain(attn_w, env, timestep)
-            
+
+            # --- attention handling ---
+            attn_w = getattr(policy_nn, "last_attention_weights", None)
+
+            # Save attention weights
+            if args_cli.save_attention_weights and attn_w is not None:
+                attention_weights_list.append(attn_w[0].cpu().numpy().copy())
+
+            # Print attention statistics
+            if args_cli.print_attention_stats and attn_w is not None:
+                if timestep % args_cli.attention_print_interval == 0:
+                    _print_attention_stats(attn_w, timestep)
+
+            # Visualize attention on terrain
+            if args_cli.vis_attention and attention_visualizer is not None and attn_w is not None:
+                _vis_attention_on_terrain(attn_w, env, timestep)
+
         if args_cli.video:
             timestep += 1
             # Exit the play loop after recording one video
@@ -369,6 +484,13 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
         sleep_time = dt - (time.time() - start_time)
         if args_cli.real_time and sleep_time > 0:
             time.sleep(sleep_time)
+
+    # Save attention weights at end
+    if args_cli.save_attention_weights and len(attention_weights_list) > 0:
+        import numpy as np
+        save_path = os.path.join(os.path.dirname(resume_path), "attention_weights_play.npy")
+        np.save(save_path, np.array(attention_weights_list))
+        print(f"[INFO] Attention weights saved to: {save_path} (shape: {np.array(attention_weights_list).shape})")
 
     # close the simulator
     env.close()
