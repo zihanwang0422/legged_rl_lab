@@ -42,6 +42,7 @@ parser.add_argument(
     "--ray-proc-id", "-rid", type=int, default=None, help="Automatically configured by Ray integration, otherwise None."
 )
 parser.add_argument("--motion_file", type=str, default=None, help="Path to motion NPZ file (required for Tracking tasks).")
+parser.add_argument("--ckpt", type=str, default=None, help="Name of a checkpoint file under ckpt/ or a direct path.")
 # append RSL-RL cli arguments
 cli_args.add_rsl_rl_args(parser)
 # append AppLauncher cli args
@@ -119,6 +120,33 @@ torch.backends.cuda.matmul.allow_tf32 = True
 torch.backends.cudnn.allow_tf32 = True
 torch.backends.cudnn.deterministic = False
 torch.backends.cudnn.benchmark = False
+
+
+def _is_direct_checkpoint_path(checkpoint: str | None) -> bool:
+    """Return True when the checkpoint argument looks like a local path."""
+    if not checkpoint:
+        return False
+    checkpoint = os.path.expanduser(checkpoint)
+    return os.path.isabs(checkpoint) or os.path.dirname(checkpoint) != "" or os.path.isfile(checkpoint)
+
+
+def _resolve_checkpoint_path(log_root_path: str, agent_cfg: RslRlBaseRunnerCfg) -> str:
+    """Resolve checkpoints from ckpt/, explicit paths, or the experiment log tree."""
+    if args_cli.ckpt:
+        ckpt_path = os.path.expanduser(args_cli.ckpt)
+        if not os.path.isabs(ckpt_path) and not os.path.exists(ckpt_path):
+            ckpt_path = os.path.join("ckpt", args_cli.ckpt)
+        if not os.path.isfile(ckpt_path):
+            raise FileNotFoundError(f"Checkpoint not found: {ckpt_path}")
+        return os.path.abspath(ckpt_path)
+
+    if _is_direct_checkpoint_path(agent_cfg.load_checkpoint):
+        checkpoint_path = os.path.expanduser(agent_cfg.load_checkpoint)
+        if not os.path.isfile(checkpoint_path):
+            raise FileNotFoundError(f"Checkpoint not found: {checkpoint_path}")
+        return os.path.abspath(checkpoint_path)
+
+    return get_checkpoint_path(log_root_path, agent_cfg.load_run, agent_cfg.load_checkpoint)
 
 
 @hydra_task_config(args_cli.task, args_cli.agent)
@@ -202,9 +230,16 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
         print(f"  [{i:2d}] {name:20s} = {pos:+.4f} rad")
     print("="*70 + "\n")
 
+    should_load_checkpoint = (
+        agent_cfg.resume
+        or args_cli.ckpt is not None
+        or _is_direct_checkpoint_path(agent_cfg.load_checkpoint)
+        or agent_cfg.algorithm.class_name == "Distillation"
+    )
+
     # save resume path before creating a new log_dir
-    if agent_cfg.resume or agent_cfg.algorithm.class_name == "Distillation":
-        resume_path = get_checkpoint_path(log_root_path, agent_cfg.load_run, agent_cfg.load_checkpoint)
+    if should_load_checkpoint:
+        resume_path = _resolve_checkpoint_path(log_root_path, agent_cfg)
         if getattr(agent_cfg.algorithm, "distillation", False) and not agent_cfg.algorithm.teacher_checkpoint_path:
             agent_cfg.algorithm.teacher_checkpoint_path = resume_path
 
@@ -240,7 +275,7 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
     # write git state to logs
     runner.add_git_repo_to_log(__file__)
     # load the checkpoint
-    if agent_cfg.resume or agent_cfg.algorithm.class_name == "Distillation":
+    if should_load_checkpoint:
         print(f"[INFO]: Loading model checkpoint from: {resume_path}")
         # load previously trained model
         runner.load(resume_path)

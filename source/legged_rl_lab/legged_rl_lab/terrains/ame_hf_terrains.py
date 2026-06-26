@@ -361,3 +361,122 @@ def alternate_column_stakes_terrain(
     hf_raw[x1:x2, y1:y2] = 0
 
     return np.rint(hf_raw).astype(np.int16)
+
+
+@height_field_to_mesh
+def radial_plank_bridge_terrain(
+    difficulty: float,
+    cfg: ame_hf_terrains_cfg.HfRadialPlankBridgeTerrainCfg,
+) -> np.ndarray:
+    """Generate a terrain with single-plank bridges radiating outward from a central platform.
+
+    A flat platform sits at the center. From it, cfg.num_arms narrow planks extend outward
+    like spokes. Everywhere off the platform and planks is a hole, so the robot must balance
+    along a single plank to cross from the center to the terrain border.
+
+    Args:
+        difficulty: The difficulty of the terrain. This is a value between 0 and 1.
+        cfg: The configuration for the terrain.
+
+    Returns:
+        The height field of the terrain as a 2D numpy array with discretized heights.
+    """
+    # Interpolate plank width: wider at low difficulty, narrower at high difficulty.
+    plank_width = cfg.plank_width_range[1] - difficulty * (
+        cfg.plank_width_range[1] - cfg.plank_width_range[0]
+    )
+
+    # Switch parameters to discrete units.
+    width_pixels = int(cfg.size[0] / cfg.horizontal_scale)
+    length_pixels = int(cfg.size[1] / cfg.horizontal_scale)
+
+    plank_width_px = max(1, int(plank_width / cfg.horizontal_scale))
+    plank_height_max_px = max(0, int(cfg.plank_height_max / cfg.vertical_scale))
+    holes_depth_px = int(cfg.holes_depth / cfg.vertical_scale)
+    platform_width_px = max(1, int(cfg.platform_width / cfg.horizontal_scale))
+
+    center_x = width_pixels // 2
+    center_y = length_pixels // 2
+    half_plank = plank_width_px / 2.0
+
+    # Max radius available: distance from center to the nearest border, in pixels.
+    max_radius_px = min(
+        center_x,
+        center_y,
+        width_pixels - center_x,
+        length_pixels - center_y,
+    )
+
+    if cfg.arm_length_range is not None:
+        arm_length = cfg.arm_length_range[1] - difficulty * (
+            cfg.arm_length_range[1] - cfg.arm_length_range[0]
+        )
+        arm_length_px = int(arm_length / cfg.horizontal_scale)
+        radius_px = min(max_radius_px, arm_length_px)
+    else:
+        radius_px = max_radius_px
+
+    if plank_height_max_px > 0:
+        plank_height_values = np.arange(
+            -plank_height_max_px,
+            plank_height_max_px + 1,
+            dtype=int,
+        )
+    else:
+        plank_height_values = np.array([0], dtype=int)
+
+    # Start with holes everywhere.
+    hf_raw = np.full((width_pixels, length_pixels), holes_depth_px, dtype=float)
+
+    # Build coordinate grids once, reused for every arm.
+    xs = np.arange(width_pixels).reshape(-1, 1)
+    ys = np.arange(length_pixels).reshape(1, -1)
+    rel_x = xs - center_x
+    rel_y = ys - center_y
+
+    if cfg.num_arms == 8:
+        angles_deg = np.arange(0, 360, 45)
+    else:
+        angles_deg = np.arange(0, 360, 90)
+
+    rng = np.random.default_rng()
+
+    for angle_deg in angles_deg:
+        angle = np.deg2rad(angle_deg)
+        dir_x = np.cos(angle)
+        dir_y = np.sin(angle)
+
+        # Signed distance along the arm direction and perpendicular distance from its centerline.
+        along = rel_x * dir_x + rel_y * dir_y
+        perp = -rel_x * dir_y + rel_y * dir_x
+
+        arm_mask = (
+            (along >= 0)
+            & (along <= radius_px)
+            & (np.abs(perp) <= half_plank)
+        )
+
+        if not np.any(arm_mask):
+            continue
+
+        # Randomize plank height per small longitudinal segment for a slightly uneven walkway.
+        segment_len_px = max(1, plank_width_px)
+        along_idx = np.clip((along / segment_len_px).astype(int), 0, None)
+        max_segment = int(along_idx[arm_mask].max())
+        segment_heights = rng.choice(plank_height_values, size=max_segment + 1)
+
+        hf_raw[arm_mask] = segment_heights[along_idx[arm_mask]]
+
+    # Flat circular or square platform at the center, carved on top of the arms.
+    if cfg.platform_shape == "circle":
+        dist = np.sqrt(rel_x**2 + rel_y**2)
+        platform_mask = dist <= (platform_width_px / 2.0)
+    else:
+        platform_mask = (
+            (np.abs(rel_x) <= platform_width_px / 2.0)
+            & (np.abs(rel_y) <= platform_width_px / 2.0)
+        )
+
+    hf_raw[platform_mask] = 0
+
+    return np.rint(hf_raw).astype(np.int16)

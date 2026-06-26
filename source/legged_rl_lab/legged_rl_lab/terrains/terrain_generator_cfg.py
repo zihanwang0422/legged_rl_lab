@@ -31,8 +31,14 @@ Available presets
     Mixed stairs + slopes at high difficulty — for play / evaluation.
 """
 
+from __future__ import annotations
+
+from dataclasses import MISSING
+
 import isaaclab.terrains as terrain_gen
+from isaaclab.terrains.height_field import HfTerrainBaseCfg
 from isaaclab.terrains.terrain_generator_cfg import TerrainGeneratorCfg
+from isaaclab.utils import configclass
 
 from .ame_hf_terrains_cfg import (
     HfAlternateColumnStakesTerrainCfg,
@@ -40,6 +46,9 @@ from .ame_hf_terrains_cfg import (
     HfDoubleColumnStakesTerrainCfg,
     HfStonesBridgeTerrainCfg,
 )
+
+
+from . import ame_hf_terrains
 
 # ------------------------------------------------------------------ #
 #  Near-flat baseline                                                  #
@@ -701,3 +710,49 @@ STAIRS_SLOPE_HARD_CFG = TerrainGeneratorCfg(
         ),
     },
 )
+
+
+
+
+@configclass
+class HfRadialPlankBridgeTerrainCfg(HfTerrainBaseCfg):
+    """Configuration for a radial single-plank bridge height field terrain.
+
+    A flat circular or square platform sits at the center of the terrain, and a number of narrow
+    single-plank bridges extend outward from the platform like spokes. By default, the planks
+    extend along +x, -x, +y, and -y. If num_arms is set to 8, diagonal planks are added too.
+    Everywhere else is a hole.
+    """
+
+    function = ame_hf_terrains.radial_plank_bridge_terrain
+
+    plank_width_range: tuple[float, float] = MISSING
+    """The minimum and maximum width of each plank in meters.
+
+    Width shrinks towards the minimum as difficulty increases.
+    """
+
+    plank_height_max: float = MISSING
+    """The maximum height variation above or below 0 randomly applied along each plank in meters."""
+
+    num_arms: int = 4
+    """Number of radial arms extending from the center.
+
+    4 means cardinal directions: +x, -x, +y, -y.
+    8 additionally adds the four diagonal arms.
+    """
+
+    arm_length_range: tuple[float, float] | None = None
+    """The minimum and maximum length of each arm in meters.
+
+    If None, arms extend all the way to the terrain border.
+    """
+
+    holes_depth: float = -2.0
+    """The depth of the holes surrounding the planks in meters."""
+
+    platform_width: float = 1.0
+    """The width or diameter of the flat platform at the center in meters."""
+
+    platform_shape: str = "square"
+    """Shape of the central platform. Supported values: "square" or "circle"."""

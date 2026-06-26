@@ -35,6 +35,7 @@ from legged_rl_lab.terrains import (
     HfConcentricGapTerrainCfg,
     HfDoubleColumnStakesTerrainCfg,
     HfStonesBridgeTerrainCfg,
+    HfRadialPlankBridgeTerrainCfg
 )
 import legged_rl_lab.tasks.parkour.attention.mdp as mdp
 
@@ -517,19 +518,19 @@ def configure_g1_attention_play_terrain(terrain_generator: Any) -> None:
     terrain_generator.num_rows = 1
     terrain_generator.num_cols = 1
     terrain_generator.curriculum = False
-    terrain_generator.difficulty_range = (1.0, 1.0)
+    terrain_generator.difficulty_range = (0.6, 0.6)
     terrain_generator.border_width = 3.0
 
     # ── Pick ONE terrain preset below ──────────────────────────────────────
 
     # [A] Alternate column stakes (current default, fixed params)
-    terrain_generator.sub_terrains = {
-        "stakes": HfAlternateColumnStakesTerrainCfg(
-            proportion=0.5, stake_height_max=0.0, stake_side_range=(0.2, 0.2),
-            stake_gap_range=(0.3, 0.3), column_gap_range=(0.3, 0.3), column_jitter=0.0,
-            holes_depth=-2.0, platform_width=2.0, border_width=0.25,
-        ),
-    }
+    # terrain_generator.sub_terrains = {
+    #     "stakes": HfAlternateColumnStakesTerrainCfg(
+    #         proportion=0.5, stake_height_max=0.0, stake_side_range=(0.2, 0.2),
+    #         stake_gap_range=(0.3, 0.3), column_gap_range=(0.3, 0.3), column_jitter=0.0,
+    #         holes_depth=-2.0, platform_width=2.0, border_width=0.25,
+    #     ),
+    # }
 
     # [B] Double column stakes
     # terrain_generator.sub_terrains = {
@@ -582,6 +583,20 @@ def configure_g1_attention_play_terrain(terrain_generator: Any) -> None:
     #         platform_width=2.0, border_width=0.4, holes=False,
     #     ),
     # }
+    # [H] Radial plank bridge — center platform with narrow planks radiating outward like spokes
+    terrain_generator.sub_terrains = {
+        "radial_plank_bridge": HfRadialPlankBridgeTerrainCfg(
+            proportion=1.0,
+            plank_width_range=(0.19, 0.19),
+            plank_height_max=0.03,
+            num_arms=4,
+            arm_length_range=None,
+            holes_depth=-2.0,
+            platform_width=1.0,
+            platform_shape="square",
+            border_width=0.25,
+        ),
+    }
 
 
 def configure_g1_attention_sensors(scene: Any, update_period: float) -> None:
