@@ -99,12 +99,11 @@ source/legged_rl_lab/legged_rl_lab/data/motion/**/h1_2
 # (removed — kept as part of repo now)
 
 # Robot Meshes and Assets
-**/*.stl
-**/*.STL
+# **/*.stl
+# **/*.STL
 **/*.obj
 **/*.OBJ
 **/*.dae
 **/*.DAE
 **/*.zip
-
 
