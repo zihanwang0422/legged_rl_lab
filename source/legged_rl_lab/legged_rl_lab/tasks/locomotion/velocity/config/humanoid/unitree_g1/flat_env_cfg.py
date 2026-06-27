@@ -1,8 +1,6 @@
 # Copyright (c) 2024-2025 zihan wang
 # SPDX-License-Identifier: Apache-2.0
 
-import math
-
 from isaaclab.managers import CurriculumTermCfg as CurrTerm
 from isaaclab.managers import RewardTermCfg as RewTerm
 from isaaclab.managers import ObservationGroupCfg as ObsGroup
@@ -73,18 +71,18 @@ class G1RewardsCfg:
     # -- task
     track_lin_vel_xy = RewTerm(
         func=mdp.track_lin_vel_xy_yaw_frame_exp,
-        weight=1.0,
-        params={"command_name": "base_velocity", "std": math.sqrt(0.5)},
+        weight=3.0,
+        params={"command_name": "base_velocity", "std": 0.5},
     )
     track_ang_vel_z = RewTerm(
-        func=mdp.track_ang_vel_z_exp, weight=1.0, params={"command_name": "base_velocity", "std": math.sqrt(0.5)}
+        func=mdp.track_ang_vel_z_exp, weight=1.0, params={"command_name": "base_velocity", "std": 0.5}
     )
 
     alive = RewTerm(func=mdp.is_alive, weight=0.15)
 
     # -- base
     base_linear_velocity = RewTerm(func=mdp.lin_vel_z_l2, weight=-1.0)
-    base_angular_velocity = RewTerm(func=mdp.ang_vel_xy_l2, weight=-0.05)
+    base_angular_velocity = RewTerm(func=mdp.ang_vel_xy_l2, weight=-0.1)
     joint_vel = RewTerm(func=mdp.joint_vel_l2, weight=-0.001)
     dof_acc_l2 = RewTerm(func=mdp.joint_acc_l2, weight=-2.5e-7)
     action_rate = RewTerm(func=mdp.action_rate_l2, weight=-0.01)
@@ -130,7 +128,7 @@ class G1RewardsCfg:
     # -- feet
     gait = RewTerm(
         func=mdp.feet_gait,
-        weight=0.5,
+        weight=0.2,
         params={
             "period": 0.8,
             "offset": [0.0, 0.5],
@@ -149,7 +147,7 @@ class G1RewardsCfg:
     )
     feet_clearance = RewTerm(
         func=mdp.foot_clearance_reward_humanoid,
-        weight=1.0,
+        weight=0.4,
         params={
             "std": 0.05,
             "tanh_mult": 2.0,
@@ -252,9 +250,12 @@ class UnitreeG1FlatEnvCfg(LocomotionVelocityRoughEnvCfg):
         lin_vel_cmd_levels = CurrTerm(mdp.lin_vel_cmd_levels)
           
         # ------------------------------- Commands ------------------------------
-        self.commands.base_velocity.ranges.lin_vel_x = (-1.0, 1.0)
-        self.commands.base_velocity.ranges.lin_vel_y = (-1.0, 1.0)
-        self.commands.base_velocity.ranges.ang_vel_z = (-1.0, 1.0)
+        self.commands.base_velocity.resampling_time_range = (4.0, 8.0)
+        self.commands.base_velocity.rel_standing_envs = 0.05
+        self.commands.base_velocity.heading_command = False
+        self.commands.base_velocity.ranges.lin_vel_x = (0.2, 1.0)
+        self.commands.base_velocity.ranges.lin_vel_y = (-0.3, 0.3)
+        self.commands.base_velocity.ranges.ang_vel_z = (-0.6, 0.6)
 
         # If the weight of rewards is 0, set rewards to None
         if self.__class__.__name__ == "UnitreeG1FlatEnvCfg":
@@ -276,7 +277,7 @@ class UnitreeG1FlatEnvCfg_PLAY(UnitreeG1FlatEnvCfg):
         # remove random pushing event
         self.events.base_external_force_torque = None
         self.events.push_robot = None
-        self.commands.base_velocity.ranges.lin_vel_x = (-0.5, 1.0)
+        self.commands.base_velocity.ranges.lin_vel_x = (0.0, 1.0)
         self.commands.base_velocity.ranges.lin_vel_y = (-0.5, 0.5)
-        self.commands.base_velocity.ranges.ang_vel_z = (-0.2, 0.2)
+        self.commands.base_velocity.ranges.ang_vel_z = (-1.0, 1.0)
         self.curriculum.lin_vel_cmd_levels = None

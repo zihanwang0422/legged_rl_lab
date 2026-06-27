@@ -43,11 +43,25 @@ class Config:
             self.ang_vel_scale = config["ang_vel_scale"]
             self.dof_pos_scale = config["dof_pos_scale"]
             self.dof_vel_scale = config["dof_vel_scale"]
-            self.action_scale = config["action_scale"]
+            self.action_scale = np.array(config["action_scale"], dtype=np.float32)
+            self.action_clip = config.get("action_clip", 100.0)
+            self.policy_ramp_time = config.get("policy_ramp_time", 0.0)
             self.command_scale = np.array(config["command_scale"], dtype=np.float32)
+            self.command_deadband = config.get("command_deadband", 0.0)
+            self.command_smoothing_tau = config.get("command_smoothing_tau", 0.0)
+            self.command_rate_limit = np.array(config.get("command_rate_limit", [100.0, 100.0, 100.0]), dtype=np.float32)
 
             self.num_actions = config["num_actions"]
             self.num_obs = config["num_obs"]
 
             self.history_length = config["history_length"]
             self.command_range = config["command_range"]
+
+            self.policy_type = config.get("policy_type", "flat")
+            self.include_state_estimation = config.get("include_state_estimation", False)
+            self.anchor_body_name = config.get("anchor_body_name", "")
+            self.body_names = config.get("body_names", [])
+            self.motion_total_steps = config.get("motion_total_steps", None)
+
+    def set_policy_path(self, policy_path: str) -> None:
+        self.policy_path = policy_path

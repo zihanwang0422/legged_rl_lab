@@ -6,7 +6,7 @@ control_dt: 0.03333333333333333
 sim_dt: 0.006666666666666667
 control_decimation: 5
 
-policy_path: "exported_policy/g1_amp.onnx"
+policy_path: "exported_policy/g1_walk.onnx"
 history_length: 4
 
 # ========== PD gains (policy joint order) ==========

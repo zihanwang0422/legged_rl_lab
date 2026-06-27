@@ -1,6 +1,7 @@
 # Deploy — local deployment packages (not tracked)
 deploy/LeggedLabDeploy/
 source/legged_rl_lab/legged_lab
+deploy/g1_deploy/cyclonedds/
 
 
 # C++
@@ -9,6 +10,7 @@ source/legged_rl_lab/legged_lab
 !**/builder/
 **/*.so
 **/*.log*
+MUJOCO_LOG.TXT
 
 # Omniverse
 **/*.dmp
@@ -106,4 +108,3 @@ source/legged_rl_lab/legged_rl_lab/data/motion/**/h1_2
 **/*.dae
 **/*.DAE
 **/*.zip
-

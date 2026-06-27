@@ -16,6 +16,7 @@ from threading import Lock
 
 import numpy as np
 import torch
+import onnxruntime as ort
 
 
 THIS_DIR = Path(__file__).resolve().parent
@@ -71,15 +72,26 @@ from config import Config
 
 
 class Controller:
-    def __init__(self, config: Config, net: str) -> None:
+    def __init__(self, config: Config, net: str, domain_id: int = 0, debug_policy: bool = False) -> None:
 
-        ChannelFactoryInitialize(0, net)
+        ChannelFactoryInitialize(domain_id, net)
 
         self.first_run = True
         self.config = config
+        self.debug_policy = debug_policy
+        self._last_debug_time = 0.0
+        self.control_start_time = 0.0
         self.remote_controller = RemoteController()
 
-        self.policy = torch.jit.load(config.policy_path).eval()
+        self.policy_path = Path(config.policy_path)
+        if self.policy_path.suffix == ".onnx":
+            self.policy_type = "onnx"
+            self.policy = ort.InferenceSession(str(self.policy_path), providers=["CPUExecutionProvider"])
+            self.policy_input_names = [inp.name for inp in self.policy.get_inputs()]
+            self.policy_output_names = [out.name for out in self.policy.get_outputs()]
+        else:
+            self.policy_type = "torchscript"
+            self.policy = torch.jit.load(config.policy_path).eval()
         self.run_thread = RecurrentThread(interval=self.config.control_dt, target=self.run)  # 100Hz/50Hz
         self.publish_thread = RecurrentThread(interval=1 / 500, target=self.publish)
         self.cmd_lock = Lock()
@@ -87,9 +99,12 @@ class Controller:
         self.joint_pos = np.zeros(config.num_actions, dtype=np.float32)
         self.joint_vel = np.zeros(config.num_actions, dtype=np.float32)
         self.action = np.zeros(config.num_actions, dtype=np.float32)
+        self.command = np.zeros(3, dtype=np.float32)
 
-        self.current_obs = np.zeros(config.num_obs, dtype=np.float32)
-        self.current_obs_history = np.zeros((config.history_length, config.num_obs), dtype=np.float32)
+        self.frame_obs_dim = 9 + 3 * config.num_actions
+        self.policy_obs_dim = self.frame_obs_dim * int(config.history_length)
+        self.current_obs = np.zeros(self.frame_obs_dim, dtype=np.float32)
+        self.current_obs_history = np.zeros((config.history_length, self.frame_obs_dim), dtype=np.float32)
 
         self.clip_min_command = np.array(
             [
@@ -109,9 +124,8 @@ class Controller:
         )
 
         for _ in range(50):
-            with torch.inference_mode():
-                obs = self.current_obs_history.reshape(1, -1).astype(np.float32)
-                self.policy(torch.from_numpy(obs))
+            obs = self.build_policy_input().reshape(1, -1).astype(np.float32)
+            self.infer_policy(obs)
 
         if config.msg_type == "hg":
             self.low_cmd = unitree_hg_msg_dds__LowCmd_()
@@ -135,6 +149,7 @@ class Controller:
         else:
             raise ValueError("Invalid msg_type")
 
+        self.setup_extra_subscribers()
         self.wait_for_low_state()
 
         if config.msg_type == "hg":
@@ -149,11 +164,15 @@ class Controller:
         self.wait_for_control()
 
         print("Start Control!")
+        self.control_start_time = time.time()
         self.run_thread.Start()
 
     def LowStateHandler(self, msg: LowStateHG):
         self.low_state = msg
         self.remote_controller.set(self.low_state.wireless_remote)
+
+    def setup_extra_subscribers(self):
+        pass
 
     def publish(self):
         with self.cmd_lock:
@@ -225,25 +244,27 @@ class Controller:
             self.joint_vel[i] = self.low_state.motor_state[self.config.sdk2isaac_idx[i]].dq
 
         quat = self.low_state.imu_state.quaternion
-        ang_vel = np.array([self.low_state.imu_state.gyroscope], dtype=np.float32)
+        ang_vel = np.asarray(self.low_state.imu_state.gyroscope, dtype=np.float32)
 
         if self.config.imu_type == "torso":
             waist_yaw = self.low_state.motor_state[self.config.torso_idx].q
             waist_yaw_omega = self.low_state.motor_state[self.config.torso_idx].dq
             quat, ang_vel = transform_imu_data(
-                waist_yaw=waist_yaw, waist_yaw_omega=waist_yaw_omega, imu_quat=quat, imu_omega=ang_vel
+                waist_yaw=waist_yaw, waist_yaw_omega=waist_yaw_omega, imu_quat=quat, imu_omega=ang_vel.reshape(1, 3)
             )
+            ang_vel = np.asarray(ang_vel, dtype=np.float32).reshape(3)
 
         gravity_orientation = get_gravity_orientation(quat)
         joint_pos = (self.joint_pos - self.config.default_joint_pos) * self.config.dof_pos_scale
         joint_vel = self.joint_vel * self.config.dof_vel_scale
         ang_vel = ang_vel * self.config.ang_vel_scale
 
-        command = np.array(
+        command_raw = np.array(
             [self.remote_controller.ly, -self.remote_controller.lx, -self.remote_controller.rx], dtype=np.float32
         )
-        command *= self.config.command_scale
-        command = np.clip(command, self.clip_min_command, self.clip_max_command)
+        command_raw *= self.config.command_scale
+        command_raw = np.clip(command_raw, self.clip_min_command, self.clip_max_command)
+        command = self.update_command(command_raw)
 
         num_actions = self.config.num_actions
         self.current_obs[:3] = ang_vel
@@ -263,29 +284,86 @@ class Controller:
 
         # Group-major reorganization
         # [omega×H, gravity×H, cmd×H, pos×H, vel×H, action×H], H=history_length
-        obs_arr = self.current_obs_history  # (H, num_obs)
-        n = self.config.num_actions
-        obs_input = np.concatenate([
-            obs_arr[:, 0:3].reshape(-1),          # omega × H frames
-            obs_arr[:, 3:6].reshape(-1),          # gravity × H frames
-            obs_arr[:, 6:9].reshape(-1),          # cmd × H frames
-            obs_arr[:, 9:9+n].reshape(-1),        # joint pos × H frames
-            obs_arr[:, 9+n:9+2*n].reshape(-1),    # joint vel × H frames
-            obs_arr[:, 9+2*n:9+3*n].reshape(-1),  # last action × H frames
-        ])
+        obs_input = self.build_policy_input()
         obs_batch = obs_input[np.newaxis, :].astype(np.float32)
 
-        with torch.no_grad():
-            obs_tensor = torch.from_numpy(obs_batch)
-            action_tensor = self.policy(obs_tensor)
-            if isinstance(action_tensor, tuple):
-                action_tensor = action_tensor[0]
-            self.action = action_tensor.cpu().numpy().flatten().astype(np.float32)
+        raw_action = self.infer_policy(obs_batch)
+        self.action = np.clip(raw_action, -self.config.action_clip, self.config.action_clip)
 
         target_dof_pos = self.config.default_joint_pos + self.action * self.config.action_scale
+        ramp = 1.0
+        if self.config.policy_ramp_time > 0.0:
+            ramp = np.clip((time.time() - self.control_start_time) / self.config.policy_ramp_time, 0.0, 1.0)
+            target_dof_pos = self.config.default_joint_pos + ramp * (target_dof_pos - self.config.default_joint_pos)
+        self.print_policy_debug(command, gravity_orientation, ang_vel, joint_pos, joint_vel, target_dof_pos, raw_action, ramp)
         with self.cmd_lock:
             for i in range(len(self.config.sdk2isaac_idx)):
                 self.low_cmd.motor_cmd[self.config.sdk2isaac_idx[i]].q = target_dof_pos[i]
+
+    def build_policy_input(self) -> np.ndarray:
+        obs_arr = self.current_obs_history
+        n = self.config.num_actions
+        return np.concatenate([
+            obs_arr[:, 0:3].reshape(-1),          # omega x H frames
+            obs_arr[:, 3:6].reshape(-1),          # gravity x H frames
+            obs_arr[:, 6:9].reshape(-1),          # cmd x H frames
+            obs_arr[:, 9:9+n].reshape(-1),        # joint pos x H frames
+            obs_arr[:, 9+n:9+2*n].reshape(-1),    # joint vel x H frames
+            obs_arr[:, 9+2*n:9+3*n].reshape(-1),  # last action x H frames
+        ]).astype(np.float32)
+
+    def print_policy_debug(self, command, gravity_orientation, ang_vel, joint_pos, joint_vel, target_dof_pos, raw_action, ramp):
+        if not self.debug_policy or time.time() - self._last_debug_time < 0.5:
+            return
+
+        action_abs = np.abs(self.action)
+        max_action_idx = int(np.argmax(action_abs))
+        clipped = int(np.count_nonzero(np.abs(raw_action - self.action) > 1e-5))
+        target_abs = np.abs(target_dof_pos - self.config.default_joint_pos)
+        max_target_idx = int(np.argmax(target_abs))
+        print(
+            "[PolicyDebug] "
+            f"cmd=[{command[0]:+.2f},{command[1]:+.2f},{command[2]:+.2f}] "
+            f"grav=[{gravity_orientation[0]:+.2f},{gravity_orientation[1]:+.2f},{gravity_orientation[2]:+.2f}] "
+            f"ang=[{ang_vel[0]:+.2f},{ang_vel[1]:+.2f},{ang_vel[2]:+.2f}] "
+            f"q_rel=[{joint_pos.min():+.2f},{joint_pos.max():+.2f}] "
+            f"dq=[{joint_vel.min():+.2f},{joint_vel.max():+.2f}] "
+            f"ramp={ramp:.2f} "
+            f"action=[{self.action.min():+.2f},{self.action.max():+.2f}] clipped={clipped}/{self.config.num_actions} "
+            f"max_action_idx={max_action_idx}:{self.action[max_action_idx]:+.2f} "
+            f"target_delta_max={max_target_idx}:{target_dof_pos[max_target_idx] - self.config.default_joint_pos[max_target_idx]:+.2f}"
+        )
+        self._last_debug_time = time.time()
+
+    def update_command(self, command_raw: np.ndarray) -> np.ndarray:
+        command_target = command_raw.copy()
+        if self.config.command_deadband > 0.0:
+            command_target[np.abs(command_target) < self.config.command_deadband] = 0.0
+
+        max_delta = self.config.command_rate_limit * self.config.control_dt
+        delta = np.clip(command_target - self.command, -max_delta, max_delta)
+        command_limited = self.command + delta
+
+        if self.config.command_smoothing_tau > 0.0:
+            alpha = self.config.control_dt / (self.config.command_smoothing_tau + self.config.control_dt)
+            self.command = self.command + alpha * (command_limited - self.command)
+        else:
+            self.command = command_limited
+        return self.command.copy()
+
+    def infer_policy(self, obs_batch):
+        if self.policy_type == "onnx":
+            outputs = self.policy.run(
+                self.policy_output_names,
+                {self.policy_input_names[0]: obs_batch.astype(np.float32)},
+            )
+            return outputs[0].flatten().astype(np.float32)
+
+        with torch.no_grad():
+            action_tensor = self.policy(torch.from_numpy(obs_batch.astype(np.float32)))
+            if isinstance(action_tensor, tuple):
+                action_tensor = action_tensor[0]
+            return action_tensor.cpu().numpy().flatten().astype(np.float32)
 
 
 if __name__ == "__main__":
@@ -293,11 +371,13 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
     parser.add_argument("--net", type=str, default="enp108s0", help="network interface")
+    parser.add_argument("--domain_id", type=int, default=0, help="DDS domain id, use 1 for local unitree_mujoco simulation")
     parser.add_argument("--config_path", type=str, default="config/g1_walk.yaml", help="configuration file path")
+    parser.add_argument("--debug_policy", action="store_true", help="Print policy observation/action ranges during control.")
     args = parser.parse_args()
 
     config = Config(args.config_path)
-    controller = Controller(config, args.net)
+    controller = Controller(config, args.net, args.domain_id, debug_policy=args.debug_policy)
 
     try:
         while True:

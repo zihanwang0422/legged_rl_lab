@@ -2,6 +2,34 @@
 
 Unitree G1 29-DOF policy deployment for Sim2Sim with MuJoCo and Sim2Real on the robot.
 
+## SDK2 Closed-Loop Sim2Sim Quick Start
+
+This mode follows `unitree_mujoco/simulate_python`: MuJoCo behaves like a real G1, the bridge publishes `rt/lowstate`, `rt/wirelesscontroller`, and `rt/sportmodestate`, the deploy controller publishes `rt/lowcmd`, and the full SDK2/DDS loop is exercised.
+
+Terminal 1: start the MuJoCo fake robot and SDK2 bridge.
+
+```bash
+conda activate legged_rl_lab
+cd /home/wzh/legged_rl_lab/deploy/g1_deploy
+python sim2sim_sdk2_bridge.py --config g1_walk.yaml --net lo --domain_id 1 --input gamepad --joystick_type switch --elastic_band
+```
+
+Keyboard input:
+
+```bash
+python sim2sim_sdk2_bridge.py --config g1_walk.yaml --net lo --domain_id 1 --input keyboard --elastic_band
+```
+
+Terminal 2: start the deploy controller against the local DDS bridge.
+
+```bash
+conda activate legged_rl_lab
+cd /home/wzh/legged_rl_lab/deploy/g1_deploy
+python sim2real_walk.py --net lo --domain_id 1 --config_path config/g1_walk.yaml
+```
+
+If CycloneDDS is not using `lo`, pass the same network interface to both commands, for example `enp108s0`. Local simulation uses domain `1`; the real robot uses domain `0` by default.
+
 ---
 
 ## Sim2Sim (MuJoCo)
@@ -11,7 +39,7 @@ Use MuJoCo to validate exported policies with either a GameSir USB gamepad or ke
 ### Dependencies
 
 ```bash
-conda activate env_isaaclab1
+conda activate legged_rl_lab
 pip install onnxruntime numpy scipy pyyaml mujoco pygame
 ```
 
@@ -251,31 +279,101 @@ policy_registry = {
 
 ---
 
+## SDK2 Closed-Loop Sim2Sim (MuJoCo as the DDS Robot)
+
+The bridge follows the `unitree_mujoco/simulate_python` split:
+
+```text
+keyboard/gamepad simulation
+  ↓
+sim bridge writes LowState.wireless_remote
+  ↓
+deploy controller subscribes rt/lowstate and reads robot/gamepad state
+  ↓
+deploy controller runs policy/PD and publishes rt/lowcmd
+  ↓
+sim bridge subscribes rt/lowcmd
+  ↓
+LowCmd → MuJoCo actuator torque
+  ↓
+MuJoCo step
+  ↓
+sim bridge publishes the next rt/lowstate
+```
+
+SDK2 is only the DDS communication layer. The deploy controller is still responsible for parsing the remote state and generating `LowCmd`. G1/H1-2 use the `unitree_hg` IDL, so this bridge publishes/subscribes HG `LowState/LowCmd`. Like the official Python simulator, the bridge reads joint position, velocity, torque, and IMU from MuJoCo `sensordata`.
+
+### Run Notes
+
+Terminal 1: start the MuJoCo fake robot and SDK2 bridge.
+
+```bash
+cd deploy/g1_deploy
+python sim2sim_sdk2_bridge.py --config g1_walk.yaml --net lo --domain_id 1 --input keyboard --elastic_band
+```
+
+For pygame gamepad input:
+
+```bash
+python sim2sim_sdk2_bridge.py --config g1_walk.yaml --net lo --domain_id 1 --input gamepad --joystick_type switch --elastic_band
+```
+
+Terminal 2: start the deploy controller against the local DDS bridge.
+
+```bash
+cd deploy/g1_deploy
+python sim2real_walk.py --net lo --domain_id 1 --config_path config/g1_walk.yaml
+```
+
+If CycloneDDS is not using `lo`, pass the same network interface to both commands, for example `enp108s0`. For local closed-loop testing, start with `lo` and domain `1`.
+
+### Bridge Keyboard Controls
+
+| Input | Function |
+| --- | --- |
+| **Enter** or **1** | Simulate Start; controller moves to default posture |
+| **2** | Simulate A; controller starts control |
+| **3 / 4 / 5** | Simulate B / X / Y |
+| **W/S** | `ly` forward/back command |
+| **A/D** | `lx` lateral command |
+| **Q/E** | `rx` yaw command |
+| **Space** or **0** | Zero joystick axes |
+| **9** or **Esc** | Select / exit |
+
+The bridge validates the low-level SDK2 path: it subscribes `rt/lowcmd`, converts each command to MuJoCo torque with
+`tau + kp * (q_des - q_sensor) + kd * (dq_des - dq_sensor)`, steps MuJoCo, and publishes `rt/lowstate`, `rt/wirelesscontroller`, and `rt/sportmodestate`. This is closer to the real robot loop than running `sim2sim_walk.py` directly, and is useful for checking DDS topics, joint order, `wireless_remote`, CRC, and deploy state-machine behavior.
+
+Humanoids such as G1 can fall before the controller takes over. `--elastic_band` enables a virtual support band similar to the official `unitree_mujoco` simulator. In the MuJoCo viewer, press **9** to toggle the band and **7/8** to adjust its length.
+
+---
+
 ## Sim2Real
 
 ### Installation
 
 ```bash
-conda activate env_isaaclab1
+conda activate legged_rl_lab
 cd deploy/g1_deploy
 
-# 1. Install Cyclone DDS first. It is required by unitree_sdk2_python.
+# 1. Install CMake. Skip this if cmake is already available.
+python -m pip install cmake
+
+# 2. Build and install the CycloneDDS C library.
 git clone https://github.com/eclipse-cyclonedds/cyclonedds -b releases/0.10.x
 cd cyclonedds
 mkdir -p build install
 cd build
-cmake .. -DCMAKE_INSTALL_PREFIX=../install
-cmake --build . --target install -j"$(nproc)"
+python -m cmake .. -DCMAKE_INSTALL_PREFIX=../install
+python -m cmake --build . --target install -j"$(nproc)"
 
-# 2. Reinstall Python headers if Python.h is missing in env_isaaclab1.
-conda install -n env_isaaclab1 --force-reinstall -y python=3.11.14
-
-# 3. Install unitree_sdk2_python.
+# 3. Install the bundled unitree_sdk2_python.
 cd ../..
-git clone https://github.com/unitreerobotics/unitree_sdk2_python.git
 cd unitree_sdk2_python
 export CYCLONEDDS_HOME=$(pwd)/../cyclonedds/install
 pip install -e .
+
+# 4. If pip upgrades numpy to 2.x, restore IsaacLab-compatible versions.
+pip install numpy==1.26.0 opencv-python==4.10.0.84 packaging==23.0 wheel==0.45.1
 ```
 
 ### Startup Process

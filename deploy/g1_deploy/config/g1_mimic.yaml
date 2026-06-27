@@ -1,15 +1,23 @@
 gamepad_type_sim2sim: "gamesir"
 xml_path: "./assets/scene_29dof.xml"
+policy_type: tracking
+policy_path: "exported_policy/g1_dance.onnx"
 
 control_dt: 0.02
 sim_dt: 0.005
 control_decimation: 4
+history_length: 1
 
 init_height: 0.76
 anchor_body_name: "torso_link"
 include_state_estimation: true
 num_obs: 160
 num_actions: 29
+
+# ========== Observation scales ==========
+ang_vel_scale: 1.0
+dof_pos_scale: 1.0
+dof_vel_scale: 1.0
 
 # Tracked body names (order matches ONNX body_pos_w / body_quat_w output)
 body_names: [
@@ -68,6 +76,18 @@ action_scale: [0.5475, 0.5475, 0.5475,           # hip_pitch(L,R), waist_yaw
                0.4386, 0.4386,                     # elbow(L,R)
                0.0745, 0.0745, 0.0745, 0.0745,   # wrist_roll, wrist_pitch
                0.0745, 0.0745]                     # wrist_yaw(L,R)
+action_clip: 3.0
+policy_ramp_time: 0.8
+
+# ========== Command placeholders for SDK2 controller compatibility ==========
+command_scale: [1.0, 1.0, 1.0]
+command_deadband: 0.05
+command_smoothing_tau: 0.12
+command_rate_limit: [1.0, 0.8, 1.2]
+command_range:
+  lin_vel_x: [0.0, 1.0]
+  lin_vel_y: [-0.5, 0.5]
+  ang_vel_z: [-1.0, 1.0]
 
 # ========== Joint ordering configuration (MuJoCo Order) ==========
 joint_names_mujoco: [

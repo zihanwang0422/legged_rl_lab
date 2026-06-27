@@ -87,7 +87,7 @@ class G1RewardsCfg(RewardsCfg):
     # -- base
     flat_orientation_l2 = RewTerm(func=mdp.flat_orientation_l2, weight=-3.0) #
     lin_vel_z_l2 = RewTerm(func=mdp.lin_vel_z_l2, weight=0.0)
-    ang_vel_xy_l2 = RewTerm(func=mdp.ang_vel_xy_l2, weight=-0.05)
+    ang_vel_xy_l2 = RewTerm(func=mdp.ang_vel_xy_l2, weight=-0.1)
        
     # -- joints
     joint_torques_l2 = RewTerm(
@@ -101,7 +101,7 @@ class G1RewardsCfg(RewardsCfg):
         weight=-2.5e-7,
         params={"asset_cfg": SceneEntityCfg("robot", joint_names=[".*_hip_.*", ".*_knee_joint", ".*_ankle_.*"])},
         )
-    action_rate_l2 = RewTerm(func=mdp.action_rate_l2, weight=-0.005)
+    action_rate_l2 = RewTerm(func=mdp.action_rate_l2, weight=-0.01)
     dof_pos_limits = RewTerm(
         func=mdp.joint_pos_limits,
         weight=-2.0,
@@ -120,7 +120,7 @@ class G1RewardsCfg(RewardsCfg):
     )
     feet_slide = RewTerm(
         func=mdp.feet_slide,
-        weight=-0.1,
+        weight=-0.2,
         params={
             "sensor_cfg": SceneEntityCfg("contact_forces", body_names=".*_ankle_roll_link"),
             "asset_cfg": SceneEntityCfg("robot", body_names=".*_ankle_roll_link"),
@@ -262,6 +262,9 @@ class UnitreeG1RoughEnvCfg(LocomotionVelocityRoughEnvCfg):
 
         
         # ------------------------------- Commands ------------------------------
+        self.commands.base_velocity.resampling_time_range = (3.0, 6.0)
+        self.commands.base_velocity.rel_standing_envs = 0.20
+        self.commands.base_velocity.heading_command = False
         self.commands.base_velocity.ranges.lin_vel_x = (0.0, 1.0)
         self.commands.base_velocity.ranges.lin_vel_y = (-0.5, 0.5)
         self.commands.base_velocity.ranges.ang_vel_z = (-1.0, 1.0)
