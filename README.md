@@ -515,7 +515,7 @@ LAFAN1 is stored as retargeted `.csv`, so convert it to `.npz` before AMP or tra
 python scripts/csv_to_npz.py \
   --input_file source/legged_rl_lab/legged_rl_lab/data/motion/LAFAN1_Retargeting_Dataset/g1/walk1_subject1.csv \
   --input_fps 30 \
-  --output_fps 30 \
+  --output_fps 50 \
   --headless
 ```
 
@@ -525,7 +525,7 @@ python scripts/csv_to_npz.py \
 python scripts/csv_to_npz.py \
   --input_dir source/legged_rl_lab/legged_rl_lab/data/motion/LAFAN1_Retargeting_Dataset/g1 \
   --input_fps 30 \
-  --output_fps 30 \
+  --output_fps 50 \
   --headless \
   --overwrite
 ```
@@ -535,7 +535,7 @@ For AMP locomotion training, put the converted LAFAN1 `run*.npz` and `walk*.npz`
 ```bash
 # Optional: replay one converted NPZ in Isaac Sim to verify the body state.
 python scripts/replay_npz.py \
-  --file source/legged_rl_lab/legged_rl_lab/data/motion/LAFAN1_Retargeting_Dataset/g1_amp_run_walk_fall_getup/walk1_subject1.npz
+  --file source/legged_rl_lab/legged_rl_lab/data/motion/LAFAN1_Retargeting_Dataset/g1/walk1_subject1.npz
 ```
 
 
@@ -561,7 +561,7 @@ python scripts/amp/train.py \
 # Use the folder containing converted LAFAN1 run/walk NPZ files.
 python scripts/amp/train.py \
   --task LeggedRLLab-Isaac-AMP-Flat-Unitree-G1-v0 \
-  --motion_file source/legged_rl_lab/legged_rl_lab/data/motion/LAFAN1_Retargeting_Dataset/g1_amp_run_walk_fall_getup \
+  --motion_file source/legged_rl_lab/legged_rl_lab/data/motion/LAFAN1_Retargeting_Dataset/g1_run \
   --num_envs 4096 \
   --headless \
   --max_iterations 20000
@@ -579,7 +579,7 @@ python scripts/amp/train.py \
 python scripts/amp/play.py \
     --task LeggedRLLab-Isaac-AMP-Flat-Unitree-G1-Play-v0 \
     --num_envs 50 \
-    --motion_file source/legged_rl_lab/legged_rl_lab/data/motion/LAFAN1_Retargeting_Dataset/g1_amp_run_walk_fall_getup
+    --motion_file source/legged_rl_lab/legged_rl_lab/data/motion/LAFAN1_Retargeting_Dataset/g1_run
 ```
 
 **skrl AMP** (alternative AMP implementation with 3-way discriminator loss):

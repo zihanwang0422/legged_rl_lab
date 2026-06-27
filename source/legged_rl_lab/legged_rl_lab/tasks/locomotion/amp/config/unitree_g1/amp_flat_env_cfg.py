@@ -52,8 +52,8 @@ class UnitreeG1AMPFlatEnvCfg(LocomotionAMPRoughEnvCfg):
         # ---------------------------------------------------------------------
         # MDP: Simulation / control timing
         # ---------------------------------------------------------------------
-        self.sim.dt = 1.0 / 150.0
-        self.decimation = 5
+        self.sim.dt = 0.005
+        self.decimation = 4
         self.sim.render_interval = self.decimation
 
         # ---------------------------------------------------------------------

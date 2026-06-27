@@ -209,7 +209,7 @@ def reset_from_reference_motion(
 def joint_deviation_from_reference(
     env,
     threshold: float = 3.5,
-    motion_fps: float = 30.0,
+    motion_fps: float = 50.0,
     asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
 ) -> torch.Tensor:
     """Terminate episodes whose joint pose drifts too far from the reference.
@@ -231,7 +231,7 @@ def joint_deviation_from_reference(
         env: RL environment instance.
         threshold: L2 norm of joint pose error above which to terminate.
             Default 3.5 rad ≈ 0.65 rad (~37°) average per joint over 29 DOF.
-        motion_fps: Frame rate of the reference motion data (LAFAN1 = 30).
+        motion_fps: Frame rate of the reference motion data.
         asset_cfg: Scene entity config for the robot articulation.
 
     Returns:

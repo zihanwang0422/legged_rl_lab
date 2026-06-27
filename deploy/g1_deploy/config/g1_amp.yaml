@@ -2,9 +2,9 @@ gamepad_type_sim2sim: "gamesir"
 policy_type: amp
 xml_path: "./assets/scene_29dof.xml"
 
-control_dt: 0.03333333333333333
-sim_dt: 0.006666666666666667
-control_decimation: 5
+control_dt: 0.02
+sim_dt: 0.005
+control_decimation: 4
 
 policy_path: "exported_policy/g1_walk.onnx"
 history_length: 4

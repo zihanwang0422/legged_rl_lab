@@ -517,7 +517,7 @@ class MotionLoader:
             f"CSV loading is no longer supported for AMP training "
             f"(file: {path}). Preprocess to NPZ first:\n"
             f"  python scripts/csv_to_npz.py -f {path} "
-            f"--input_fps 30 --output_fps 30 --headless"
+            f"--input_fps 50 --output_fps 50 --headless"
         )
 
     def _load_directory(self, path: str) -> torch.Tensor:
