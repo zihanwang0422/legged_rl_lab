@@ -127,6 +127,7 @@ class Sdk2MujocoBridge:
         self.ctrl_range = self.model.actuator_ctrlrange[: self.num_motor].copy()
         self.elastic_band = ElasticBand() if elastic_band else None
         self.elastic_body_id = self.model.body("torso_link").id if self.elastic_band is not None else None
+        self.anchor_body_id = self.model.body(self.config.get("anchor_body_name", "torso_link")).id
 
         default_joint_pos = np.asarray(self.config["default_joint_pos"], dtype=np.float32)
         isaac_to_mujoco = np.asarray(self.config["isaac_to_mujoco_map"], dtype=np.int32)
@@ -250,12 +251,14 @@ class Sdk2MujocoBridge:
         self.low_state_pub.Write(self.low_state)
 
     def publish_highstate(self) -> None:
+        anchor_pos = self.data.xpos[self.anchor_body_id]
+        anchor_quat = self.data.xquat[self.anchor_body_id]
+        self.high_state.position[:] = [float(x) for x in anchor_pos]
+        self.high_state.imu_state.quaternion[:] = [float(x) for x in anchor_quat]
         if self.have_frame_sensor:
             base = self.dim_motor_sensor
-            self.high_state.position[:] = [float(x) for x in self.data.sensordata[base + 10 : base + 13]]
             self.high_state.velocity[:] = [float(x) for x in self.data.sensordata[base + 13 : base + 16]]
         else:
-            self.high_state.position[:] = [float(x) for x in self.data.qpos[:3]]
             self.high_state.velocity[:] = [float(x) for x in self.data.qvel[:3]]
         self.high_state_pub.Write(self.high_state)
 
