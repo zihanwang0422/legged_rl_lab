@@ -100,3 +100,21 @@ foreach(name walk amp mimic attention sdk2_bridge)
   add_executable(sim2sim_${name} src/sim2sim_${name}.cpp)
   target_link_libraries(sim2sim_${name} PRIVATE g1_cpp_sim2sim)
 endforeach()
+
+if(G1_CPP_BUILD_SDK2)
+  add_library(g1_cpp_sim2real
+    src/sim2real_controller.cpp
+  )
+  target_include_directories(g1_cpp_sim2real PUBLIC include)
+  target_compile_definitions(g1_cpp_sim2real PUBLIC
+    G1_CPP_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
+  target_link_libraries(g1_cpp_sim2real PUBLIC
+    g1_cpp_sim2sim
+    unitree_sdk2
+  )
+
+  foreach(name walk amp mimic)
+    add_executable(sim2real_${name} src/sim2real_${name}.cpp)
+    target_link_libraries(sim2real_${name} PRIVATE g1_cpp_sim2real)
+  endforeach()
+endif()

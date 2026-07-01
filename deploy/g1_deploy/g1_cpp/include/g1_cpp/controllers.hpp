@@ -4,8 +4,10 @@
 
 #include <atomic>
 #include <mutex>
+#include <string>
 #include <termios.h>
 #include <thread>
+#include <unordered_map>
 
 namespace g1 {
 
@@ -63,6 +65,48 @@ class ConstantController final : public CommandController {
   float warmup_s_;
   float ramp_s_;
   double start_time_ = 0.0;
+};
+
+class GamepadController final : public CommandController {
+ public:
+  GamepadController(Range vx, Range vy, Range vyaw, std::string joystick_type);
+  ~GamepadController() override;
+  void start() override;
+  void stop() override;
+  VelocityCommand velocity() override;
+
+  struct Map {
+    int axis_lx = 0;
+    int axis_ly = 1;
+    int axis_rx = 2;
+    int axis_ry = 3;
+    int button_a = 0;
+    int button_b = 1;
+    int button_x = 3;
+    int button_y = 4;
+    int button_select = 10;
+    int button_start = 11;
+  };
+
+ private:
+  void loop();
+  void apply_state();
+  float axis(int index) const;
+  bool button(int index) const;
+  float scale_axis(float value, Range range) const;
+
+  Range vx_range_;
+  Range vy_range_;
+  Range vyaw_range_;
+  Map map_;
+  int fd_ = -1;
+  std::string joystick_type_;
+  std::mutex mutex_;
+  std::thread thread_;
+  std::atomic<bool> running_{false};
+  std::unordered_map<unsigned char, float> axes_;
+  std::unordered_map<unsigned char, bool> buttons_;
+  VelocityCommand cmd_;
 };
 
 }  // namespace g1
